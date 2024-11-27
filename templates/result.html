@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        
+        .container {
+            width: 80%;
+            margin: auto;
+            padding-top: 20px;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+        }
+
+        .images-column {
+            display: flex;
+            flex-direction: column;  /* Stack images vertically */
+            align-items: center;     /* Center images horizontally */
+            gap: 20px;               /* Space between images */
+        }
+
+        img {
+            border: 5px solid #000;  /* Black border with 5px thickness */
+            padding: 10px;           /* Adds padding between image and border */
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5); /* Optional: Adds a shadow effect */
+            max-width: 100%;         /* Make sure image scales properly */
+            height: auto;            /* Maintain aspect ratio */
+        }
+
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+            color: #000;
+            text-decoration: none;
+        }
+
+        a:hover {
+            color: #007BFF;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Processing Results</h1>
+        <h2>Total Price: {{ total_price }} pesos</h2>
+
+        <h3>Processed Images:</h3>
+        <div class="images-column">
+            {% for image in images %}
+                <img src="{{ url_for('uploaded_file', filename=image) }}" alt="Processed Image">
+            {% endfor %}
+        </div>
+
+        <a href="/">Upload another file</a>
+    </div>
+
+</body>
+</html>
