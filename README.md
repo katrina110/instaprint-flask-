@@ -6,3 +6,12 @@
 3. execute the command 
     python app.py    
 
+
+ img  <image src="{{ url_for('static', filename= 'ricci.jpg')}}">
+ css: <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename= 'style.css')}}">
+
+
+ in app.py every page(.html) app route: 
+@app.route('/profile')
+def profile():
+    return render_template('profile.html')
