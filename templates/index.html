@@ -3,113 +3,62 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Manual Upload</title>
     <link href="./../static/css/main.css" rel="stylesheet" />
-  </head>
-  <body>
-    <header class="header">
-      <!-- Left logo -->
-      <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
-
-      <!-- Center text -->
-      <div class="center-text">INSTAPRINT</div>
-
-      <!-- Right logo -->
-      <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
-    </header>
-
-    <main>
-      <div class="upload-area">
-        <h2>Choose File to Upload</h2>
-        <form action="/upload" method="POST" enctype="multipart/form-data">
-          <label for="fileInput" class="custom-file-label">
-            <img src="./../static/images/upload-icon.png" alt="Upload" />
-          </label>
-          <input
-            type="file"
-            id="fileInput"
-            name="file"
-            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
-            hidden
-            required
-          />
-          <input
-            type="text"
-            id="fileName"
-            placeholder="Selected file"
-            readonly
-          />
-
-          <div class="button-container">
-            <button id="exitButton" class="action-button" type="button">
-              Exit
-            </button>
-            <button id="continueButton" class="action-button" type="submit">
-              Upload
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <div class="uploaded-file">
-        <div class="file-box">
-          {% for file in files %}
-          <div class="file-entry">
-            {% if file.endswith('.pdf') %}
-            <img
-              src="{{ url_for('static', filename='images/pdf.png') }}"
-              alt="PDF Icon"
-            />
-            {% elif file.endswith('.doc') or file.endswith('.docx') %}
-            <img
-              src="{{ url_for('static', filename='images/microsoftword.png') }}"
-              alt="Word Icon"
-            />
-            {% elif file.endswith('.jpg') or file.endswith('.jpeg') or
-            file.endswith('.png') %}
-            <img
-              src="{{ url_for('static', filename='images/file-upload.png') }}"
-              alt="Image Icon"
-            />
-            {% else %}
-            <img
-              src="{{ url_for('static', filename='images/file-icon.png') }}"
-              alt="File Icon"
-            />
-            {% endif %}
-            <a
-              href="{{ url_for('uploaded_file', filename=file) }}"
-              target="_blank"
-              >{{ file }}</a
-            >
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </main>
-
+    <title>Kiosk Login</title>
     <script>
-      // JavaScript for updating file input label
-      const fileInput = document.getElementById("fileInput");
-      const fileNameInput = document.getElementById("fileName");
+      document.addEventListener("DOMContentLoaded", () => {
+        const pinForm = document.getElementById("pinForm");
 
-      fileInput.addEventListener("change", () => {
-        if (fileInput.files.length > 0) {
-          fileNameInput.value = Array.from(fileInput.files)
-            .map((file) => file.name)
-            .join(", ");
-        } else {
-          fileNameInput.value = "";
-        }
-      });
+        pinForm.addEventListener("submit", function (e) {
+          e.preventDefault(); // Prevent form submission from refreshing the page
 
-      // Exit button functionality
-      const exitButton = document.getElementById("exitButton");
-      exitButton.addEventListener("click", () => {
-        if (confirm("Are you sure you want to exit?")) {
-          window.location.href = "/"; // Replace with the appropriate exit URL
-        }
+          const enteredPin = document.getElementById("password").value;
+          const correctPin = "1234"; // Correct PIN for login
+
+          if (enteredPin === correctPin) {
+            // Redirect to file upload if PIN is correct
+            window.location.href = "/file-upload";
+          } else {
+            // Display an alert if PIN is incorrect
+            alert("Incorrect PIN. Please try again.");
+          }
+        });
       });
     </script>
+  </head>
+  <body>
+    <div class="insta-container">
+      <div class="logo-container">
+        <div class="logo">
+          <div class="logo1">
+            <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
+          </div>
+          <div class="logo2">
+            <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
+          </div>
+          <div class="logo3">
+            <img src="./../static/images/ce-logo.png" alt="CE Logo" />
+          </div>
+        </div>
+      </div>
+      <div class="title">INSTAPRINT</div>
+      <div class="subtitle">ENTER KIOSK PIN</div>
+      <div class="form">
+        <div class="form-container">
+          <form id="pinForm" method="POST">
+            <div class="input-group">
+              <label for="password">PIN</label>
+              <input
+                type="password"
+                name="password"
+                id="password"
+                placeholder="Enter PIN"
+              />
+            </div>
+            <button type="submit" class="login">ENTER</button>
+          </form>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

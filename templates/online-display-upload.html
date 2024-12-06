@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Uploaded File</title>
+    <link href="./../static/css/main.css" rel="stylesheet" />
+    <link href="./../static/css/uploaded-files.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="header">
+      <!-- Left logo -->
+      <img src="./../static/images/pup-logo.png" alt="sample" />
+
+      <!-- Center text -->
+      <div class="center-text">INSTAPRINT</div>
+
+      <!-- Right logo -->
+      <img src="./../static/images/cpe-logo.png" alt="sample" />
+    </header>
+
+    <div class="upload-file-container">
+      <div class="scan-qr">
+        <span class="uf-texts">SCAN THIS QR</span>
+        <img class="qr" src="./../static/images/sample qr.png" />
+        <span class="uf-texts">or visit the link below</span>
+        <span class="uf-texts red">www.instaprint.com</span>
+      </div>
+      <div class="uploaded-file">
+        <div class="file-box">
+          {% for file in files %}
+          <div class="file-entry">
+            {% if file.endswith('.pdf') %}
+            <img
+              src="{{ url_for('static', filename='images/pdf.png') }}"
+              alt="PDF Icon"
+            />
+            {% elif file.endswith('.doc') or file.endswith('.docx') %}
+            <img
+              src="{{ url_for('static', filename='images/microsoftword.png') }}"
+              alt="Word Icon"
+            />
+            {% elif file.endswith('.jpg') or file.endswith('.jpeg') or
+            file.endswith('.png') %}
+            <img
+              src="{{ url_for('static', filename='images/file-upload.png') }}"
+              alt="Image Icon"
+            />
+            {% else %}
+            <img
+              src="{{ url_for('static', filename='images/file-icon.png') }}"
+              alt="File Icon"
+            />
+            {% endif %}
+            <a
+              href="{{ url_for('uploaded_file', filename=file) }}"
+              target="_blank"
+              >{{ file }}</a
+            >
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // JavaScript for updating file input label
+      const fileInput = document.getElementById("fileInput");
+      const fileNameInput = document.getElementById("fileName");
+
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          fileNameInput.value = Array.from(fileInput.files)
+            .map((file) => file.name)
+            .join(", ");
+        } else {
+          fileNameInput.value = "";
+        }
+      });
+
+      // Exit button functionality
+      const exitButton = document.getElementById("exitButton");
+      exitButton.addEventListener("click", () => {
+        if (confirm("Are you sure you want to exit?")) {
+          window.location.href = "/"; // Replace with the appropriate exit URL
+        }
+      });
+    </script>
+  </body>
+</html>
+
