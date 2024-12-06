@@ -6,7 +6,8 @@
   box-sizing: border-box;
 }
 
-body, html {
+body,
+html {
   height: 100%;
   font-family: "Inter", sans-serif;
   position: relative;
@@ -18,7 +19,7 @@ body::after {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 10px; 
+  height: 10px;
   background: #700000;
 }
 
@@ -33,24 +34,24 @@ body::after {
 }
 
 .logo-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-end; 
-    margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  margin-bottom: 20px;
 }
 
 .logo {
-    display: flex;
-    gap: 20px;
+  display: flex;
+  gap: 20px;
 }
 
 .logo img {
-    width: 100px;
-    height: 100px;
+  width: 100px;
+  height: 100px;
 }
 
 .logo2 img {
-    transform: translateY(-30px);
+  transform: translateY(-30px);
 }
 
 .title {
@@ -95,50 +96,51 @@ body::after {
 }
 
 .login {
-    margin-top: 1.2rem;
-    display: block;
-    width: 30%;
-    background-color: #e2e2e2;
-    padding: 0.75rem;
-    text-align: center;
-    color: rgba(17, 24, 39, 1);
-    border-radius: 0.375rem;
-    font-weight: 600;
+  margin-top: 1.2rem;
+  display: block;
+  width: 30%;
+  background-color: #e2e2e2;
+  padding: 0.75rem;
+  text-align: center;
+  color: rgba(17, 24, 39, 1);
+  border-radius: 0.375rem;
+  font-weight: 600;
 }
 
 .login:hover {
   background-color: #acabab;
 }
 
-.online, .manual {
-    margin-top: 1.2rem;
-    display: block;
-    border: 1px solid white;
-    width: 100%;
-    background-color: #700000;
-    padding: 0.75rem;
-    text-align: center;
-    color: white;
-    border-radius: 0.375rem;
-    font-weight: 600;
+.online,
+.manual {
+  margin-top: 1.2rem;
+  display: block;
+  border: 1px solid white;
+  width: 100%;
+  background-color: #700000;
+  padding: 0.75rem;
+  text-align: center;
+  color: white;
+  border-radius: 0.375rem;
+  font-weight: 600;
 }
 
 header {
-    background-color: white;
-    padding: 20px 0;
-    position: fixed;
-    top: 0;
-    width: 100%;
-    z-index: 1000;
+  background-color: white;
+  padding: 20px 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 .header-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
 }
 
 .header {
@@ -148,7 +150,6 @@ header {
   padding: 10px 20px;
 
   height: 7rem;
-  
 }
 
 .header img {
@@ -160,33 +161,29 @@ header {
   text-align: center;
   font-size: 40px;
   font-weight: bold;
-  color: #FDBB57;
-	text-shadow:
-		1px 1px 0 #510300,
-		2px 2px 0 #510300,
-		3px 3px 0 #510300,
-		4px 4px 0 #510300,
-		5px 5px 0 #510300,
-		6px 6px 0 #510300,
-		7px 7px 0 #510300;
+  color: #fdbb57;
+  text-shadow: 1px 1px 0 #510300, 2px 2px 0 #510300, 3px 3px 0 #510300,
+    4px 4px 0 #510300, 5px 5px 0 #510300, 6px 6px 0 #510300, 7px 7px 0 #510300;
 }
 
 /* ==== MANUAL UPLOAD ==== */
 main {
   display: flex;
+  flex-direction: row;
   justify-content: center;
   align-items: center;
   min-height: 80vh;
   padding-top: 6rem; /* To offset fixed header */
 }
 
-.upload-area  {
+.upload-area {
   display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 50px;
-    border-radius: 10px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 50px;
+  border-radius: 10px;
+  width: 30%;
 }
 
 .upload-area h1 {
@@ -194,8 +191,14 @@ main {
 }
 
 .upload-area img {
-  height: 100px;
+  height: 250px;
   width: auto;
+}
+
+.upload-area form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .drag-area {
@@ -299,17 +302,17 @@ main {
 }
 
 .custom-file-label {
-    cursor: pointer;
-    display: inline-block;
-    transition: transform 0.2s ease;
+  cursor: pointer;
+  display: inline-block;
+  transition: transform 0.2s ease;
 }
 
 .custom-file-label:hover {
-    transform: scale(1.05);
+  transform: scale(1.05);
 }
 
 #fileInput {
-    display: none; /* Hides the default file input */
+  display: none; /* Hides the default file input */
 }
 
 input[type="text"] {
@@ -353,6 +356,62 @@ input[type="text"] {
   background-color: #4cae4c;
 }
 
+/* For displaying uploaded files */
+
+.uploaded-file {
+  width: 70%;
+  height: 80vh;
+  padding-right: 50px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.file-box {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  background-color: #f2f2f2;
+  border: 1px solid #333;
+  border-radius: 1rem;
+  width: 100%;
+  height: 80%;
+  padding: 1rem;
+  gap: 5px;
+}
+
+.file-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px; /* Space between icon and file name */
+  padding: 5px;
+
+  border-radius: 5px;
+
+  overflow: hidden; /* Prevent overflow of long names */
+}
+
+.file-entry img {
+  width: 63px;
+  height: 70px;
+}
+
+.file-entry a {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  display: block;
+  max-width: 100%; /* Limit file name width */
+  color: #007bff; /* Link color */
+  text-decoration: none; /* Remove underline */
+}
+
+.file-entry a:hover {
+  text-decoration: underline; /* Underline on hover for better UX */
+}
 
 /* Responsive adjustments for smaller screens */
 @media (max-width: 768px) {

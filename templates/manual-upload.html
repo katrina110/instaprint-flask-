@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual Upload</title>
+    <link href="./../static/css/main.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="header">
+        <!-- Left logo -->
+        <img src="./../static/images/pup-logo.png" alt="sample" />
+        
+        <!-- Center text -->
+        <div class="center-text">INSTAPRINT</div>
+        
+        <!-- Right logo -->
+        <img src="./../static/images/cpe-logo.png" alt="sample" />
+    </header>
+
+    <main>
+      <div class="upload-area">
+        <h1>Choose File to Upload</h1>
+        <label for="fileInput" class="custom-file-label">
+          <img src="./../static/images/file-upload.png" alt="Upload" />
+        </label>
+        <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple hidden/>
+        <input type="text" id="fileName" placeholder="Selected file" readonly>
+
+        <div class="button-container">
+          <button id="exitButton" class="action-button">Exit</button>
+          <button id="continueButton" class="action-button">Continue</button>
+        </div>
+      </div>
+
+      <div id="previewContainer"></div>
+    </main>
+
+    <script src="./../static/js/main.js"></script>
+  </body>
+</html>
+
