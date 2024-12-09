@@ -435,3 +435,177 @@ input[type="text"] {
     font-size: 14px;
   }
 }
+
+/* MODAL */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(128, 0, 0, 0.5); /* Red with 50% transparency */
+  overflow: hidden;
+}
+
+/* Modal content box */
+.modal-content {
+  background-color: white;
+  margin: 0 auto; /* Center modal horizontally */
+  padding: 20px;
+  width: 80%;  /* Adjust width to fit content */
+  max-width: 800px; /* Max width of modal */
+  border-radius: 10px;
+
+  /* Flexbox to center content vertically and horizontally */
+  display: flex;
+  flex-direction: column;
+  align-items: center;  /* Center content horizontally */
+  justify-content: center;  /* Center content vertically */
+  height: 50%;  /* Take up the full height of the modal */
+  text-align: center; /* Center text inside the modal */
+  margin-top: 150px;
+}
+
+.button-container {
+  display: flex;
+  justify-content: space-between;
+  width: 100%; /* Adjust width as needed */
+  margin-top: 20px;  /* Add some space between content and buttons */
+}
+
+.button-container button {
+  flex: 1; /* Make buttons equally sized */
+}
+
+.close {
+  float: right;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.p-modal {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.modal-pdf {
+  width: 75px;
+  margin-top: 25px;
+}
+
+.exit {
+  height: 50px;
+  width: 50px;
+  font-size: 20px; /* Increased font size */
+  font-family: Arial, Helvetica, sans-serif;
+  color: white;
+  background-color: #c15051;
+  border-radius: 15px; /* Increased border radius */
+  cursor: pointer;
+  border: none;
+}
+
+.close-second-modal {
+  height: 50px;
+  width: 75px;
+  font-size: 20px; /* Increased font size */
+  font-family: Arial, Helvetica, sans-serif;
+  color: white;
+  background-color: #c15051;
+  border-radius: 15px; /* Increased border radius */
+  cursor: pointer;
+  border: none;
+  margin-right: 8px; /* Add space to the right of the "EXIT" button */
+  margin-top: 15px; /* Add space to the right of the "EXIT" button */
+}
+
+.yes {
+  height: 50px;
+  width: 50px;
+  font-size: 20px; /* Increased font size */
+  font-family: Arial, Helvetica, sans-serif;
+  color: white;
+  background-color: #4caf4f;
+  border-radius: 15px; /* Increased border radius */
+  cursor: pointer;
+  border: none;
+}
+
+.continue {
+  height: 50px;
+  width: 125px;
+  font-size: 20px; /* Increased font size */
+  font-family: Arial, Helvetica, sans-serif;
+  color: white;
+  background-color: #4caf4f;
+  border-radius: 15px; /* Increased border radius */
+  cursor: pointer;
+  border: none;
+}
+
+.modal-columns {
+  display: flex;              /* Use flexbox to arrange columns side by side */
+  justify-content: flex-start; /* Align items to the start (left) */
+  gap: 20px;                  /* Space between the columns */
+  width: 100%;                /* Ensure the columns take up full width */
+  margin-bottom: 30px; /* Remove unnecessary margin if needed */
+}
+
+/* Each column style */
+.column1, .column2, .column3 {
+  flex: 1;                     /* Each column takes equal space */
+  padding: 20px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-sizing: border-box;      /* Include padding in width calculation */
+  min-width: 20px;            /* Minimum width of each column */
+  max-width: 33%;              /* Maximum width of each column */
+}
+
+/* Add spacing and style for the column headers */
+.column1 h3, .column2 h3, .column3 h3 {
+  margin-bottom: 10px;
+}
+
+/* CHECKBOXES */
+/* Ensure the checkboxes are displayed vertically */
+.column1 input[type="checkbox"] {
+  display: block;       /* Makes each checkbox appear on a new line */
+  margin-bottom: 10px;  /* Adds space between the checkboxes */
+}
+
+/* Align checkbox and text horizontally using label */
+.column1 label {
+  display: flex;
+  align-items: center; /* Vertically centers the checkbox and text */
+  margin-bottom: 10px; /* Adds space between each row */
+  font-size: 16px;
+}
+
+.column2 input[type="checkbox"] {
+  display: block;       /* Makes each checkbox appear on a new line */
+  margin-bottom: 10px;  /* Adds space between the checkboxes */
+}
+
+.column2 label {
+  display: flex;
+  align-items: center; /* Vertically centers the checkbox and text */
+  margin-bottom: 10px; /* Adds space between each row */
+  font-size: 16px;
+}
+
+.column3 input[type="checkbox"] {
+  display: block;       /* Makes each checkbox appear on a new line */
+  margin-bottom: 10px;  /* Adds space between the checkboxes */
+}
+
+.column3 label {
+  display: flex;
+  align-items: center; /* Vertically centers the checkbox and text */
+  margin-bottom: 10px; /* Adds space between each row */
+  font-size: 16px;
+}

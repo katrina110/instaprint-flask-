@@ -88,6 +88,109 @@
       </div>
     </main>
 
+    <!-- Modal Structure -->
+    <!-- First Modal -->
+    <div id="myModal" class="modal">
+
+      <div class="modal-content">
+        
+        <h2>FILE SELECTED</h2>
+        <img src="./../static/images/pdf.png" alt="PDF" class="modal-pdf">
+        <p>filename.pdf</p>
+        <p class="p-modal">DO YOU WANT TO PROCEED?</p>
+
+        <div class="button-container">
+          <button class="exit">EXIT</button>
+          <button class="yes">YES</button>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Second Modal -->
+    <div id="newModal" class="modal">
+
+      <div class="modal-content">
+
+        <!-- Flexbox container for columns -->
+        <div class="modal-columns">
+
+          <div class="column1">
+
+            <h3>PAGE RANGE</h3>
+
+            <form>
+
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Current Page
+              </label>
+              
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;All Pages
+              </label>
+              
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Custom Range
+              </label>
+
+            </form>
+
+          </div>
+
+          <div class="column2">
+
+            <h3>PAPER SIZE</h3>
+
+            <form>
+
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Letter
+              </label>
+              
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Legal
+              </label>
+              
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;A4
+              </label>
+            
+            </form>
+
+          </div>
+
+          <div class="column3">
+            
+            <h3>COLOR OPTIONS</h3>
+            
+            <form>
+
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Colored
+              </label>
+              
+              <label>
+                <input type="radio" name="option" id="checkbox1"/> &nbsp;Grayscale
+              </label>
+            
+            </form>
+
+          </div>
+
+        </div>
+
+        <div>
+
+          <button class="close-second-modal">EXIT</button>
+          <button class="continue">CONTINUE</button>
+
+        </div>
+
+      </div>
+
+    </div>
+
     <script>
       // JavaScript for updating file input label
       const fileInput = document.getElementById("fileInput");
@@ -103,13 +206,89 @@
         }
       });
 
-      // Exit button functionality
-      const exitButton = document.getElementById("exitButton");
+      // MODAL
+      // Get modal elements
+      const myModal = document.getElementById("myModal");
+      const newModal = document.getElementById("newModal");
+
+      // Get the buttons inside the modals
+      const exitButton = document.querySelector(".exit");
+      const yesButton = document.querySelector(".yes");
+      const closeSecondModalButton = document.querySelector(".close-second-modal");
+
+      // Get the file images and file links
+      const fileEntries = document.querySelectorAll(".file-entry img");
+      const fileLinks = document.querySelectorAll(".file-entry a");
+
+      // Function to open the first modal
+      function openModal(fileName) {
+        myModal.style.display = "block";
+        // Update the modal content
+        const modalImage = myModal.querySelector(".modal-pdf");
+        const modalText = myModal.querySelector("p");
+        
+        // Set the file name and icon
+        modalImage.src = "./../static/images/pdf.png"; // or other icon depending on the file type
+        modalText.textContent = fileName;
+      }
+
+      // Event listeners for file icons and links to open the modal
+      fileEntries.forEach(img => {
+        img.addEventListener("click", () => {
+          const fileName = img.closest(".file-entry").querySelector("a").textContent;
+          openModal(fileName);
+        });
+      });
+
+      fileLinks.forEach(link => {
+        link.addEventListener("click", () => {
+          const fileName = link.textContent;
+          openModal(fileName);
+        });
+      });
+
+      // Event listener for "EXIT" button to close the first modal
       exitButton.addEventListener("click", () => {
-        if (confirm("Are you sure you want to exit?")) {
-          window.location.href = "/"; // Replace with the appropriate exit URL
+        myModal.style.display = "none";
+      });
+
+      // Event listener for "YES" button to open the second modal
+      yesButton.addEventListener("click", () => {
+        myModal.style.display = "none";
+        newModal.style.display = "block";
+      });
+
+      // Event listener for "EXIT" button in second modal
+      closeSecondModalButton.addEventListener("click", () => {
+        newModal.style.display = "none";
+      });
+
+      // Optionally, close modals when clicking outside of them
+      window.addEventListener("click", (event) => {
+        if (event.target === myModal || event.target === newModal) {
+          myModal.style.display = "none";
+          newModal.style.display = "none";
         }
       });
+
+      // CLEAR RADIO SELECTIONS
+      // Get the "EXIT" button
+      var closeSecModButton = document.querySelector(".close-second-modal");
+
+      // Get all the radio buttons within the modal
+      var radioButtons = document.querySelectorAll('input[type="radio"]');
+
+      // Add event listener to the "EXIT" button
+      closeSecondModalButton.onclick = function() {
+      // Reset all the radio buttons when "EXIT" is clicked
+        radioButtons.forEach(function(radio) {
+          radio.checked = false;
+        });
+
+        // Close the modal
+        newModal.style.display = "none";
+      };
+
     </script>
   </body>
 </html>
