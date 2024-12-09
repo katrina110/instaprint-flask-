@@ -384,15 +384,9 @@ input[type="text"] {
   border-radius: 0.375rem; /* Rounded corners */
   box-sizing: border-box; /* Ensures padding is included in width calculation */
   transition: all 0.3s ease-in-out; /* Smooth transition for hover and focus effects */
+  pointer-events: none;
 }
 
-/* Focus effect */
-#fileName:focus {
-  background-color: #ffffff; /* White background on focus */
-  border-color: #700000; /* Change border color */
-  outline: none; /* Remove default outline */
-  box-shadow: 0 0 5px rgba(112, 0, 0, 0.2); /* Subtle shadow on focus */
-}
 
 /* Placeholder style */
 #fileName::placeholder {
