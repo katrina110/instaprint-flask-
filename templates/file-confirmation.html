@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Confirmation</title>
+    <link href="./../static/css/main.css" rel="stylesheet" />
+  </head>
+  <body>
+    <header class="header">
+      <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
+      <div class="center-text">INSTAPRINT</div>
+      <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
+    </header>
+
+    <main>
+      <div class="confirmation-area">
+        <h2>File Confirmation</h2>
+        <div class="file-preview">
+          <h3>Selected File</h3>
+          <p>{{ file_name }}</p>
+        </div>
+
+        <div class="options-preview">
+          <h3>Printing Options</h3>
+          <ul>
+            <li><strong>Page Range:</strong> {{ page_range }}</li>
+            <li><strong>Paper Size:</strong> {{ paper_size }}</li>
+            <li><strong>Color Option:</strong> {{ color_option }}</li>
+          </ul>
+        </div>
+
+        <div class="button-container">
+          <button onclick="window.history.back()" class="action-button">
+            Go Back
+          </button>
+          <button
+            onclick="window.location.href='/process'"
+            class="action-button"
+          >
+            Confirm and Proceed
+          </button>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,204 @@
+
+.left {
+    width: 25%;
+    float: left;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; 
+    padding: 0;
+    margin: 0;
+}
+
+.left-contents {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    margin-left: 20px;
+    gap: 0;
+}
+
+.left-contents img {
+    width: auto;
+    height: 100px;
+}
+
+.doc {
+    width: 200px; /* Reduced size */
+    padding-top: 100px;
+    margin: 0;
+}
+
+.doc-name {
+    font-size: 16px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 0;
+    margin-bottom: 8px; /* Reduced margin */
+}
+
+.success {
+    font-size: 32px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 0;
+    margin-bottom: 24px; /* Reduced margin */
+    font-weight: bold;
+}
+
+.amount {
+    font-size: 25px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 0;
+    margin: 0;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+.price-container {
+    margin-top: 20px;
+}
+
+.price {
+    font-size: 90px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+}
+
+/* RIGHT */
+.right {
+    width: 75%;
+    float: right;
+    height: 100vh; 
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.right-contents {
+    width: 100%; 
+    height: 100%; 
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Rectangle container adjustments */
+.rectangle {
+    width: 100%;
+    height: 70%; /* Increased height */
+    background-color: transparent;
+    border: 2px solid black;
+    border-radius: 20px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    margin-right: 60px;
+    margin-top: 75px;
+    padding: 20px; /* Add padding to the inside of the rectangle */
+}
+
+/* Rec-container adjustments */
+.rec-container {
+    width: 100%;
+    height: calc(100% - 60px); /* Increased height of rec-container */
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Align elements at the top */
+    overflow: visible;
+}
+
+/* Adjust padding and margin for the left and right parts */
+.rec-left, .rec-right {
+    width: 50%;
+    height: auto; /* Allow height to expand */
+    display: flex;
+    flex-direction: column; /* Stack content vertically */
+    justify-content: flex-start;
+    align-items: center;
+    padding: 12px; /* Increased padding for spacing */
+    margin-bottom: 20px; /* Reduced margin for better alignment */
+}
+
+.rec-left {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 6px;
+    margin-top: 125px;
+    margin-left: 40px; /* Reduced margin */
+}
+
+.rec-right {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 6px;
+    margin-top: 100px;
+    margin-right: 50px; /* Reduced margin */
+}
+
+/* Button container adjustments */
+.button-container {
+    display: flex;
+    gap: 10px; /* Increased gap */
+    margin-top: 20px; /* Increased margin for better spacing */
+}
+
+/* Button styles */
+button.pay-now {
+    width: 140px; /* Increased width */
+    padding: 12px 18px; /* Increased padding */
+    font-size: 20px; /* Increased font size */
+    font-family: Arial, Helvetica, sans-serif;
+    color: white;
+    background-color: #fdbb57;
+    border-radius: 25px; /* Increased border radius */
+    cursor: pointer;
+    border: none;
+}
+
+button.back {
+    width: 140px; /* Increased width */
+    padding: 12px 18px; /* Increased padding */
+    font-size: 20px; /* Increased font size */
+    font-family: Arial, Helvetica, sans-serif;
+    color: white;
+    background-color: #543d2c;
+    border-radius: 25px; /* Increased border radius */
+    cursor: pointer;
+    margin-left: 10px; /* Increased margin */
+}
+
+.selected-payment {
+    font-size: 28px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+}
+
+.coins {
+    width: 200px; /* Reduced width */
+    margin-top: 40px; /* Reduced margin */
+}
+
+.content-right {
+    font-size: 14px; /* Reduced font size */
+    text-align: center;
+}
+
+.inserted {
+    font-size: 28px; /* Reduced font size */
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+}
+
+.price {
+    margin-top: 14px; /* Reduced margin */
+    margin-bottom: 0px; /* Reduced margin */
+}
