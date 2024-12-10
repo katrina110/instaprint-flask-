@@ -60,14 +60,8 @@
         <div class="file-box grid-layout">
           <div class="layout-toggle">
             <!-- Using FontAwesome icons for grid and list view -->
-            <span id="gridIcon" class="layout-icon"
-              ><i class="fas fa-th-large"></i
-            ></span>
-            <!-- Grid Icon -->
-            <span id="listIcon" class="layout-icon"
-              ><i class="fas fa-th-list"></i
-            ></span>
-            <!-- List Icon -->
+            <span id="gridIcon" class="layout-icon"><i class="fas fa-th-large"></i></span> <!-- Grid Icon -->
+            <span id="listIcon" class="layout-icon"><i class="fas fa-th-list"></i></span> <!-- List Icon -->
           </div>
           {% for file in files %}
           <div class="file-entry">
@@ -127,24 +121,20 @@
             <h3>PAGE RANGE</h3>
             <form>
               <label>
-                <input type="radio" name="page-range" id="checkbox1" />
-                &nbsp;Current Page
+                <input type="radio" name="page-range" id="checkbox1" /> &nbsp;Current
+                Page
               </label>
               <label>
-                <input type="radio" name="page-range" id="checkbox2" />
-                &nbsp;All Pages
+                <input type="radio" name="page-range" id="checkbox2" /> &nbsp;All
+                Pages
               </label>
               <label>
-                <input type="radio" name="page-range" id="checkbox3" />
-                &nbsp;Custom Range
+                <input type="radio" name="page-range" id="checkbox3" /> &nbsp;Custom
+                Range
               </label>
               <!-- Custom Range Input -->
-              <div id="customRangeContainer" style="display: none">
-                <input
-                  type="text"
-                  id="customRange"
-                  placeholder="Enter page range (e.g., 1-5)"
-                />
+              <div id="customRangeContainer" style="display: none;">
+                <input type="text" id="customRange" placeholder="Enter page range (e.g., 1-5)" />
               </div>
             </form>
           </div>
@@ -153,12 +143,10 @@
             <h3>PAPER SIZE</h3>
             <form>
               <label>
-                <input type="radio" name="paper-size" id="checkbox1" />
-                &nbsp;Letter
+                <input type="radio" name="paper-size" id="checkbox1" /> &nbsp;Letter
               </label>
               <label>
-                <input type="radio" name="paper-size" id="checkbox2" />
-                &nbsp;Legal
+                <input type="radio" name="paper-size" id="checkbox2" /> &nbsp;Legal
               </label>
               <label>
                 <input type="radio" name="paper-size" id="checkbox3" /> &nbsp;A4
@@ -170,12 +158,10 @@
             <h3>COLOR OPTIONS</h3>
             <form>
               <label>
-                <input type="radio" name="color-option" id="checkbox1" />
-                &nbsp;Colored
+                <input type="radio" name="color-option" id="checkbox1" /> &nbsp;Colored
               </label>
               <label>
-                <input type="radio" name="color-option" id="checkbox2" />
-                &nbsp;Grayscale
+                <input type="radio" name="color-option" id="checkbox2" /> &nbsp;Grayscale
               </label>
             </form>
           </div>
@@ -208,9 +194,7 @@
 
       const exitButton = document.querySelector(".exit");
       const yesButton = document.querySelector(".yes");
-      const closeSecondModalButton = document.querySelector(
-        ".close-second-modal"
-      );
+      const closeSecondModalButton = document.querySelector(".close-second-modal");
 
       const fileEntries = document.querySelectorAll(".file-entry img");
       const fileLinks = document.querySelectorAll(".file-entry a");
@@ -224,16 +208,14 @@
         modalText.textContent = fileName;
       }
 
-      fileEntries.forEach((img) => {
+      fileEntries.forEach(img => {
         img.addEventListener("click", () => {
-          const fileName = img
-            .closest(".file-entry")
-            .querySelector("a").textContent;
+          const fileName = img.closest(".file-entry").querySelector("a").textContent;
           openModal(fileName);
         });
       });
 
-      fileLinks.forEach((link) => {
+      fileLinks.forEach(link => {
         link.addEventListener("click", () => {
           const fileName = link.textContent;
           openModal(fileName);
@@ -260,15 +242,6 @@
         }
       });
 
-      // Handle continue button to go to result page (Image Segmentation result)
-      const continueButton = document.querySelector(".continue");
-
-      continueButton.addEventListener("click", () => {
-        // You may need to collect selected options here (e.g., page range, paper size, color option)
-        // Then send the data to the result page
-        window.location.href = "/result"; // Redirect to result page
-      });
-
       // Toggle layout
       const gridIcon = document.getElementById("gridIcon");
       const listIcon = document.getElementById("listIcon");
@@ -282,6 +255,18 @@
       listIcon.addEventListener("click", () => {
         fileBox.classList.remove("grid-layout");
         fileBox.classList.add("list-layout");
+      });
+
+      // Show custom range input when the "Custom Range" option is selected
+      const customRangeOption = document.getElementById("checkbox3");
+      const customRangeContainer = document.getElementById("customRangeContainer");
+
+      customRangeOption.addEventListener("change", () => {
+        if (customRangeOption.checked) {
+          customRangeContainer.style.display = "block";
+        } else {
+          customRangeContainer.style.display = "none";
+        }
       });
     </script>
   </body>
