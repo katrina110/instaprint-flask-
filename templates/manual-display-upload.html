@@ -1,35 +1,44 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
   <head>
+
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Manual Upload</title>
     <link href="./../static/css/main.css" rel="stylesheet" />
-    <!-- Add FontAwesome link for icons -->
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
       rel="stylesheet"
     />
+
   </head>
+
   <body>
+
     <header class="header">
-      <!-- Left logo -->
+
       <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
-
-      <!-- Center text -->
       <div class="center-text">INSTAPRINT</div>
-
-      <!-- Right logo -->
       <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
+
     </header>
 
     <main>
+
       <div class="upload-area">
+
         <h2>Choose File to Upload</h2>
+
         <form action="/upload" method="POST" enctype="multipart/form-data">
+
           <label for="fileInput" class="custom-file-label">
+
             <img src="./../static/images/upload-icon.png" alt="Upload" />
+
           </label>
+
           <input
             type="file"
             id="fileInput"
@@ -38,6 +47,7 @@
             hidden
             required
           />
+
           <input
             type="text"
             id="fileName"
@@ -46,134 +56,268 @@
           />
 
           <div class="button-container">
-            <button id="exitButton" class="action-button" type="button">
-              Exit
-            </button>
-            <button id="continueButton" class="action-button" type="submit">
-              Upload
-            </button>
+
+            <button id="exitButton" class="action-button" type="button">Exit</button>
+            <button id="continueButton" class="action-button" type="submit">Upload</button>
+
           </div>
+
         </form>
+
       </div>
 
       <div class="uploaded-file">
+
         <div class="file-box grid-layout">
+
           <div class="layout-toggle">
+
             <!-- Using FontAwesome icons for grid and list view -->
             <span id="gridIcon" class="layout-icon"><i class="fas fa-th-large"></i></span> <!-- Grid Icon -->
             <span id="listIcon" class="layout-icon"><i class="fas fa-th-list"></i></span> <!-- List Icon -->
+          
           </div>
+
           {% for file in files %}
+          
           <div class="file-entry">
+
             {% if file.endswith('.pdf') %}
+
             <img
-              src="{{ url_for('static', filename='images/pdf.png') }}"
-              alt="PDF Icon"
-            />
+              src="{{ url_for('static', filename='images/pdf.png') }}" alt="PDF Icon"/>
+
             {% elif file.endswith('.doc') or file.endswith('.docx') %}
+
             <img
-              src="{{ url_for('static', filename='images/microsoftword.png') }}"
-              alt="Word Icon"
-            />
-            {% elif file.endswith('.jpg') or file.endswith('.jpeg') or
-            file.endswith('.png') %}
-            <img
-              src="{{ url_for('static', filename='images/image-upload.png') }}"
-              alt="Image Icon"
-            />
+              src="{{ url_for('static', filename='images/microsoftword.png') }}" alt="Word Icon"/>
+
+            {% elif file.endswith('.jpg') or file.endswith('.jpeg') or file.endswith('.png') %}
+            
+            <img src="{{ url_for('static', filename='images/image-upload.png') }}" alt="Image Icon"/>
+
             {% else %}
-            <img
-              src="{{ url_for('static', filename='images/file-icon.png') }}"
-              alt="File Icon"
-            />
+
+            <img src="{{ url_for('static', filename='images/file-icon.png') }}"/>
+
             {% endif %}
-            <a
-              href="{{ url_for('uploaded_file', filename=file) }}"
-              target="_blank"
-              >{{ file }}</a
-            >
+
+            <a href="{{ url_for('uploaded_file', filename=file) }}" target="_blank">{{ file }}</a>
+
           </div>
+
           {% endfor %}
+
         </div>
+
       </div>
+
     </main>
 
     <!-- Modal Structure -->
     <!-- First Modal -->
     <div id="myModal" class="modal">
+
       <div class="modal-content">
+
         <h2>FILE SELECTED</h2>
-        <img src="./../static/images/pdf.png" alt="PDF" class="modal-pdf" />
-        <p>filename.pdf</p>
+
+        <!-- <img src="./../static/images/pdf.png" alt="PDF" class="modal-pdf" /> -->
+
+        <p class="file-name">filename.pdf</p>
         <p class="p-modal">DO YOU WANT TO PROCEED?</p>
+
         <div class="button-container">
+
           <button class="exit">EXIT</button>
           <button class="yes">YES</button>
+
         </div>
+
       </div>
+
     </div>
 
     <!-- Second Modal -->
     <div id="newModal" class="modal">
+
       <div class="modal-content">
+
         <div class="modal-columns">
+
           <div class="column1">
+
             <h3>PAGE RANGE</h3>
+
             <form>
+
               <label>
-                <input type="radio" name="page-range" id="checkbox1" /> &nbsp;Current
-                Page
+
+                <input type="radio" name="page-range" id="checkbox1" /> &nbsp;Current Page
+              
               </label>
+
               <label>
-                <input type="radio" name="page-range" id="checkbox2" /> &nbsp;All
-                Pages
+
+                <input type="radio" name="page-range" id="checkbox2" /> &nbsp;All Pages
+              
               </label>
+
               <label>
-                <input type="radio" name="page-range" id="checkbox3" /> &nbsp;Custom
-                Range
+                
+                <input type="radio" name="page-range" id="checkbox3" /> &nbsp;Custom Range
+              
               </label>
+              
               <!-- Custom Range Input -->
               <div id="customRangeContainer" style="display: none;">
+
                 <input type="text" id="customRange" placeholder="Enter page range (e.g., 1-5)" />
+              
               </div>
+              
             </form>
+
           </div>
 
           <div class="column2">
+
             <h3>PAPER SIZE</h3>
+
             <form>
+
               <label>
+
                 <input type="radio" name="paper-size" id="checkbox1" /> &nbsp;Letter
+              
               </label>
+
               <label>
+
                 <input type="radio" name="paper-size" id="checkbox2" /> &nbsp;Legal
+              
               </label>
+
               <label>
+
                 <input type="radio" name="paper-size" id="checkbox3" /> &nbsp;A4
+              
               </label>
+
             </form>
+
           </div>
 
           <div class="column3">
+
             <h3>COLOR OPTIONS</h3>
+
             <form>
+
               <label>
+
                 <input type="radio" name="color-option" id="checkbox1" /> &nbsp;Colored
+              
               </label>
+
               <label>
+
                 <input type="radio" name="color-option" id="checkbox2" /> &nbsp;Grayscale
+              
               </label>
+
             </form>
+
           </div>
+
         </div>
+
         <div>
+
           <button class="close-second-modal">EXIT</button>
-          <button class="continue">CONTINUE</button>
+          <button id="redirectButton" class="continue" type="button">CONTINUE</button>
+
         </div>
+
       </div>
+
+    </div>
+
+    <!-- ALTERNATIVE FOR colored-page.html -->
+
+    <div id="coloredPageModal" class="colored-page-modal">
+
+      <div class="m3-modal-content">
+
+        <div class="left">
+
+          <!-- LEFT CONTENTS -->
+          <div class="left-contents">
+          
+            <div class="price-container">
+
+              <h1 class="amount">Total Amount</h1>
+              <h1 class="price">₱20</h1>
+              <h1 class="amount">Proceed to payment?</h1>
+
+            </div>
+            
+            <div class="button-container">
+
+              <button id="m3ExitButton" class="action-button">Exit</button>
+              <button id="m3ContinueButton" class="action-button">Continue</button>
+
+            </div>
+
+          </div>
+
+        </div>
+        
+        <div class="right">
+
+          <!-- RIGHT CONTENTS -->
+          <div class="right-contents">
+            
+            <div class="rectangle">
+
+              <!-- INSIDE OF THE RECTANGLE -->
+              <div class="colored-title">
+
+                <h2>COLORED PAGES DETECTED</h2>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
     <script>
+
+      // MODAL FOR colored-page
+
+      document.getElementById('redirectButton').addEventListener('click', () => {
+        const modal = document.getElementById('coloredPageModal');
+        modal.style.display = 'block';
+      });
+
+      // CLOSE MODAL 2 on EXIT
+      document.getElementById('m3ExitButton').addEventListener('click', () => {
+        const modal = document.getElementById('newModal');
+        modal.style.display = 'none';
+      });
+
+      // CLOSE MODAL 3 on EXIT
+      document.getElementById('m3ExitButton').addEventListener('click', () => {
+        const modal = document.getElementById('coloredPageModal');
+        modal.style.display = 'none';
+      });
+
       // JavaScript for updating file input label
       const fileInput = document.getElementById("fileInput");
       const fileNameInput = document.getElementById("fileName");
@@ -191,11 +335,12 @@
       // MODAL
       const myModal = document.getElementById("myModal");
       const newModal = document.getElementById("newModal");
+      const redirectButton = document.getElementById("redirectButton");
 
       const exitButton = document.querySelector(".exit");
       const yesButton = document.querySelector(".yes");
       const closeSecondModalButton = document.querySelector(".close-second-modal");
-
+      
       const fileEntries = document.querySelectorAll(".file-entry img");
       const fileLinks = document.querySelectorAll(".file-entry a");
 
@@ -268,6 +413,55 @@
           customRangeContainer.style.display = "none";
         }
       });
+
+      // DELETE FILES
+      document.querySelectorAll(".file-entry").forEach((fileEntry) => {
+      let pressTimer;
+
+      // Start timer on mousedown or touchstart
+      const startTimer = () => {
+        pressTimer = setTimeout(() => {
+          const fileName = fileEntry.querySelector("a").textContent;
+          if (confirm(`Are you sure you want to delete "${fileName}"?`)) {
+            deleteFile(fileName, fileEntry); // Call delete function
+          }
+        }, 500); // 0.5 seconds threshold for long press
+      };
+
+      // Clear timer on mouseup or touchend
+      const cancelTimer = () => clearTimeout(pressTimer);
+
+      // Attach event listeners
+      fileEntry.addEventListener("mousedown", startTimer);
+      fileEntry.addEventListener("mouseup", cancelTimer);
+      fileEntry.addEventListener("mouseleave", cancelTimer);
+      fileEntry.addEventListener("touchstart", startTimer);
+      fileEntry.addEventListener("touchend", cancelTimer);
+      fileEntry.addEventListener("touchmove", cancelTimer); // Cancel if the user moves their finger
+      });
+
+      // DELETE FILE FUNCTION
+      function deleteFile(fileName, fileEntry) {
+
+        fetch(`/delete-file?filename=${encodeURIComponent(fileName)}`, {
+          method: "DELETE",
+        })
+          .then((response) => {
+            if (response.ok) {
+              fileEntry.remove();
+              alert(`File "${fileName}" deleted successfully.`);
+            } else {
+              alert(`Failed to delete "${fileName}". Please try again.`);
+            }
+          })
+          .catch((error) => {
+            console.error("Error deleting file:", error);
+            alert(`An error occurred while deleting "${fileName}".`);
+          });
+      }
+
     </script>
+
   </body>
+
 </html>

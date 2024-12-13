@@ -623,6 +623,11 @@ input[type="text"] {
 .modal-pdf {
   width: 75px;
   margin-top: 25px;
+  padding-bottom: 20px;
+}
+
+.file-name {
+  padding-bottom: 10px;
 }
 
 .exit {
@@ -741,4 +746,173 @@ input[type="text"] {
   align-items: center; /* Vertically centers the checkbox and text */
   margin-bottom: 10px; /* Adds space between each row */
   font-size: 16px;
+}
+
+
+
+
+
+
+
+
+
+/* TEST */
+
+/* Modal background */
+.colored-page-modal {
+  display: none; /* Hidden by default */
+  position: fixed;
+  z-index: 9999; /* Ensure it's above other elements */
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+}
+
+/* Modal content */
+.colored-page-modal .modal-content {
+  position: relative; /* Center within modal background */
+  width: 100%; /* Adjust width as needed */
+  max-width: 2000px; /* Optional: constrain max size */
+  height: 100%;
+  max-height: 2000px;
+  background-color: #fff;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: auto; /* Center content horizontally and vertically */
+  overflow: auto;
+}
+
+.m3-modal-content {
+  background-color: #fff;
+}
+
+/* Close button */
+.colored-page-modal .close {
+  color: #000;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.colored-page-modal .close:hover,
+.colored-page-modal .close:focus {
+  color: #555;
+}
+
+/* colored-page LEFT */
+.left {
+  width: 25%;
+  float: left;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh; 
+  padding: 0;
+  margin: 0;
+}
+
+.left-contents {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin-left: 20px;
+  gap: 0;
+}
+
+.left-contents img {
+  width: auto;
+  height: 100px;
+}
+.doc-name {
+  font-size: 16px; /* Reduced font size */
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 0;
+  margin-bottom: 8px; /* Reduced margin */
+}
+
+.price-container {
+  margin-top: 20px;
+}
+
+.amount {
+  font-size: 25px; /* Reduced font size */
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 0;
+  margin: 0;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.price {
+  font-size: 90px; /* Reduced font size */
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 0;
+  margin: 0;
+  text-align: center;
+}
+
+.button-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+#m3ExitButton {
+  background-color: #d9534f; /* Red for Exit */
+  color: white;
+}
+
+#m3ContinueButton {
+  background-color: #5cb85c; /* Green for Continue */
+  color: white;
+}
+
+/* colored-page RIGHT */
+.right {
+  width: 75%;
+  float: right;
+  height: 100vh; 
+  padding: 0;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.right-contents {
+  width: 100%; 
+  height: 100%; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Rectangle container adjustments */
+.rectangle {
+  width: 100%;
+  height: 70%; /* Increased height */
+  background-color: transparent;
+  border: 2px solid black;
+  border-radius: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  margin-right: 60px;
+  margin-top: 75px;
+  padding: 20px; /* Add padding to the inside of the rectangle */
 }

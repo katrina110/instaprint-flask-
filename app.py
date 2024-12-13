@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
 import os
 
 app = Flask(__name__)
@@ -50,6 +50,25 @@ def upload_file():
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+# DELETE FILES
+@app.route('/delete-file', methods=['DELETE'])
+def delete_file():
+    file_name = request.args.get('filename')
+    if file_name:
+        try:
+            os.remove(os.path.join(UPLOAD_FOLDER, file_name))  # Adjust UPLOAD_FOLDER as needed
+            return jsonify({'message': 'File deleted successfully'}), 200
+        except FileNotFoundError:
+            return jsonify({'error': 'File not found'}), 404
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    return jsonify({'error': 'Filename not provided'}), 400
+
+# REDIRECT TO colored-pages.html
+@app.route('/colored-page')
+def colored_page():
+    return render_template('colored-page.html')
+    
 # Main entry point for the Flask app
 if __name__ == '__main__':
     app.run(debug=True)

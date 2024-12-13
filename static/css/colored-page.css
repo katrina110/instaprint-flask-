@@ -1,3 +1,6 @@
+* {
+    overflow: hidden;
+}
 
 .left {
     width: 25%;
