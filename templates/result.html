@@ -3,106 +3,297 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Processed Images</title>
-    <style>
-      body {
-        font-family: "Arial", sans-serif;
-        background-color: #f4f7fc;
-        margin: 0;
-        padding: 0;
-        color: #333;
-      }
-      h1 {
-        text-align: center;
-        color: #444;
-        margin-top: 30px;
-        font-size: 2.5rem;
-      }
-      .container {
-        display: flex;
-        justify-content: space-around;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        padding: 30px;
-      }
-      .column {
-        width: 45%;
-        margin: 10px;
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-      }
-      .column h2 {
-        color: #5e5e5e;
-        font-size: 1.6rem;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #f1f1f1;
-        padding-bottom: 10px;
-      }
-      img {
-        width: 100%;
-        max-width: 100%;
-        margin-bottom: 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
-      .price {
-        text-align: center;
-        font-size: 1.6rem;
-        color: #f4512c;
-        margin-bottom: 30px;
-        font-weight: bold;
-      }
-      .footer {
-        text-align: center;
-        margin-top: 40px;
-        color: #888;
-        font-size: 1rem;
-      }
-      @media (max-width: 768px) {
-        .container {
-          flex-direction: column;
-          align-items: center;
-        }
-        .column {
-          width: 80%;
-          margin: 10px 0;
-        }
-      }
-    </style>
+    <title>Result Page</title>
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
   </head>
   <body>
-    <h1>Processed Images and Results</h1>
-    <div class="price">Total Price: ₱{{ total_price }}</div>
-
     <div class="container">
-      <div class="column">
-        <h2>Original Images</h2>
-        {% for img in original_images %}
-        <img
-          src="{{ url_for('uploaded_file', filename=img) }}"
-          alt="Original Image"
-        />
-        {% endfor %}
-      </div>
+      <h1 class="mt-5">Print Preview Results</h1>
 
-      <div class="column">
-        <h2>Colored Pixels Detected</h2>
-        {% for img in processed_images %}
-        <img
-          src="{{ url_for('uploaded_file', filename=img) }}"
-          alt="Processed Image"
-        />
-        {% endfor %}
+      <!-- Section for displaying selected print options -->
+      <div id="printDetails" class="mb-4"></div>
+
+      <!-- Button to open edit modal -->
+      <button
+        class="btn btn-warning"
+        id="editButton"
+        data-toggle="modal"
+        data-target="#editModal"
+      >
+        Edit Print Options
+      </button>
+
+      <!-- Button to print the document -->
+      <button class="btn btn-success mt-3" id="printButton">
+        Print Document
+      </button>
+
+      <!-- Total price -->
+      <h3 class="mt-4" id="totalPrice">
+        Total Price: $<span id="priceValue">0.00</span>
+      </h3>
+
+      <!-- Preview container -->
+      <h2>Page Previews</h2>
+      <div id="previewContainer" class="d-flex flex-wrap"></div>
+
+      <!-- Segmented/Processed images with prices -->
+      <h2 class="mt-5">Segmented Images and Price Breakdown</h2>
+      <div id="segmentedContainer" class="d-flex flex-wrap"></div>
+    </div>
+
+    <!-- Edit Print Options Modal -->
+    <div
+      class="modal fade"
+      id="editModal"
+      tabindex="-1"
+      aria-labelledby="editModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editModalLabel">Edit Print Options</h5>
+            <button
+              type="button"
+              class="close"
+              data-dismiss="modal"
+              aria-label="Close"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="editForm">
+              <div class="form-group">
+                <label for="editPageFrom">Page From:</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="editPageFrom"
+                  name="pageFrom"
+                  min="1"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editPageTo">Page To:</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="editPageTo"
+                  name="pageTo"
+                  min="1"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editNumCopies">Number of Copies:</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  id="editNumCopies"
+                  name="numCopies"
+                  min="1"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="editPageSize">Page Size:</label>
+                <select
+                  class="form-control"
+                  id="editPageSize"
+                  name="pageSize"
+                  required
+                >
+                  <option value="A4">A4</option>
+                  <option value="Short">Short</option>
+                  <option value="Long">Long</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="editColorOption">Color Option:</label>
+                <select
+                  class="form-control"
+                  id="editColorOption"
+                  name="colorOption"
+                  required
+                >
+                  <option value="Color">Color</option>
+                  <option value="Grayscale">Grayscale</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                Apply Changes
+              </button>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="footer">
-      <p>
-        Thank you for using our image processing service. For more information,
-        contact us.
-      </p>
-    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Function to refresh the UI based on the current options
+        const refreshUI = (options) => {
+          // Update print details section
+          const printDetails = document.getElementById("printDetails");
+          printDetails.innerHTML = `
+            <h5>Selected Options:</h5>
+            <ul>
+              <li><strong>File:</strong> ${options.fileName}</li>
+              <li><strong>Page Range:</strong> ${options.pageFrom} to ${options.pageTo}</li>
+              <li><strong>Number of Copies:</strong> ${options.numCopies}</li>
+              <li><strong>Page Size:</strong> ${options.pageSize}</li>
+              <li><strong>Color Option:</strong> ${options.colorOption}</li>
+            </ul>
+          `;
+
+          // Fetch updated previews and pricing details
+          fetch("/preview_with_price", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(options),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              const previewContainer =
+                document.getElementById("previewContainer");
+              const segmentedContainer =
+                document.getElementById("segmentedContainer");
+              const priceValue = document.getElementById("priceValue");
+
+              // Clear previous content
+              previewContainer.innerHTML = "";
+              segmentedContainer.innerHTML = "";
+              priceValue.textContent = data.totalPrice.toFixed(2);
+
+              // Update content based on options
+              if (options.colorOption === "Grayscale") {
+                data.previews.forEach((preview) => {
+                  const previewElement = document.createElement("div");
+                  previewElement.classList.add("m-2", "border", "p-2");
+                  previewElement.innerHTML = `
+                    <p>Page ${preview.page}:</p>
+                    <img src="${preview.path}" alt="Grayscale Preview" style="max-width: 200px;">
+                  `;
+                  previewContainer.appendChild(previewElement);
+                });
+                segmentedContainer.innerHTML =
+                  "<p>No segmentation applied for Grayscale option.</p>";
+              } else {
+                data.pagePrices.forEach((page) => {
+                  const previewElement = document.createElement("div");
+                  previewElement.classList.add("m-2", "border", "p-2");
+                  previewElement.innerHTML = `
+                    <p>Page ${page.page}:</p>
+                    <img src="${page.original}" alt="Preview" style="max-width: 200px;">
+                  `;
+                  previewContainer.appendChild(previewElement);
+
+                  const segmentedElement = document.createElement("div");
+                  segmentedElement.classList.add("m-2", "border", "p-2");
+                  segmentedElement.innerHTML = `
+                    <p>Page ${page.page} ($${page.price.toFixed(2)}):</p>
+                    <img src="${
+                      page.processed
+                    }" alt="Segmented" style="max-width: 200px;">
+                  `;
+                  segmentedContainer.appendChild(segmentedElement);
+                });
+              }
+            })
+            .catch((error) => {
+              console.error("Error fetching previews and prices:", error);
+            });
+        };
+
+        // Load options from sessionStorage
+        const options = JSON.parse(sessionStorage.getItem("printOptions"));
+        if (!options) {
+          alert("No print options found!");
+          return;
+        }
+
+        // Initial UI refresh
+        refreshUI(options);
+
+        // Populate edit modal with the current options
+        const editForm = document.getElementById("editForm");
+        const fields = [
+          "pageFrom",
+          "pageTo",
+          "numCopies",
+          "pageSize",
+          "colorOption",
+        ];
+        fields.forEach((field) => {
+          document.getElementById(
+            `edit${field.charAt(0).toUpperCase() + field.slice(1)}`
+          ).value = options[field];
+        });
+
+        // Handle edit form submission
+        editForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+
+          // Update options object
+          fields.forEach((field) => {
+            options[field] = document.getElementById(
+              `edit${field.charAt(0).toUpperCase() + field.slice(1)}`
+            ).value;
+          });
+
+          // Save updated options to sessionStorage
+          sessionStorage.setItem("printOptions", JSON.stringify(options));
+
+          // Close the modal
+          $("#editModal").modal("hide");
+
+          // Refresh the UI with updated options
+          refreshUI(options);
+        });
+
+        // Print button functionality
+        document.getElementById("printButton").addEventListener("click", () => {
+          fetch("/print_document", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(options),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.success) {
+                alert("Document sent to printer successfully!");
+              } else {
+                alert("Error printing document: " + data.message);
+              }
+            })
+            .catch((error) => {
+              console.error("Error printing document:", error);
+              alert("Failed to send document to printer.");
+            });
+        });
+      });
+    </script>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>

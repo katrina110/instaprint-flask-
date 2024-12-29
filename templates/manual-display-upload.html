@@ -1,467 +1,240 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
   <head>
-
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Manual Upload</title>
-    <link href="./../static/css/main.css" rel="stylesheet" />
+    <title>File Upload and Print Preview</title>
     <link
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
       rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
     />
-
+    <style>
+      .preview-container {
+        max-height: 400px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        padding: 10px;
+        width: 300px;
+      }
+      .preview-page {
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+      }
+      .preview-page img {
+        max-width: 100%;
+        display: block;
+        margin: auto;
+      }
+      .modal-body {
+        display: flex;
+      }
+      .form-section {
+        flex: 1;
+      }
+      .preview-section {
+        flex: 1;
+        margin-left: 20px;
+      }
+    </style>
   </head>
-
   <body>
-
-    <header class="header">
-
-      <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
-      <div class="center-text">INSTAPRINT</div>
-      <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
-
-    </header>
-
-    <main>
-
-      <div class="upload-area">
-
-        <h2>Choose File to Upload</h2>
-
-        <form action="/upload" method="POST" enctype="multipart/form-data">
-
-          <label for="fileInput" class="custom-file-label">
-
-            <img src="./../static/images/upload-icon.png" alt="Upload" />
-
-          </label>
-
+    <div class="container">
+      <h1 class="mt-5">Upload a File for Processing</h1>
+      <form id="uploadForm">
+        <div class="form-group">
+          <label for="file"
+            >Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)</label
+          >
           <input
             type="file"
-            id="fileInput"
+            class="form-control"
+            id="file"
             name="file"
-            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
-            hidden
             required
           />
-
-          <input
-            type="text"
-            id="fileName"
-            placeholder="Selected file"
-            readonly
-          />
-
-          <div class="button-container">
-
-            <button id="exitButton" class="action-button" type="button">Exit</button>
-            <button id="continueButton" class="action-button" type="submit">Upload</button>
-
-          </div>
-
-        </form>
-
-      </div>
-
-      <div class="uploaded-file">
-
-        <div class="file-box grid-layout">
-
-          <div class="layout-toggle">
-
-            <!-- Using FontAwesome icons for grid and list view -->
-            <span id="gridIcon" class="layout-icon"><i class="fas fa-th-large"></i></span> <!-- Grid Icon -->
-            <span id="listIcon" class="layout-icon"><i class="fas fa-th-list"></i></span> <!-- List Icon -->
-          
-          </div>
-
-          {% for file in files %}
-          
-          <div class="file-entry">
-
-            {% if file.endswith('.pdf') %}
-
-            <img
-              src="{{ url_for('static', filename='images/pdf.png') }}" alt="PDF Icon"/>
-
-            {% elif file.endswith('.doc') or file.endswith('.docx') %}
-
-            <img
-              src="{{ url_for('static', filename='images/microsoftword.png') }}" alt="Word Icon"/>
-
-            {% elif file.endswith('.jpg') or file.endswith('.jpeg') or file.endswith('.png') %}
-            
-            <img src="{{ url_for('static', filename='images/image-upload.png') }}" alt="Image Icon"/>
-
-            {% else %}
-
-            <img src="{{ url_for('static', filename='images/file-icon.png') }}"/>
-
-            {% endif %}
-
-            <a href="{{ url_for('uploaded_file', filename=file) }}" target="_blank">{{ file }}</a>
-
-          </div>
-
-          {% endfor %}
-
         </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </form>
 
-      </div>
-
-    </main>
-
-    <!-- Modal Structure -->
-    <!-- First Modal -->
-    <div id="myModal" class="modal">
-
-      <div class="modal-content">
-
-        <h2>FILE SELECTED</h2>
-
-        <!-- <img src="./../static/images/pdf.png" alt="PDF" class="modal-pdf" /> -->
-
-        <p class="file-name">filename.pdf</p>
-        <p class="p-modal">DO YOU WANT TO PROCEED?</p>
-
-        <div class="button-container">
-
-          <button class="exit">EXIT</button>
-          <button class="yes">YES</button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- Second Modal -->
-    <div id="newModal" class="modal">
-
-      <div class="modal-content">
-
-        <div class="modal-columns">
-
-          <div class="column1">
-
-            <h3>PAGE RANGE</h3>
-
-            <form>
-
-              <label>
-
-                <input type="radio" name="page-range" id="checkbox1" /> &nbsp;Current Page
-              
-              </label>
-
-              <label>
-
-                <input type="radio" name="page-range" id="checkbox2" /> &nbsp;All Pages
-              
-              </label>
-
-              <label>
-                
-                <input type="radio" name="page-range" id="checkbox3" /> &nbsp;Custom Range
-              
-              </label>
-              
-              <!-- Custom Range Input -->
-              <div id="customRangeContainer" style="display: none;">
-
-                <input type="text" id="customRange" placeholder="Enter page range (e.g., 1-5)" />
-              
+      <div id="printOptionsModal" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Print Options</h5>
+            </div>
+            <div class="modal-body">
+              <div class="form-section">
+                <div class="form-group">
+                  <label for="pageFrom">Page From</label>
+                  <input
+                    type="number"
+                    id="pageFrom"
+                    class="form-control"
+                    placeholder="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pageTo">Page To</label>
+                  <input
+                    type="number"
+                    id="pageTo"
+                    class="form-control"
+                    placeholder="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="numCopies">Number of Copies</label>
+                  <input
+                    type="number"
+                    id="numCopies"
+                    class="form-control"
+                    value="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pageSize">Page Size</label>
+                  <select id="pageSize" class="form-control">
+                    <option value="A4">A4</option>
+                    <option value="Short">Short</option>
+                    <option value="Long">Long</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="colorOption">Color Option</label>
+                  <select id="colorOption" class="form-control">
+                    <option value="Color">Color</option>
+                    <option value="Grayscale">Grayscale</option>
+                  </select>
+                </div>
               </div>
-              
-            </form>
-
-          </div>
-
-          <div class="column2">
-
-            <h3>PAPER SIZE</h3>
-
-            <form>
-
-              <label>
-
-                <input type="radio" name="paper-size" id="checkbox1" /> &nbsp;Letter
-              
-              </label>
-
-              <label>
-
-                <input type="radio" name="paper-size" id="checkbox2" /> &nbsp;Legal
-              
-              </label>
-
-              <label>
-
-                <input type="radio" name="paper-size" id="checkbox3" /> &nbsp;A4
-              
-              </label>
-
-            </form>
-
-          </div>
-
-          <div class="column3">
-
-            <h3>COLOR OPTIONS</h3>
-
-            <form>
-
-              <label>
-
-                <input type="radio" name="color-option" id="checkbox1" /> &nbsp;Colored
-              
-              </label>
-
-              <label>
-
-                <input type="radio" name="color-option" id="checkbox2" /> &nbsp;Grayscale
-              
-              </label>
-
-            </form>
-
-          </div>
-
-        </div>
-
-        <div>
-
-          <button class="close-second-modal">EXIT</button>
-          <button id="redirectButton" class="continue" type="button">CONTINUE</button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-    <!-- ALTERNATIVE FOR colored-page.html -->
-
-    <div id="coloredPageModal" class="colored-page-modal">
-
-      <div class="m3-modal-content">
-
-        <div class="left">
-
-          <!-- LEFT CONTENTS -->
-          <div class="left-contents">
-          
-            <div class="price-container">
-
-              <h1 class="amount">Total Amount</h1>
-              <h1 class="price">₱20</h1>
-              <h1 class="amount">Proceed to payment?</h1>
-
-            </div>
-            
-            <div class="button-container">
-
-              <button id="m3ExitButton" class="action-button">Exit</button>
-              <button id="m3ContinueButton" class="action-button">Continue</button>
-
-            </div>
-
-          </div>
-
-        </div>
-        
-        <div class="right">
-
-          <!-- RIGHT CONTENTS -->
-          <div class="right-contents">
-            
-            <div class="rectangle">
-
-              <!-- INSIDE OF THE RECTANGLE -->
-              <div class="colored-title">
-
-                <h2>COLORED PAGES DETECTED</h2>
-
+              <div class="preview-section">
+                <h6>File: <span id="fileName"></span></h6>
+                <h6>Total Pages: <span id="totalPages"></span></h6>
+                <h6>Preview</h6>
+                <div id="previewContainer" class="preview-container"></div>
               </div>
-
             </div>
-
+            <div class="modal-footer">
+              <button
+                id="closeModalBtn"
+                class="btn btn-secondary"
+                data-dismiss="modal"
+              >
+                Exit
+              </button>
+              <button id="continueBtn" class="btn btn-primary">Continue</button>
+            </div>
           </div>
-
         </div>
-
       </div>
-
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
+      let previewTimeout;
+      let totalPages = 0;
+      let fileName = "";
 
-      // MODAL FOR colored-page
+      $("#uploadForm").on("submit", function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
 
-      document.getElementById('redirectButton').addEventListener('click', () => {
-        const modal = document.getElementById('coloredPageModal');
-        modal.style.display = 'block';
-      });
+        $.ajax({
+          url: "/upload",
+          method: "POST",
+          data: formData,
+          contentType: false,
+          processData: false,
+          success: function (response) {
+            fileName = response.fileName;
+            totalPages = response.totalPages;
+            $("#fileName").text(fileName);
+            $("#totalPages").text(totalPages);
+            $("#printOptionsModal").modal("show");
 
-      // CLOSE MODAL 2 on EXIT
-      document.getElementById('m3ExitButton').addEventListener('click', () => {
-        const modal = document.getElementById('newModal');
-        modal.style.display = 'none';
-      });
+            $("#pageFrom").val(1);
+            $("#pageTo").val(totalPages);
 
-      // CLOSE MODAL 3 on EXIT
-      document.getElementById('m3ExitButton').addEventListener('click', () => {
-        const modal = document.getElementById('coloredPageModal');
-        modal.style.display = 'none';
-      });
-
-      // JavaScript for updating file input label
-      const fileInput = document.getElementById("fileInput");
-      const fileNameInput = document.getElementById("fileName");
-
-      fileInput.addEventListener("change", () => {
-        if (fileInput.files.length > 0) {
-          fileNameInput.value = Array.from(fileInput.files)
-            .map((file) => file.name)
-            .join(", ");
-        } else {
-          fileNameInput.value = "";
-        }
-      });
-
-      // MODAL
-      const myModal = document.getElementById("myModal");
-      const newModal = document.getElementById("newModal");
-      const redirectButton = document.getElementById("redirectButton");
-
-      const exitButton = document.querySelector(".exit");
-      const yesButton = document.querySelector(".yes");
-      const closeSecondModalButton = document.querySelector(".close-second-modal");
-      
-      const fileEntries = document.querySelectorAll(".file-entry img");
-      const fileLinks = document.querySelectorAll(".file-entry a");
-
-      function openModal(fileName) {
-        myModal.style.display = "block";
-        const modalImage = myModal.querySelector(".modal-pdf");
-        const modalText = myModal.querySelector("p");
-
-        modalImage.src = "./../static/images/pdf.png"; // or other icon depending on the file type
-        modalText.textContent = fileName;
-      }
-
-      fileEntries.forEach(img => {
-        img.addEventListener("click", () => {
-          const fileName = img.closest(".file-entry").querySelector("a").textContent;
-          openModal(fileName);
+            updatePreview();
+          },
+          error: function (err) {
+            alert(err.responseJSON.error || "Upload failed.");
+          },
         });
       });
 
-      fileLinks.forEach(link => {
-        link.addEventListener("click", () => {
-          const fileName = link.textContent;
-          openModal(fileName);
-        });
-      });
+      function updatePreview() {
+        const pageFrom = $("#pageFrom").val();
+        const pageTo = $("#pageTo").val();
+        const numCopies = $("#numCopies").val();
+        const pageSize = $("#pageSize").val();
+        const colorOption = $("#colorOption").val();
 
-      exitButton.addEventListener("click", () => {
-        myModal.style.display = "none";
-      });
+        if (!pageFrom || !pageTo || pageFrom > pageTo || pageTo > totalPages)
+          return;
 
-      yesButton.addEventListener("click", () => {
-        myModal.style.display = "none";
-        newModal.style.display = "block";
-      });
+        clearTimeout(previewTimeout);
 
-      closeSecondModalButton.addEventListener("click", () => {
-        newModal.style.display = "none";
-      });
+        previewTimeout = setTimeout(() => {
+          $.ajax({
+            url: "/generate_preview",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({
+              pageFrom,
+              pageTo,
+              numCopies,
+              pageSize,
+              colorOption,
+            }),
+            success: function (response) {
+              const previewContainer = $("#previewContainer");
+              previewContainer.empty();
 
-      window.addEventListener("click", (event) => {
-        if (event.target === myModal || event.target === newModal) {
-          myModal.style.display = "none";
-          newModal.style.display = "none";
-        }
-      });
-
-      // Toggle layout
-      const gridIcon = document.getElementById("gridIcon");
-      const listIcon = document.getElementById("listIcon");
-      const fileBox = document.querySelector(".file-box");
-
-      gridIcon.addEventListener("click", () => {
-        fileBox.classList.remove("list-layout");
-        fileBox.classList.add("grid-layout");
-      });
-
-      listIcon.addEventListener("click", () => {
-        fileBox.classList.remove("grid-layout");
-        fileBox.classList.add("list-layout");
-      });
-
-      // Show custom range input when the "Custom Range" option is selected
-      const customRangeOption = document.getElementById("checkbox3");
-      const customRangeContainer = document.getElementById("customRangeContainer");
-
-      customRangeOption.addEventListener("change", () => {
-        if (customRangeOption.checked) {
-          customRangeContainer.style.display = "block";
-        } else {
-          customRangeContainer.style.display = "none";
-        }
-      });
-
-      // DELETE FILES
-      document.querySelectorAll(".file-entry").forEach((fileEntry) => {
-      let pressTimer;
-
-      // Start timer on mousedown or touchstart
-      const startTimer = () => {
-        pressTimer = setTimeout(() => {
-          const fileName = fileEntry.querySelector("a").textContent;
-          if (confirm(`Are you sure you want to delete "${fileName}"?`)) {
-            deleteFile(fileName, fileEntry); // Call delete function
-          }
-        }, 500); // 0.5 seconds threshold for long press
-      };
-
-      // Clear timer on mouseup or touchend
-      const cancelTimer = () => clearTimeout(pressTimer);
-
-      // Attach event listeners
-      fileEntry.addEventListener("mousedown", startTimer);
-      fileEntry.addEventListener("mouseup", cancelTimer);
-      fileEntry.addEventListener("mouseleave", cancelTimer);
-      fileEntry.addEventListener("touchstart", startTimer);
-      fileEntry.addEventListener("touchend", cancelTimer);
-      fileEntry.addEventListener("touchmove", cancelTimer); // Cancel if the user moves their finger
-      });
-
-      // DELETE FILE FUNCTION
-      function deleteFile(fileName, fileEntry) {
-
-        fetch(`/delete-file?filename=${encodeURIComponent(fileName)}`, {
-          method: "DELETE",
-        })
-          .then((response) => {
-            if (response.ok) {
-              fileEntry.remove();
-              alert(`File "${fileName}" deleted successfully.`);
-            } else {
-              alert(`Failed to delete "${fileName}". Please try again.`);
-            }
-          })
-          .catch((error) => {
-            console.error("Error deleting file:", error);
-            alert(`An error occurred while deleting "${fileName}".`);
+              response.previews.forEach((preview) => {
+                const timestampedURL = preview + "?t=" + new Date().getTime();
+                const pageDiv = $("<div>")
+                  .addClass("preview-page")
+                  .append($("<img>").attr("src", timestampedURL));
+                previewContainer.append(pageDiv);
+              });
+            },
+            error: function (error) {
+              console.error(
+                error.responseJSON.error || "Failed to generate previews."
+              );
+            },
           });
+        }, 300);
       }
 
+      $("#pageFrom, #pageTo, #numCopies, #pageSize, #colorOption").on(
+        "input change",
+        function () {
+          updatePreview();
+        }
+      );
+
+      $("#continueBtn").on("click", function () {
+        const options = {
+          pageFrom: $("#pageFrom").val(),
+          pageTo: $("#pageTo").val(),
+          numCopies: $("#numCopies").val(),
+          pageSize: $("#pageSize").val(),
+          colorOption: $("#colorOption").val(),
+          fileName: fileName,
+        };
+
+        // Store options in session storage to retrieve in result.html
+        sessionStorage.setItem("printOptions", JSON.stringify(options));
+
+        // Redirect to result.html
+        window.location.href = "/result";
+      });
     </script>
-
   </body>
-
 </html>
