@@ -122,6 +122,11 @@ def manual_upload():
     files = os.listdir(app.config['UPLOAD_FOLDER'])  # List all files in the upload folder
     return render_template('manual-display-upload.html', files=files)
 
+@app.route('/online-upload')
+def online_upload():
+    files = os.listdir(app.config['UPLOAD_FOLDER'])  # List all files in the upload folder
+    return render_template('online-display-upload.html', files=files)
+
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
