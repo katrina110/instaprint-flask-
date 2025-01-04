@@ -137,6 +137,26 @@ def manual_upload():
     files = os.listdir(app.config['UPLOAD_FOLDER'])  # List all files in the upload folder
     return render_template('manual-display-upload.html', files=files)
 
+@app.route('/online-upload', methods=['GET', 'POST'])
+def online_upload():
+    # If it's a POST request (file upload)
+    if request.method == 'POST':
+        # Check if a file is part of the request
+        file = request.files.get('file')
+        if file:
+            filename = file.filename
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            return f'File "{filename}" uploaded successfully!'
+        else:
+            return 'No file selected!', 400
+
+    # If it's a GET request (display upload form and ToffeeShare link)
+    else:
+        # List the files in the upload folder if you want to display them
+        files = os.listdir(app.config['UPLOAD_FOLDER'])
+        # You can provide a link to ToffeeShare or any related functionality
+        toffee_share_link = "https://toffeeshare.com/nearby"
+        return render_template('upload_page.html', files=files, toffee_share_link=toffee_share_link)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

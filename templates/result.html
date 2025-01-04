@@ -33,7 +33,7 @@
 
       <!-- Total price -->
       <h3 class="mt-4" id="totalPrice">
-        Total Price: $<span id="priceValue">0.00</span>
+        Total Price: ₱<span id="priceValue">0.00</span>
       </h3>
 
       <!-- Preview container -->
@@ -208,10 +208,8 @@
                   const segmentedElement = document.createElement("div");
                   segmentedElement.classList.add("m-2", "border", "p-2");
                   segmentedElement.innerHTML = `
-                    <p>Page ${page.page} ($${page.price.toFixed(2)}):</p>
-                    <img src="${
-                      page.processed
-                    }" alt="Segmented" style="max-width: 200px;">
+                    <p>Page ${page.page} (₱${page.price.toFixed(2)}):</p>
+                    <img src="${page.processed}" alt="Segmented" style="max-width: 200px;">
                   `;
                   segmentedContainer.appendChild(segmentedElement);
                 });

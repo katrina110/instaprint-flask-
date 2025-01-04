@@ -77,7 +77,7 @@ def process_image(image):
     num_bright_pixels = np.sum(bright_mask == 255)
 
     # Define price per bright pixel
-    price_per_pixel = 0.0000075
+    price_per_pixel = 0.0000085
 
     # Calculate total price based on number of bright pixels
     price = num_bright_pixels * price_per_pixel
@@ -104,6 +104,21 @@ def process_image(image):
     output_image[combined_mask == 255] = [255, 255, 255]  # Set to white where mask is dark
 
     return output_image, rounded_price
+
+
+def calculate_cost_and_profit(image, is_grayscale=False):
+    """Calculate the cost and profit per page based on image type (grayscale or color)."""
+    if is_grayscale:
+        # Cost and profit calculation for grayscale
+        cost_per_page = 2  # Arbitrary cost for grayscale pages
+        profit_per_page = 3  # Arbitrary profit for grayscale pages
+    else:
+        # Cost and profit calculation for colored pages
+        num_pixels = image.shape[0] * image.shape[1]
+        cost_per_page = 1* num_pixels  # Example pricing model for color (per pixel)
+        profit_per_page = 5 * num_pixels  # Example profit for color pages
+
+    return cost_per_page, profit_per_page
 
 
 @app.route('/')
@@ -142,7 +157,6 @@ def online_upload():
         # You can provide a link to ToffeeShare or any related functionality
         toffee_share_link = "https://toffeeshare.com/nearby"
         return render_template('upload_page.html', files=files, toffee_share_link=toffee_share_link)
-
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -218,7 +232,6 @@ def generate_preview():
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews: {e}"}), 500
 
-
 @app.route('/preview_with_price', methods=['POST'])
 def preview_with_price():
     """Generate previews and calculate prices for selected pages."""
@@ -246,9 +259,16 @@ def preview_with_price():
                 cv2.imwrite(preview_path, gray_preview)
                 previews.append(f"/uploads/grayscale_preview_{page_from + idx}.jpg")
 
+            # Calculate the cost and profit for grayscale
+            for img in selected_images:
+                cost, profit = calculate_cost_and_profit(img, is_grayscale=True)
+                total_price += cost
+
+            total_price = round(total_price)  # Round the total price to whole number
+
             return jsonify({
-                "totalPrice": 0,  # No cost calculation for grayscale
-                "pagePrices": [{"page": i + page_from, "price": 0} for i in range(len(selected_images))],
+                "totalPrice": total_price,
+                "pagePrices": [{"page": i + page_from, "price": 0, "profit": profit} for i in range(len(selected_images))],
                 "previews": [{"page": page_from + idx, "path": preview} for idx, preview in enumerate(previews)]
             }), 200
 
@@ -272,6 +292,8 @@ def preview_with_price():
                 "original": f"/uploads/preview_{page_from + idx}.jpg",
                 "processed": f"/uploads/segmented_{page_from + idx}.jpg"
             })
+
+        total_price = round(total_price)  # Round the total price to whole number
 
         return jsonify({
             "totalPrice": total_price,
@@ -334,33 +356,17 @@ def print_document():
             if not os.path.exists(full_path):
                 continue
             # Get image dimensions
-            img = cv2.imread(full_path)
-            height, width, _ = img.shape
-            aspect_ratio = width / height
-            page_width = 210  # A4 width in mm
-            page_height = page_width / aspect_ratio
-
+            image = cv2.imread(full_path)
+            height, width, _ = image.shape
             pdf.add_page()
-            pdf.image(full_path, x=10, y=10, w=page_width, h=page_height)
+            pdf.image(full_path, 0, 0, width=210, h=height * 210 / width)  # Add image to PDF
 
+        # Save the PDF for printing
         pdf.output(pdf_path)
-
-        # Send the PDF to the printer
-        if os.name == 'nt':  # Windows
-            import win32print
-            import win32api
-
-            printer_name = win32print.GetDefaultPrinter()
-            win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
-        else:  # Linux/MacOS
-            os.system(f'lp "{pdf_path}"')
-
-        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
+        return jsonify({"message": "Document prepared for printing.", "pdfPath": pdf_path}), 200
 
     except Exception as e:
-        print(f"Error printing document: {e}")
-        return jsonify({"error": f"Failed to print document: {e}"}), 500
-
+        return jsonify({"error": f"Failed to print the document: {e}"}), 500
 
 
 
