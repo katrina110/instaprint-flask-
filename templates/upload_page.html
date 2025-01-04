@@ -39,17 +39,47 @@
   </head>
   <body>
     <div class="container">
-      <h1 class="mt-5">First, use ToffeeShare</h1>
-      <p>Click the link below to upload your file to ToffeeShare, and then go back to this window to upload your file</p>
-      <a href="{{ toffee_share_link }}" target="_blank">Upload to ToffeeShare</a>
 
-      <h1 class="mt-5">Second, upload your file here</h1>
-      <form id="uploadForm">
-        <div class="form-group">
-          <label for="file">Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)</label>
-          <input type="file" class="form-control" id="file" name="file" required />
-        </div>
-        <button type="submit" class="btn btn-primary">Upload</button>
+        <h2>Would you like to see a demo video?</h2>
+      <div>
+        <button class="btn btn-info" data-toggle="collapse" data-target="#demoVideo">
+          Yes, Show me the Demo!
+        </button>
+      </div>
+      <div id="demoVideo" class="collapse mt-3">
+        <h3>Video Tutorial</h3>
+        <video width="auto" height="500px" controls>
+          <source src="./../static/images/tutorial.mp4
+          " type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+      </div>
+       
+        <!-- Step 1: ToffeeShare Upload -->
+        <h2>Step 1: Go to ToffeeShare using your device</h2>
+        <p>Use the QR code or type the link below in your device’s browser to go to ToffeeShare:</p>
+        <img src="./../static/images/toffeshare.png" height="120px" alt="toffeshare"> or type the link below in your browser:
+        <b>https://toffeeshare.com/</b>
+
+
+        <h2>Step 2: Click the link below</h2>
+        <a href="{{ toffee_share_link }}" target="_blank">Upload to ToffeeShare</a>
+        <p>Follow the instructions on ToffeeShare to upload your file.</p>
+  
+        <!-- Step 2: Return to Upload File -->
+        <h2>Step 3: Upload Your File Here</h2>
+        <p>After uploading your file to ToffeeShare, return to this window to upload your file for printing.</p>
+        <form id="uploadForm">
+          <div class="form-group">
+            <label for="file">Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)</label>
+            <input type="file" class="form-control" id="file" name="file" required />
+          </div>
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+  
+        <!-- Video Demo Section -->
+        
+      </div>
       </form>
 
       <div id="printOptionsModal" class="modal" tabindex="-1">
