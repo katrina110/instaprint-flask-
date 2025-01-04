@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>File Upload and Print Preview</title>
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+    <style>
+      .preview-container {
+        max-height: 400px;
+        overflow-y: scroll;
+        border: 1px solid #ccc;
+        padding: 10px;
+        width: 300px;
+      }
+      .preview-page {
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+      }
+      .preview-page img {
+        max-width: 100%;
+        display: block;
+        margin: auto;
+      }
+      .modal-body {
+        display: flex;
+      }
+      .form-section {
+        flex: 1;
+      }
+      .preview-section {
+        flex: 1;
+        margin-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="mt-5">First, use ToffeeShare</h1>
+      <p>Click the link below to upload your file to ToffeeShare, and then go back to this window to upload your file</p>
+      <a href="{{ toffee_share_link }}" target="_blank">Upload to ToffeeShare</a>
+
+      <h1 class="mt-5">Second, upload your file here</h1>
+      <form id="uploadForm">
+        <div class="form-group">
+          <label for="file">Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)</label>
+          <input type="file" class="form-control" id="file" name="file" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </form>
+
+      <div id="printOptionsModal" class="modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Print Options</h5>
+            </div>
+            <div class="modal-body">
+              <div class="form-section">
+                <div class="form-group">
+                  <label for="pageFrom">Page From</label>
+                  <input
+                    type="number"
+                    id="pageFrom"
+                    class="form-control"
+                    placeholder="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pageTo">Page To</label>
+                  <input
+                    type="number"
+                    id="pageTo"
+                    class="form-control"
+                    placeholder="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="numCopies">Number of Copies</label>
+                  <input
+                    type="number"
+                    id="numCopies"
+                    class="form-control"
+                    value="1"
+                    min="1"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="pageSize">Page Size</label>
+                  <select id="pageSize" class="form-control">
+                    <option value="A4">A4</option>
+                    <option value="Short">Short</option>
+                    <option value="Long">Long</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="colorOption">Color Option</label>
+                  <select id="colorOption" class="form-control">
+                    <option value="Color">Color</option>
+                    <option value="Grayscale">Grayscale</option>
+                  </select>
+                </div>
+              </div>
+              <div class="preview-section">
+                <h6>File: <span id="fileName"></span></h6>
+                <h6>Total Pages: <span id="totalPages"></span></h6>
+                <h6>Preview</h6>
+                <div id="previewContainer" class="preview-container"></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                id="closeModalBtn"
+                class="btn btn-secondary"
+                data-dismiss="modal"
+              >
+                Exit
+              </button>
+              <button id="continueBtn" class="btn btn-primary">Continue</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <script>
+      let previewTimeout;
+      let totalPages = 0;
+      let fileName = "";
+
+      $("#uploadForm").on("submit", function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+
+        $.ajax({
+          url: "/upload",
+          method: "POST",
+          data: formData,
+          contentType: false,
+          processData: false,
+          success: function (response) {
+            fileName = response.fileName;
+            totalPages = response.totalPages;
+            $("#fileName").text(fileName);
+            $("#totalPages").text(totalPages);
+            $("#printOptionsModal").modal("show");
+
+            $("#pageFrom").val(1);
+            $("#pageTo").val(totalPages);
+
+            updatePreview();
+          },
+          error: function (err) {
+            alert(err.responseJSON.error || "Upload failed.");
+          },
+        });
+      });
+
+      function updatePreview() {
+        const pageFrom = $("#pageFrom").val();
+        const pageTo = $("#pageTo").val();
+        const numCopies = $("#numCopies").val();
+        const pageSize = $("#pageSize").val();
+        const colorOption = $("#colorOption").val();
+
+        if (!pageFrom || !pageTo || pageFrom > pageTo || pageTo > totalPages)
+          return;
+
+        clearTimeout(previewTimeout);
+
+        previewTimeout = setTimeout(() => {
+          $.ajax({
+            url: "/generate_preview",
+            method: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({
+              pageFrom,
+              pageTo,
+              numCopies,
+              pageSize,
+              colorOption,
+            }),
+            success: function (response) {
+              const previewContainer = $("#previewContainer");
+              previewContainer.empty();
+
+              response.previews.forEach((preview) => {
+                const timestampedURL = preview + "?t=" + new Date().getTime();
+                const pageDiv = $("<div>")
+                  .addClass("preview-page")
+                  .append($("<img>").attr("src", timestampedURL));
+                previewContainer.append(pageDiv);
+              });
+            },
+            error: function (error) {
+              console.error(
+                error.responseJSON.error || "Failed to generate previews."
+              );
+            },
+          });
+        }, 300);
+      }
+
+      $("#pageFrom, #pageTo, #numCopies, #pageSize, #colorOption").on(
+        "input change",
+        function () {
+          updatePreview();
+        }
+      );
+
+      $("#continueBtn").on("click", function () {
+        const options = {
+          pageFrom: $("#pageFrom").val(),
+          pageTo: $("#pageTo").val(),
+          numCopies: $("#numCopies").val(),
+          pageSize: $("#pageSize").val(),
+          colorOption: $("#colorOption").val(),
+          fileName: fileName,
+        };
+
+        // Store options in session storage to retrieve in result.html
+        sessionStorage.setItem("printOptions", JSON.stringify(options));
+
+        // Redirect to result.html
+        window.location.href = "/result";
+      });
+    </script>
+  </body>
+</html>
