@@ -356,19 +356,32 @@ def print_document():
             if not os.path.exists(full_path):
                 continue
             # Get image dimensions
-            image = cv2.imread(full_path)
-            height, width, _ = image.shape
-            pdf.add_page()
-            pdf.image(full_path, 0, 0, width=210, h=height * 210 / width)  # Add image to PDF
+            img = cv2.imread(full_path)
+            height, width, _ = img.shape
+            aspect_ratio = width / height
+            page_width = 210  # A4 width in mm
+            page_height = page_width / aspect_ratio
 
-        # Save the PDF for printing
+            pdf.add_page()
+            pdf.image(full_path, x=10, y=10, w=page_width, h=page_height)
+
         pdf.output(pdf_path)
-        return jsonify({"message": "Document prepared for printing.", "pdfPath": pdf_path}), 200
+
+        # Send the PDF to the printer
+        if os.name == 'nt':  # Windows
+            import win32print
+            import win32api
+
+            printer_name = win32print.GetDefaultPrinter()
+            win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
+        else:  # Linux/MacOS
+            os.system(f'lp "{pdf_path}"')
+
+        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Failed to print the document: {e}"}), 500
-
-
+        print(f"Error printing document: {e}")
+        return jsonify({"error": f"Failed to print document: {e}"}), 500
 
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])
