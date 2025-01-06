@@ -8,6 +8,8 @@
       rel="stylesheet"
       href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
     />
+    <link href="./../static/css/header.css" rel="stylesheet">
+    <link href="./../static/css/manual-upload.css" rel="stylesheet">
     <style>
       .preview-container {
         max-height: 400px;
@@ -38,99 +40,109 @@
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1 class="mt-5">Upload a File for Processing</h1>
-      <form id="uploadForm">
-        <div class="form-group">
-          <label for="file"
-            >Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)</label
-          >
-          <input
-            type="file"
-            class="form-control"
-            id="file"
-            name="file"
-            required
-          />
-        </div>
-        <button type="submit" class="btn btn-primary">Upload</button>
-      </form>
+    <header class="header">
+      <!-- Left logo -->
+      <img src="./../static/images/pup-logo.png" alt="sample" />
 
-      <div id="printOptionsModal" class="modal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">Print Options</h5>
+      <!-- Center text -->
+      <div class="center-text">INSTAPRINT <h6>MANUAL UPLOAD</h6></div>
+
+      <!-- Right logo -->
+      <img src="./../static/images/cpe-logo.png" alt="sample" />
+    </header>
+    <main>
+      <div class="manual-upload-container">
+    <form id="uploadForm">
+        <div class="file-upload-container">
+            <div class="folder">
+                <div class="tip"></div>
+                <div class="cover"></div>
             </div>
-            <div class="modal-body">
-              <div class="form-section">
-                <div class="form-group">
-                  <label for="pageFrom">Page From</label>
-                  <input
-                    type="number"
-                    id="pageFrom"
-                    class="form-control"
-                    placeholder="1"
-                    min="1"
-                  />
+            <label for="file" class="custom-file-upload">
+                Choose a file (PDF, DOC, DOCX, JPG, JPEG, PNG)
+                <input type="file" id="file" name="file" required />
+            </label>
+            <span id="file-name-display">No file chosen</span> <!-- Display selected file name -->
+        </div>
+        <button type="submit" class="btn btn-primary mt-3" style="background-color: #700000; border: none;">Upload</button>
+    </form>
+  
+        <div id="printOptionsModal" class="modal" tabindex="-1">
+          <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Print Options</h5>
+              </div>
+              <div class="modal-body">
+                <div class="form-section">
+                  <div class="form-group">
+                    <label for="pageFrom">Page From</label>
+                    <input
+                      type="number"
+                      id="pageFrom"
+                      class="form-control"
+                      placeholder="1"
+                      min="1"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pageTo">Page To</label>
+                    <input
+                      type="number"
+                      id="pageTo"
+                      class="form-control"
+                      placeholder="1"
+                      min="1"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="numCopies">Number of Copies</label>
+                    <input
+                      type="number"
+                      id="numCopies"
+                      class="form-control"
+                      value="1"
+                      min="1"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pageSize">Page Size</label>
+                    <select id="pageSize" class="form-control">
+                      <option value="A4">A4</option>
+                      <option value="Short">Short</option>
+                      <option value="Long">Long</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="colorOption">Color Option</label>
+                    <select id="colorOption" class="form-control">
+                      <option value="Color">Color</option>
+                      <option value="Grayscale">Grayscale</option>
+                    </select>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label for="pageTo">Page To</label>
-                  <input
-                    type="number"
-                    id="pageTo"
-                    class="form-control"
-                    placeholder="1"
-                    min="1"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="numCopies">Number of Copies</label>
-                  <input
-                    type="number"
-                    id="numCopies"
-                    class="form-control"
-                    value="1"
-                    min="1"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="pageSize">Page Size</label>
-                  <select id="pageSize" class="form-control">
-                    <option value="A4">A4</option>
-                    <option value="Short">Short</option>
-                    <option value="Long">Long</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="colorOption">Color Option</label>
-                  <select id="colorOption" class="form-control">
-                    <option value="Color">Color</option>
-                    <option value="Grayscale">Grayscale</option>
-                  </select>
+                <div class="preview-section">
+                  <h6>File: <span id="fileName"></span></h6>
+                  <h6>Total Pages: <span id="totalPages"></span></h6>
+                  <h6>Preview</h6>
+                  <div id="previewContainer" class="preview-container"></div>
                 </div>
               </div>
-              <div class="preview-section">
-                <h6>File: <span id="fileName"></span></h6>
-                <h6>Total Pages: <span id="totalPages"></span></h6>
-                <h6>Preview</h6>
-                <div id="previewContainer" class="preview-container"></div>
+              <div class="modal-footer">
+                <button
+                  id="closeModalBtn"
+                  class="btn btn-secondary"
+                  data-dismiss="modal"
+                >
+                  Exit
+                </button>
+                <button id="continueBtn" class="btn btn-primary">Continue</button>
               </div>
-            </div>
-            <div class="modal-footer">
-              <button
-                id="closeModalBtn"
-                class="btn btn-secondary"
-                data-dismiss="modal"
-              >
-                Exit
-              </button>
-              <button id="continueBtn" class="btn btn-primary">Continue</button>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
@@ -235,6 +247,11 @@
         // Redirect to result.html
         window.location.href = "/result";
       });
+
+      document.getElementById("file").addEventListener("change", function() {
+    let fileName = this.files.length > 0 ? this.files[0].name : "No file chosen";
+    document.getElementById("file-name-display").textContent = fileName;
+});
     </script>
   </body>
 </html>

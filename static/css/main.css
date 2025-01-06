@@ -134,6 +134,10 @@ body::after {
   font-family: "Montserrat", sans-serif;
 }
 
+.header-one {
+  font-weight: 800;
+}
+
 /* Hover effect */
 .online:hover,
 .manual:hover {
@@ -143,7 +147,7 @@ body::after {
 }
 
 header {
-  background-color: white;
+  background-color: rgba(255, 255, 255, 0);
   padding: 20px 0;
   position: fixed;
   top: 0;
@@ -161,26 +165,40 @@ header {
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 10px 20px;
 
-  height: 7rem;
+height: 7rem;
+
 }
 
 .header img {
-  height: 5rem;
+height: 5rem;
 }
 
 .header .center-text {
-  flex: 1;
-  text-align: center;
-  font-size: 40px;
-  font-weight: bold;
-  color: #fdbb57;
-  text-shadow: 1px 1px 0 #510300, 2px 2px 0 #510300, 3px 3px 0 #510300,
-    4px 4px 0 #510300, 5px 5px 0 #510300, 6px 6px 0 #510300, 7px 7px 0 #510300;
+flex: 1;
+text-align: center;
+font-size: 40px;
+font-weight: bold;
+color: #FDBB57;
+text-shadow:
+  1px 1px 0 #510300,
+  2px 2px 0 #510300,
+  3px 3px 0 #510300,
+  4px 4px 0 #510300,
+  5px 5px 0 #510300,
+  6px 6px 0 #510300,
+  7px 7px 0 #510300;
+}
+
+.header .center-text h6{
+font-size: 20px;
+color: black;
+text-shadow: none;
+font-weight: 900;
 }
 
 /* ==== MANUAL UPLOAD ==== */
@@ -191,6 +209,12 @@ main {
   align-items: center;
   min-height: 80vh;
   padding-top: 6rem; /* To offset fixed header */
+}
+
+.manual-upload-container {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
 }
 
 .upload-area {
@@ -916,3 +940,4 @@ input[type="text"] {
   margin-top: 75px;
   padding: 20px; /* Add padding to the inside of the rectangle */
 }
+
