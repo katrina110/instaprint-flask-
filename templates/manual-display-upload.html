@@ -59,9 +59,62 @@
         flex: 1;
         margin-left: 20px;
       }
+      .main-content {
+        display: none;
+      }
+      .modal-body {
+        display: flex;
+        flex-direction: column;
+      }
     </style>
   </head>
   <body>
+     <!-- Terms and Conditions Modal -->
+     <div class="modal fade" id="termsModal" tabindex="-1" role="dialog" aria-labelledby="termsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header" style="background-color: #700000;">
+            <h5 class="modal-title" id="termsModalLabel">Terms and Agreements</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="window.history.back();">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p>We value your privacy and are committed to protecting your data. By proceeding, you agree to the following:</p>
+
+<div style="margin-left: 20px;">
+  <h5>1. Data Use:</h5>
+  <ul>
+    <li>Your files will only be accessed for the purpose of providing the requested service or functionality.</li>
+    <li>We do not store or share your files with third parties unless explicitly authorized by you.</li>
+  </ul>
+  
+  <h5>2. Permissions:</h5>
+  <ul>
+    <li>This application requires access to your files to enable the uploading of documents. This feature allows you to securely select files from your device and send them to the printer for printing.</li>
+  </ul>
+  
+  <h5>3. Security Measures:</h5>
+  <ul>
+    <li>All accessed data will be handled securely, adhering to industry-standard encryption and privacy practices.</li>
+  </ul>
+</div>
+
+<p><strong>Do you agree to allow this application to access your files for the specified purpose?</strong></p>
+
+            <div class="form-group">
+              <label for="acceptTerms">
+                <input type="checkbox" id="acceptTerms" /> I agree to the terms and conditions.
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.history.back();">Decline</button>
+            <button type="button" class="btn btn-primary" id="acceptTermsButton">Accept</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <header class="header">
       <!-- Left logo -->
       <img src="./../static/images/pup-logo.png" alt="sample" />
@@ -192,6 +245,21 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
+       $(document).ready(function() {
+    // Show the Terms and Agreements modal when the page loads
+    $('#termsModal').modal('show');
+    
+    // Handle accept button click
+    $('#acceptTermsButton').click(function() {
+      if ($('#acceptTerms').is(':checked')) {
+        // Proceed to main content
+        $('#termsModal').modal('hide');
+      } else {
+        alert("Please agree to the terms and conditions before proceeding.");
+      }
+    });
+  });
+
       let previewTimeout;
       let totalPages = 0;
       let fileName = "";
