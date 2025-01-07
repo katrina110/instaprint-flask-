@@ -8,41 +8,73 @@
       rel="stylesheet"
       href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
     />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      /* Create two unequal columns that floats next to each other */
+      .column {
+        float: left;
+        padding: 10px;
+        height: 300px; /* Should be removed. Only for demonstration */
+      }
+
+      .left {
+        width: 25%;
+      }
+
+      .right {
+        width: 75%;
+      }
+
+      /* Clear floats after the columns */
+      .row:after {
+        content: "";
+        display: table;
+        clear: both;
+      }
+    </style>
   </head>
   <body>
-    <div class="container">
-      <h1 class="mt-5">Print Preview Results</h1>
+    <div>
+      <div class="row">
+        <div class="column left">
+          <h1 class="mt-5">Print Preview Results</h1>
 
-      <!-- Section for displaying selected print options -->
-      <div id="printDetails" class="mb-4"></div>
+          <!-- Section for displaying selected print options -->
+          <div id="printDetails" class="mb-4"></div>
 
-      <!-- Button to open edit modal -->
-      <button
-        class="btn btn-warning"
-        id="editButton"
-        data-toggle="modal"
-        data-target="#editModal"
-      >
-        Edit Print Options
-      </button>
+          <!-- Button to open edit modal -->
+          <button
+            class="btn btn-warning"
+            id="editButton"
+            data-toggle="modal"
+            data-target="#editModal"
+          >
+            Edit Print Options
+          </button>
 
-      <!-- Button to print the document -->
-      <button class="btn btn-success mt-3" id="printButton">
-        Print Document
-      </button>
+          <!-- Button to print the document -->
+          <button class="btn btn-success mt-3" id="printButton">
+            Print Document
+          </button>
+        </div>
+        <div class="column right">
+          <!-- Total price -->
+          <h3 class="mt-4" id="totalPrice">
+            Total Price: ₱<span id="priceValue">0.00</span>
+          </h3>
 
-      <!-- Total price -->
-      <h3 class="mt-4" id="totalPrice">
-        Total Price: ₱<span id="priceValue">0.00</span>
-      </h3>
+          <!-- Preview container -->
+          <h2>Page Previews</h2>
+          <div id="previewContainer" class="d-flex flex-wrap"></div>
 
-      <!-- Preview container -->
-      <h2>Page Previews</h2>
-      <div id="previewContainer" class="d-flex flex-wrap"></div>
-
-      <!-- Segmented/Processed images with prices -->
-      <h2 class="mt-5">Segmented Images and Price Breakdown</h2>
-      <div id="segmentedContainer" class="d-flex flex-wrap"></div>
+          <!-- Segmented/Processed images with prices -->
+          <h2 class="mt-5">Segmented Images and Price Breakdown</h2>
+          <div id="segmentedContainer" class="d-flex flex-wrap"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Edit Print Options Modal -->
@@ -209,7 +241,9 @@
                   segmentedElement.classList.add("m-2", "border", "p-2");
                   segmentedElement.innerHTML = `
                     <p>Page ${page.page} (₱${page.price.toFixed(2)}):</p>
-                    <img src="${page.processed}" alt="Segmented" style="max-width: 200px;">
+                    <img src="${
+                      page.processed
+                    }" alt="Segmented" style="max-width: 200px;">
                   `;
                   segmentedContainer.appendChild(segmentedElement);
                 });
