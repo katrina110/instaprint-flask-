@@ -15,6 +15,7 @@ body, html {
     border-radius: 10px;
     text-align: center;
     width: 100%;
+    margin-top: 6rem;
 }
 
 h1 {
@@ -42,7 +43,7 @@ h1 {
 
 .folder {
     position: absolute;
-    top: -50px;
+    top: -100px;
     left: calc(50% - 60px);
     animation: float 2.5s infinite ease-in-out;
     transition: transform var(--transition) ease;
@@ -105,7 +106,6 @@ h1 {
     background: linear-gradient(135deg, #ffe563, #ffc663);
     width: var(--folder-W);
     height: var(--folder-H);
-    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
     border-radius: 10px;
 }
 
