@@ -112,9 +112,11 @@
       </div>
 
       <div class="step" id="step2">
-          <h2>Step 2: Click the Link Below</h2>
-          <a href="{{ toffee_share_link }}" target="_blank">Upload to ToffeeShare</a>
-          <p>Follow the instructions on ToffeeShare.</p>
+          <h2>Step 2: Upload your file using Toffeeshare</h2>
+          <p>Use the <b>link below</b> to directly transfer files from your device to this kiosk. Simply click <b>'share to nearby PC'</b> on your device and <b>scan the QR code</b> to share your file.</p>
+          <a href="{{ toffee_share_link }}" target="_blank">Go To Toffeshare</a>
+         <br />
+         <br />
           <button class="btn btn-secondary prev-btn">Previous</button>
           <button class="btn btn-primary next-btn">Next</button>
       </div>
@@ -122,10 +124,14 @@
       <div class="step" id="step3">
           <h2>Step 3: Upload Your File</h2>
           <form id="uploadForm">
-              <div class="form-group">
-                  <label for="file">Choose a file</label>
-                  <input type="file" class="form-control" id="file" name="file" required />
-              </div>
+            <div class="form-group custom-file-upload">
+              <input type="file" class="file-input" id="file" name="file" required />
+              <label for="file" class="file-label">
+                  <span class="file-label-text">Choose a file</span>
+                  <span class="file-button">Browse</span>
+              </label>
+          </div>
+          
               <button class="btn btn-secondary prev-btn">Previous</button>
               <button type="submit" class="btn btn-success" style="background-color: #700000; border: #700000;">Upload</button>
           </form>
