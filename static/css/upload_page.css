@@ -16,10 +16,7 @@ body {
   }
   
   .container {
-    background: #fff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin-top: 6rem;
   }
   
   button.btn {
@@ -28,19 +25,19 @@ body {
   }
   
   .btn-primary {
-    background-color: #007bff;
+    background-color: #700000;
     border: none;
   }
   
   .btn-primary:hover {
-    background-color: #0056b3;
+    background-color: #700000;
   }
   
   .step {
-    border-left: 4px solid #007bff;
+    border-left: 4px solid #700000;
     padding: 15px 20px;
     margin-bottom: 20px;
-    background: #f1f8ff;
+    background: #fff;
     border-radius: 5px;
   }
   
@@ -54,7 +51,6 @@ body {
   }
   
   .modal-header {
-    background: #007bff;
     color: #fff;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
@@ -91,4 +87,11 @@ body {
       flex: 1;
     }
   }
-  
+
+.flex {
+  display: flex;
+}
+
+.step h2 {
+  color: #700000;
+}
