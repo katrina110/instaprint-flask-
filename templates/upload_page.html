@@ -122,19 +122,26 @@
       </div>
 
       <div class="step" id="step3">
-          <h2>Step 3: Upload Your File</h2>
-          <form id="uploadForm">
+        <h2>Step 3: Upload Your File</h2>
+        <form id="uploadForm">
             <div class="form-group custom-file-upload">
-              <input type="file" class="file-input" id="file" name="file" required />
-              <label for="file" class="file-label">
-                  <span class="file-label-text">Choose a file</span>
-                  <span class="file-button">Browse</span>
-              </label>
-          </div>
-          
-              <button class="btn btn-secondary prev-btn">Previous</button>
-              <button type="submit" class="btn btn-success" style="background-color: #700000; border: #700000;">Upload</button>
-          </form>
+                <input type="file" class="file-input" id="file" name="file" required />
+                <label for="file" class="file-label">
+                    <span class="file-label-text">Choose a file</span>
+                    <span class="file-button" style="background-color: #700000; border: #700000;">Browse</span>
+                </label>
+            </div>
+            <div class="file-info" id="fileInfo" style="display: none;">
+                <p><strong>File Name:</strong> <span id="fileName">N/A</span></p>
+                <p><strong>File Size:</strong> <span id="fileSize">N/A</span></p>
+            </div>
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            <br />
+            <button class="btn btn-secondary prev-btn">Previous</button>
+            <button type="submit" class="btn btn-success" style="background-color: #700000; border: #700000;">Upload</button>
+        </form>        
       </div>
   </div>
 
@@ -342,6 +349,17 @@
         // Redirect to result.html
         window.location.href = "/result";
       });
+    </script>
+    <script>
+      document.getElementById('file').addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        document.getElementById('fileInfo').style.display = 'block';
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(2) + ' KB';
+    }
+});
+
     </script>
   </body>
 </html>
