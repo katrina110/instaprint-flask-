@@ -15,10 +15,10 @@ import threading
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
 arduino = None
 coin_count = 0
-socketio = SocketIO(app)
 
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
 app.config['STATIC_FOLDER'] = os.path.join(os.getcwd(), 'static', 'uploads')
@@ -314,6 +314,7 @@ def preview_with_price():
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
 
+
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
 @app.route('/payment')
 def payment_page():
@@ -336,19 +337,17 @@ def detect_coin():
     print("Starting coin detection thread...")
     while True:
         if arduino and arduino.in_waiting > 0:
-            try:
-                # Read data from Arduino
-                coin_status = arduino.readline().decode('utf-8').strip()
-                print(f"Received from Arduino: {coin_status}")
-                if "Coin Count:" in coin_status:  # Ensure message contains coin count
+            coin_status = arduino.readline().decode('utf-8').strip()
+            print(f"Received from Arduino: {coin_status}")
+            if "Coin Count:" in coin_status:  # Ensure message contains coin count
+                try:
                     coin_count = int(coin_status.split(":")[1].strip())
                     print(f"Updated Coin Count: {coin_count}")
                     # Emit the updated coin count to connected clients
-                    socketio.emit('update_coin_count', {'count': coin_count}, namespace='/')
-            except Exception as e:
-                print(f"Error in reading or processing data: {e}")
-
-        time.sleep(0.1)  # Reduce the frequency of reading and processing
+                    socketio.emit('update_coin_count', {'count': coin_count})
+                except ValueError:
+                    print("Invalid coin count format received.")
+            time.sleep(0.1)
 
 @app.route('/coin_count')
 def get_coin_count():
