@@ -11,6 +11,28 @@
     <link href="./../static/css/header.css" rel="stylesheet">
     <link href="./../static/css/manual-upload.css" rel="stylesheet">
     <style>
+       .sticky-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #700000;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 1000;
+    }
+
+    .modal-body-video {
+      text-align: center;
+    }
+
+    .modal-body-video iframe {
+      width: 100%;
+      height: 400px;
+    }
       .preview-container {
         max-height: 400px;
         overflow-y: scroll;
@@ -66,6 +88,29 @@
         </div>
         <button type="submit" class="btn btn-primary mt-3" style="background-color: #700000; border: none;">Upload</button>
     </form>
+
+    <!-- Sticky Button -->
+  <button class="sticky-button" data-toggle="modal" data-target="#videoDemoModal">Video Demo</button>
+
+  <!-- Video Demo Modal -->
+  <div id="videoDemoModal" class="modal fade" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+      <div class="modal-content">
+        <div class="modal-header" style="background-color: #700000;">
+          <h5 class="modal-title">Website Usage Demo</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body modal-body-video">
+          <iframe src="https://www.youtube.com/embed/your-video-id" frameborder="0" allowfullscreen></iframe>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
   
     <div id="printOptionsModal" class="modal" tabindex="-1">
       <div class="modal-dialog modal-lg">
