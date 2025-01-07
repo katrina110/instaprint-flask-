@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = io();  // Connect to the Flask-SocketIO server
+
+            // Listen for coin count updates
+            socket.on('update_coin_count', (data) => {
+                const coinCountElement = document.getElementById('coin-count');
+                coinCountElement.textContent = `Coins Inserted: ${data.count}`;
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Payment Page</h1>
+    <p id="coin-count">Coins Inserted: 0</p>
+</body>
+</html>

@@ -286,28 +286,59 @@
           refreshUI(options);
         });
 
-        // Print button functionality
+
+
+
+
+
+
+
+        // PRINT BUTTON
+
+
+
         document.getElementById("printButton").addEventListener("click", () => {
-          fetch("/print_document", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(options),
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              if (data.success) {
-                alert("Document sent to printer successfully!");
-              } else {
-                alert("Error printing document: " + data.message);
-              }
-            })
-            .catch((error) => {
-              console.error("Error printing document:", error);
-              alert("Failed to send document to printer.");
-            });
+          // Prevent default form submission behavior (if applicable)
+          event.preventDefault();
+
+          // Redirect to the /payment page
+          window.location.href = "/payment";
         });
+
+
+
+
+
+        // document.getElementById("printButton").addEventListener("click", () => {
+        //   fetch("/print_document", {
+        //     method: "POST",
+        //     headers: {
+        //       "Content-Type": "application/json",
+        //     },
+        //     body: JSON.stringify(options),
+        //   })
+        //     .then((response) => response.json())
+        //     .then((data) => {
+        //       if (data.success) {
+        //         alert("Document sent to printer successfully!");
+        //       } else {
+        //         alert("Error printing document: " + data.message);
+        //       }
+        //     })
+        //     .catch((error) => {
+        //       console.error("Error printing document:", error);
+        //       alert("Failed to send document to printer.");
+        //     });
+        // });
+
+
+
+
+
+
+
+
+
       });
     </script>
 

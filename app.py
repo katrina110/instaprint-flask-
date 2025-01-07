@@ -9,7 +9,17 @@ import pythoncom
 from win32com import client
 from fpdf import FPDF
 
+import serial
+import time
+import threading
+from flask_socketio import SocketIO, emit
+
 app = Flask(__name__)
+
+arduino = None
+coin_count = 0
+socketio = SocketIO(app)
+
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
 app.config['STATIC_FOLDER'] = os.path.join(os.getcwd(), 'static', 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'pdf', 'jpg', 'jpeg', 'png', 'docx', 'doc'}
@@ -304,8 +314,48 @@ def preview_with_price():
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
 
+# START OF ARDUINO AND COIN SLOT CONNECTION CODE
+@app.route('/payment')
+def payment_page():
+    global arduino
+    # Initialize Arduino connection if not already done
+    if not arduino:
+        try:
+            arduino = serial.Serial('COM6', 9600)
+            time.sleep(2)  # Wait for the connection to initialize
+            print("Arduino successfully initialized.")
+        except Exception as e:
+            print(f"Failed to initialize Arduino: {e}")
+            return "Error: Could not connect to Arduino."
+    
+    return render_template('payment.html')
 
-# New Route: Print the Document
+@app.route('/detect_coins')
+def detect_coin():
+    global coin_count, arduino
+    print("Starting coin detection thread...")
+    while True:
+        if arduino and arduino.in_waiting > 0:
+            try:
+                # Read data from Arduino
+                coin_status = arduino.readline().decode('utf-8').strip()
+                print(f"Received from Arduino: {coin_status}")
+                if "Coin Count:" in coin_status:  # Ensure message contains coin count
+                    coin_count = int(coin_status.split(":")[1].strip())
+                    print(f"Updated Coin Count: {coin_count}")
+                    # Emit the updated coin count to connected clients
+                    socketio.emit('update_coin_count', {'count': coin_count}, namespace='/')
+            except Exception as e:
+                print(f"Error in reading or processing data: {e}")
+
+        time.sleep(0.1)  # Reduce the frequency of reading and processing
+
+@app.route('/coin_count')
+def get_coin_count():
+    global coin_count
+    return f"Total coins inserted: {coin_count}"
+# END OF ARDUINO AND COIN SLOT CONNECTION CODE
+
 @app.route('/print_document', methods=['POST'])
 def print_document():
     global images
@@ -389,11 +439,14 @@ def result():
     global selected_previews
     return render_template('result.html', previews=selected_previews, price_info=None)
 
-
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['STATIC_FOLDER'], filename)
 
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Start the coin detection thread first
+    detection_thread = threading.Thread(target=detect_coin, daemon=True)
+    detection_thread.start()
+
+    # Start the Flask app
+    socketio.run(app, debug=False)
