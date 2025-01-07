@@ -1,0 +1,48 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap");
+
+html, body {
+    font-family: "Inter", sans-serif;
+    margin: 0;
+    height: 100%;
+    overflow: hidden; /* Prevent horizontal scrolling */
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.row {
+    display: flex;
+    height: 100vh; /* Full viewport height */
+    padding: 20px; /* Set padding for the whole container */
+    overflow: hidden; /* Prevent scrolling of the entire page */
+}
+
+.column {
+    padding: 10px; /* Individual column padding (if needed separately) */
+}
+
+.left {
+    width: 25%;
+    overflow: hidden; /* No scroll on left */
+}
+
+.right {
+    width: 75%;
+    overflow-y: auto; /* Enable vertical scrolling */
+    height: 100%; /* Ensure it takes full height */
+}
+
+.result-container {
+    margin-top: 4rem;
+}
+
+.button {
+    display: flex;
+    flex-direction: column;
+}
+
+.edit-btn {
+    color: white;
+    background-color: #700000;
+}
