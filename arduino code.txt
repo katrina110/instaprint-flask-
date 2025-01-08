@@ -1,0 +1,28 @@
+int coincount = 0;                   // Credit counter
+unsigned long lastInterruptTime = 0; // Last time the interrupt was triggered
+const unsigned long debounceDelay = 100; // Debounce delay in milliseconds
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(2), coinInserted, RISING); // Trigger on FALLING instead of RISING
+}
+
+void loop() {
+  // No need to continuously print in the loop
+}
+
+void coinInserted() {
+  unsigned long currentTime = millis();
+
+  // Check for debounce
+  if (currentTime - lastInterruptTime > debounceDelay) {
+    // Verify the signal is stable
+    if (digitalRead(2) == HIGH) { // Adjust based on your sensor's normal state
+      coincount++;
+      Serial.print("Credits: ");
+      Serial.println(coincount);
+      lastInterruptTime = currentTime; // Update debounce time
+    }
+  }
+}

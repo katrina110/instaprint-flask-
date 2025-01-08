@@ -246,19 +246,19 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
        $(document).ready(function() {
-    // Show the Terms and Agreements modal when the page loads
-    $('#termsModal').modal('show');
-    
-    // Handle accept button click
-    $('#acceptTermsButton').click(function() {
-      if ($('#acceptTerms').is(':checked')) {
-        // Proceed to main content
-        $('#termsModal').modal('hide');
-      } else {
-        alert("Please agree to the terms and conditions before proceeding.");
-      }
-    });
-  });
+        // Show the Terms and Agreements modal when the page loads
+        $('#termsModal').modal('show');
+        
+        // Handle accept button click
+        $('#acceptTermsButton').click(function() {
+          if ($('#acceptTerms').is(':checked')) {
+            // Proceed to main content
+            $('#termsModal').modal('hide');
+          } else {
+            alert("Please agree to the terms and conditions before proceeding.");
+          }
+        });
+      });
 
       let previewTimeout;
       let totalPages = 0;
@@ -362,9 +362,9 @@
       });
 
       document.getElementById("file").addEventListener("change", function() {
-    let fileName = this.files.length > 0 ? this.files[0].name : "No file chosen";
-    document.getElementById("file-name-display").textContent = fileName;
-});
+          let fileName = this.files.length > 0 ? this.files[0].name : "No file chosen";
+          document.getElementById("file-name-display").textContent = fileName;
+      });
     </script>
   </body>
 </html>
