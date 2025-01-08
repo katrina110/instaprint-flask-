@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payment</title>
+    <link href="./../static/css/header.css" rel="stylesheet">
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         // WEB SOCKET FOR REALTIME POSTING OF COIN INSERTION
@@ -70,15 +71,190 @@
         });
         });
     </script>
-
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
+            text-align: center;
+        }
+        main h1, main h3, main p {
+            margin: 10px 0;
+        }
+        .icons {
+            margin-top: 20px;
+        }
+        .icons i {
+            font-size: 2rem;
+            margin: 0 15px;
+            color: #007BFF;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover, .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .star-rating {
+        direction: rtl;
+        display: inline-flex;
+    }
+    .star-rating input {
+        display: none;
+    }
+    .star-rating label {
+        font-size: 2rem;
+        color: #ddd;
+        cursor: pointer;
+    }
+    .star-rating input:checked ~ label,
+    .star-rating label:hover,
+    .star-rating label:hover ~ label {
+        color: gold;
+    }
+    </style>
 </head>
 <body>
-    <h1>Payment Page</h1>
+    <header class="header">
+        <!-- Left logo -->
+        <img src="./../static/images/pup-logo.png" alt="sample" />
+  
+        <!-- Center text -->
+        <div class="center-text" style="background-color: white;">INSTAPRINT <h6>PRINT PREVIEW RESULTS</h6></div>
+  
+        <!-- Right logo -->
+        <img src="./../static/images/cpe-logo.png" alt="sample" />
+      </header>
 
+      <main>
+        <div class="animation-container">
+  <div class="y-axis-container">
+    <div class="container">
+      <div class="flash"></div>
+      <div class="coin side">
+        <div class="shine" style="transform:rotate(-30deg);"></div>
+      </div>
+      <div class="side-coin"></div>
+      <div class="coin">
+        <div class="dai">
+          <div class="inner-dai">
+            <div class="inner-inner-dai">
+
+            </div>
+          </div>
+          <div class="cutout"></div>
+          <div class="dai-shadow"></div>
+        </div>
+        <div class="shine"></div>
+      </div>
+    </div>
+  </div>
+  <div class="shadow"></div>
+</div>
+
+<main>
+
+
+    <h1>Payment Page</h1>
     <h3 class="mt-4" id="totalPrice"> 
         Total Price: ₱<span id="priceValue">0.00</span>  
     </h3>
+    <h3 id="coin-count">Coins Inserted: <br/> <span style="font-size: 80px;">₱0  </span></h3>
     
-    <p id="coin-count">Coins Inserted: 0</p>
+    <!-- Button to open the modal -->
+    <button class="btn" id="openModal">Open Modal</button>
+
+    <!-- Modal structure -->
+<div id="myModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Thank You for Using InstaPrint!</h2>
+        <p>Your document has been successfully printed. We appreciate your patronage and hope to see you again soon.</p>
+
+        <!-- Star Rating -->
+        <h3>Rate Your Experience:</h3>
+        <div class="star-rating">
+            <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
+            <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
+            <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
+            <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
+            <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+        </div>
+        <br/>
+        <!-- Feedback Button -->
+        <button class="btn" id="feedbackButton" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
+
+        <!-- Back to Homepage Button -->
+        <button class="btn" id="backToHomepage" onclick="location.href='file-upload.html'">Go Back to Homepage</button>
+    </div>
+</div>
+</main>
+
+
+     <script>
+        // Get the modal
+        var modal = document.getElementById("myModal");
+
+        // Get the button that opens the modal
+        var btn = document.getElementById("openModal");
+
+        // Get the <span> element that closes the modal
+        var span = document.getElementsByClassName("close")[0];
+
+        // When the user clicks on the button, open the modal
+        btn.onclick = function() {
+            modal.style.display = "block";
+        }
+
+        // When the user clicks on <span> (x), close the modal
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
 </body>
 </html>
