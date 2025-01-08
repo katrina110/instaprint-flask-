@@ -17,6 +17,15 @@ from flask_socketio import SocketIO, emit
 app = Flask(__name__)
 socketio = SocketIO(app)
 
+@socketio.on('connect')
+def send_total_price():
+    total_price = 45.75
+    emit('update_total_price', {'price': total_price})
+
+# Emit updates to connected clients
+def update_coin_count(count):
+    socketio.emit('update_coin_count', {'count': count})
+
 arduino = None
 coin_count = 0
 
@@ -202,7 +211,6 @@ def upload_file():
 
     return jsonify({"error": "Invalid file format"}), 400
 
-
 @app.route('/generate_preview', methods=['POST'])
 def generate_preview():
     global images, selected_previews
@@ -314,7 +322,6 @@ def preview_with_price():
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
 
-
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
 @app.route('/payment')
 def payment_page():
@@ -338,7 +345,6 @@ def detect_coin():
     while True:
         if arduino and arduino.in_waiting > 0:
             coin_status = arduino.readline().decode('utf-8').strip()
-            print(f"Received from Arduino: {coin_status}")
             if "Coin Count:" in coin_status:  # Ensure message contains coin count
                 try:
                     coin_count = int(coin_status.split(":")[1].strip())
@@ -355,6 +361,7 @@ def get_coin_count():
     return f"Total coins inserted: {coin_count}"
 # END OF ARDUINO AND COIN SLOT CONNECTION CODE
 
+# START OF PRINT DOCUMENT
 @app.route('/print_document', methods=['POST'])
 def print_document():
     global images
@@ -431,6 +438,9 @@ def print_document():
     except Exception as e:
         print(f"Error printing document: {e}")
         return jsonify({"error": f"Failed to print document: {e}"}), 500
+# END OF PRINT DOCUMENT
+
+
 
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])

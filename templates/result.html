@@ -234,6 +234,13 @@
                   segmentedContainer.appendChild(segmentedElement);
                 });
               }
+
+              if (data.totalPrice) {
+                  document.getElementById('priceValue').textContent = data.totalPrice.toFixed(2);
+                  // Save price to localStorage for use in payment.html
+                  localStorage.setItem('totalPrice', data.totalPrice.toFixed(2));
+              }
+
             })
             .catch((error) => {
               console.error("Error fetching previews and prices:", error);

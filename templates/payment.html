@@ -6,6 +6,7 @@
     <title>Payment</title>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
+        // WEB SOCKET FOR REALTIME POSTING OF COIN INSERTION
         document.addEventListener('DOMContentLoaded', () => {
             const socket = io();  // Connect to the Flask-SocketIO server
 
@@ -16,9 +17,74 @@
             });
         });
     </script>
+
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Retrieve the total price from localStorage
+            const totalPrice = localStorage.getItem('totalPrice');
+            if (totalPrice) {
+                document.getElementById('priceValue').textContent = totalPrice;
+            }
+        });
+
+    </script>
+
+    <script>
+        
+        document.addEventListener('DOMContentLoaded', () => {
+        const socket = io();  // Connect to the Flask-SocketIO server
+
+            // Listen for coin count updates
+            socket.on('update_coin_count', (data) => {
+                const coinCountElement = document.getElementById('coin-count');
+                const totalPriceElement = document.getElementById('priceValue');
+
+                // Update the coin count display
+                coinCountElement.textContent = `Coins Inserted: ${data.count}`;
+
+                // Get the total price from the page
+                const totalPrice = parseFloat(totalPriceElement.textContent);
+
+                // Check if the coins inserted are equal to or greater than the price
+                if (data.count >= totalPrice) {
+                    // Trigger print document function in Python
+                    fetch('/print_document', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pageFrom: 1,  // Example values; update with actual inputs
+                            pageTo: 5,
+                            numCopies: 1,
+                            pageSize: 'A4',
+                            colorOption: 'Color'
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("Document sent to the printer successfully!");
+                        } else {
+                            alert(`Error: ${data.error}`);
+                        }
+                    })
+                    .catch(error => console.error('Error triggering print:', error));
+                }
+            });
+        });
+
+    </script>
+
+
+    
 </head>
 <body>
     <h1>Payment Page</h1>
+
+    <h3 class="mt-4" id="totalPrice"> 
+        Total Price: ₱<span id="priceValue">0.00</span>  
+    </h3>
+    
     <p id="coin-count">Coins Inserted: 0</p>
 </body>
 </html>
