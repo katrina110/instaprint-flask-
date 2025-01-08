@@ -17,9 +17,7 @@
             });
         });
     </script>
-
     <script>
-        
         document.addEventListener('DOMContentLoaded', () => {
             // Retrieve the total price from localStorage
             const totalPrice = localStorage.getItem('totalPrice');
@@ -27,56 +25,52 @@
                 document.getElementById('priceValue').textContent = totalPrice;
             }
         });
-
     </script>
-
     <script>
-        
         document.addEventListener('DOMContentLoaded', () => {
-        const socket = io();  // Connect to the Flask-SocketIO server
+        const socket = io(); // Connect to the Flask-SocketIO server
 
-            // Listen for coin count updates
-            socket.on('update_coin_count', (data) => {
-                const coinCountElement = document.getElementById('coin-count');
-                const totalPriceElement = document.getElementById('priceValue');
+        // Listen for coin count updates
+        socket.on('update_coin_count', (data) => {
+            const coinCountElement = document.getElementById('coin-count');
+            const totalPriceElement = document.getElementById('priceValue');
 
-                // Update the coin count display
-                coinCountElement.textContent = `Coins Inserted: ${data.count}`;
+            // Update the coin count display
+            coinCountElement.textContent = `Coins Inserted: ${data.count}`;
 
-                // Get the total price from the page
-                const totalPrice = parseFloat(totalPriceElement.textContent);
+            // Get the total price from the page
+            const totalPrice = parseFloat(totalPriceElement.textContent);
 
-                // Check if the coins inserted are equal to or greater than the price
-                if (data.count >= totalPrice) {
-                    // Trigger print document function in Python
-                    fetch('/print_document', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            pageFrom: 1,  // Example values; update with actual inputs
-                            pageTo: 5,
-                            numCopies: 1,
-                            pageSize: 'A4',
-                            colorOption: 'Color'
-                        })
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert("Document sent to the printer successfully!");
-                        } else {
-                            alert(`Error: ${data.error}`);
-                        }
-                    })
-                    .catch(error => console.error('Error triggering print:', error));
+            // Check if the coins inserted are equal to or greater than the price
+            if (data.count >= totalPrice) {
+            // Trigger print document function in Python
+            fetch('/print_document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                // Include necessary data for printing here, 
+                // e.g., document ID, user ID, etc.
+                documentId: 'your_document_id', 
+                userId: 'your_user_id' 
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                alert("Document sent to the printer successfully!");
+                // Optionally: Reset coin count and/or display a success message
+                socket.emit('reset_coin_count'); // Send a message to the server to reset the coin count
+                // Display a success message to the user
+                } else {
+                alert(`Error: ${data.error}`);
                 }
-            });
+            })
+            .catch(error => console.error('Error triggering print:', error));
+            }
         });
-
+        });
     </script>
 
-
-    
 </head>
 <body>
     <h1>Payment Page</h1>
