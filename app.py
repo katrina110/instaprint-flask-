@@ -326,11 +326,10 @@ def preview_with_price():
 @app.route('/payment')
 def payment_page():
     global arduino
-    # Initialize Arduino connection if not already done
     if not arduino:
         try:
-            arduino = serial.Serial('COM6', 9600)
-            time.sleep(2)  # Wait for the connection to initialize
+            arduino = serial.Serial('COM6', 9600, timeout=1)
+            time.sleep(2)
             print("Arduino successfully initialized.")
         except Exception as e:
             print(f"Failed to initialize Arduino: {e}")
@@ -341,19 +340,30 @@ def payment_page():
 @app.route('/detect_coins')
 def detect_coin():
     global coin_count, arduino
-    print("Starting coin detection thread...")
-    while True:
-        if arduino and arduino.in_waiting > 0:
-            coin_status = arduino.readline().decode('utf-8').strip()
-            if "Coin Count:" in coin_status:  # Ensure message contains coin count
-                try:
-                    coin_count = int(coin_status.split(":")[1].strip())
-                    print(f"Updated Coin Count: {coin_count}")
-                    # Emit the updated coin count to connected clients
-                    socketio.emit('update_coin_count', {'count': coin_count})
-                except ValueError:
-                    print("Invalid coin count format received.")
-            time.sleep(0.1)
+    print("Starting coin detection...")
+    try:
+        while True:
+            if arduino and arduino.in_waiting > 0:
+                # Read and decode the data from Arduino
+                coin_status = arduino.readline().decode('utf-8').strip()
+                print(f"Arduino Output: {coin_status}")  # Print raw data to the terminal
+                
+                # Check if the message contains "Credits:"
+                if "Credits:" in coin_status:
+                    try:
+                        # Extract and update the coin count
+                        coin_count = int(coin_status.split(":")[1].strip())
+                        print(f"Updated Coin Count: {coin_count}")
+                        
+                        # Emit the updated coin count to clients (if using Flask-SocketIO)
+                        socketio.emit('update_coin_count', {'count': coin_count})
+                    except ValueError:
+                        print("Invalid coin count format received.")
+                
+                time.sleep(0.1)  # Prevent overwhelming the CPU
+    except KeyboardInterrupt:
+        print("Coin detection stopped.")
+        return "Coin detection stopped."
 
 @app.route('/coin_count')
 def get_coin_count():
