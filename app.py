@@ -180,10 +180,17 @@ def online_upload():
         # You can provide a link to ToffeeShare or any related functionality
         toffee_share_link = "https://toffeeshare.com/nearby"
         return render_template('upload_page.html', files=files, toffee_share_link=toffee_share_link)
-
+    
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global images, total_pages
+
+    # Path to the flash drive (update to your actual mount path)
+    flash_drive_path = "E:\\"  # Example for Windows; adjust for other OSes (e.g., `/media/usb`)
+
+    if not os.path.exists(flash_drive_path):
+        return jsonify({"error": "Flash drive not connected!"}), 400
+
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -192,25 +199,28 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
 
     if file and allowed_file(file.filename):
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(filepath)
+        # Save the file to the flash drive
+        flash_file_path = os.path.join(flash_drive_path, file.filename)
+        file.save(flash_file_path)
 
-        if filepath.endswith('.pdf'):
-            images = pdf_to_images(filepath)
+        # Process the file after saving
+        if flash_file_path.endswith('.pdf'):
+            images = pdf_to_images(flash_file_path)
             total_pages = len(images)
-        elif filepath.endswith(('.jpg', '.jpeg', '.png')):
-            images = [cv2.imread(filepath)]
+        elif flash_file_path.endswith(('.jpg', '.jpeg', '.png')):
+            images = [cv2.imread(flash_file_path)]
             total_pages = 1
-        elif filepath.endswith(('.docx', '.doc')):
-            images = docx_to_images(filepath)
+        elif flash_file_path.endswith(('.docx', '.doc')):
+            images = docx_to_images(flash_file_path)
             total_pages = len(images)
         else:
             return jsonify({"error": "Unsupported file format"}), 400
 
         return jsonify({
-            "message": "File uploaded successfully!",
+            "message": f"File uploaded successfully!",
             "fileName": file.filename,
-            "totalPages": total_pages
+            "totalPages": total_pages,
+            "flashDrivePath": flash_file_path
         }), 200
 
     return jsonify({"error": "Invalid file format"}), 400
