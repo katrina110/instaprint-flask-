@@ -57,24 +57,31 @@ def pdf_to_images(pdf_path):
     return pdf_images
 
 
-def docx_to_images(docx_path):
+def docx_to_images(file_path):
     try:
+        if not file_path.lower().endswith(('.doc', '.docx')):
+            raise ValueError("Unsupported file type for Word documents.")
+        
         pythoncom.CoInitialize()  # Initialize COM
         word = client.Dispatch("Word.Application")
         word.visible = False
-        doc = word.Documents.Open(docx_path)
 
-        pdf_path = docx_path.replace('.docx', '.pdf')
-        doc.SaveAs(pdf_path, FileFormat=17)
+        doc = word.Documents.Open(file_path)
+        pdf_path = file_path.replace('.docx', '.pdf').replace('.doc', '.pdf')
+        
+        doc.SaveAs(pdf_path, FileFormat=17)  # 17 corresponds to PDF format
         doc.Close()
 
-        images = pdf_to_images(pdf_path)
-        os.remove(pdf_path)
-        return images
-    except Exception as e:
-        print(f"Error during DOCX to PDF conversion: {e}")
-        return []
+        word.Quit()
+        pythoncom.CoUninitialize()
 
+        images = pdf_to_images(pdf_path)
+        os.remove(pdf_path)  # Clean up temporary file
+        return images
+
+    except Exception as e:
+        print(f"Error processing Word document: {e}")
+        return []
 
 # Add the process_image function
 def process_image(image):
