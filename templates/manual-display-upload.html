@@ -66,9 +66,46 @@
         display: flex;
         flex-direction: column;
       }
+      /* Preloader styles */
+      #preloader {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+        }
+
+        .spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #700000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            0% {
+                transform: translate(-50%, -50%) rotate(0deg);
+            }
+            100% {
+                transform: translate(-50%, -50%) rotate(360deg);
+            }
+        }
     </style>
   </head>
   <body>
+    <!-- Preloader -->
+    <div id="preloader">
+      <div class="spinner"></div>
+  </div>
      <!-- Terms and Conditions Modal -->
      <div class="modal fade" id="termsModal" tabindex="-1" role="dialog" aria-labelledby="termsModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg" role="document">
@@ -246,21 +283,71 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
-       $(document).ready(function() {
-        // Show the Terms and Agreements modal when the page loads
-        $('#termsModal').modal('show');
-        
-        // Handle accept button click
-        $('#acceptTermsButton').click(function() {
-          if ($('#acceptTerms').is(':checked')) {
+     $(document).ready(function() {
+    // Show the Terms and Agreements modal when the page loads
+    $('#termsModal').modal('show');
+
+    // Handle accept button click
+    $('#acceptTermsButton').click(function() {
+        if ($('#acceptTerms').is(':checked')) {
             // Proceed to main content
             $('#termsModal').modal('hide');
-          } else {
+        } else {
             alert("Please agree to the terms and conditions before proceeding.");
-          }
-        });
-      });
+        }
+    });
 
+    $("#uploadForm").on("submit", function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+
+        // Show preloader
+        $("#preloader").show();
+
+        // Simulate file upload and processing (use actual AJAX in a real scenario)
+        setTimeout(function() {
+            // Hide preloader once processing is done
+            $("#preloader").hide();
+
+            // Show the print options modal
+            $("#printOptionsModal").modal("show");
+
+            // Populate modal with file data (for demonstration purposes)
+            const fileInput = $("#file")[0];
+            if (fileInput.files.length > 0) {
+                $("#fileName").text(fileInput.files[0].name);
+                $("#totalPages").text("10"); // Example page count
+            }
+        }, 3000); // Simulated delay for processing
+    });
+
+    // Additional logic to handle closing of modals
+    $("#closeModalBtn").click(function() {
+        $("#printOptionsModal").modal("hide");
+    });
+
+    $("#continueBtn").click(function() {
+        alert("Continuing with print options...");
+        // Add logic for continuing to the next step
+    });
+});
+
+        function updatePreview() {
+            const pageFrom = $("#pageFrom").val();
+            const pageTo = $("#pageTo").val();
+            const numCopies = $("#numCopies").val();
+            const pageSize = $("#pageSize").val();
+            const colorOption = $("#colorOption").val();
+
+            if (!pageFrom || !pageTo || pageFrom > pageTo || pageTo > totalPages)
+                return;
+
+            clearTimeout(previewTimeout);
+
+            previewTimeout = setTimeout(function () {
+                // Mock preview update
+            }, 300);
+        }
       let previewTimeout;
       let totalPages = 0;
       let fileName = "";
