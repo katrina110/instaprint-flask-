@@ -19,58 +19,60 @@
         });
     </script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // Retrieve the total price from localStorage
-            const totalPrice = localStorage.getItem('totalPrice');
-            if (totalPrice) {
-                document.getElementById('priceValue').textContent = totalPrice;
+        document.addEventListener("DOMContentLoaded", () => {
+        const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
+            if (!printOptions) {
+                alert("Print options not found! Please start the process again.");
+                window.location.href = "/manual-display-upload";
+                return;
             }
-        });
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-        const socket = io(); // Connect to the Flask-SocketIO server
+            const totalPriceElement = document.getElementById("priceValue");
+            const modal = document.getElementById("myModal");
+            const socket = io();
 
-        // Listen for coin count updates
-        socket.on('update_coin_count', (data) => {
-            const coinCountElement = document.getElementById('coin-count');
-            const totalPriceElement = document.getElementById('priceValue');
+            socket.on("update_coin_count", (data) => {
+                const coinCountElement = document.getElementById("coin-count");
+                coinCountElement.textContent = `Coins Inserted: ${data.count}`;
 
-            // Update the coin count display
-            coinCountElement.textContent = `Coins Inserted: ${data.count}`;
+                const totalPrice = parseFloat(totalPriceElement.textContent);
 
-            // Get the total price from the page
-            const totalPrice = parseFloat(totalPriceElement.textContent);
-
-            // Check if the coins inserted are equal to or greater than the price
-            if (data.count >= totalPrice) {
-            // Trigger print document function in Python
-            fetch('/print_document', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                // Include necessary data for printing here, 
-                // e.g., document ID, user ID, etc.
-                documentId: 'your_document_id', 
-                userId: 'your_user_id' 
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                alert("Document sent to the printer successfully!");
-                // Optionally: Reset coin count and/or display a success message
-                socket.emit('reset_coin_count'); // Send a message to the server to reset the coin count
-                // Display a success message to the user
-                } else {
-                alert(`Error: ${data.error}`);
+                if (data.count >= totalPrice) {
+                    fetch("/print_document", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(printOptions), // Send the print options
+                    })
+                        .then((response) => response.json())
+                        .then((data) => {
+                            if (data.success) {
+                                modal.style.display = "block";
+                                socket.emit("reset_coin_count");
+                            } else {
+                                alert(`Error: ${data.error}`);
+                            }
+                        })
+                        .catch((error) => console.error("Error triggering print:", error));
                 }
-            })
-            .catch(error => console.error('Error triggering print:', error));
+            });
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // Retrieve Total Price from sessionStorage
+            const totalPrice = sessionStorage.getItem("totalPrice");
+
+            if (totalPrice) {
+                const priceValueElement = document.getElementById("priceValue");
+                priceValueElement.textContent = parseFloat(totalPrice).toFixed(2);
+
+                console.log("Total Price loaded:", totalPrice);
+            } else {
+                console.warn("Total Price not found in sessionStorage.");
+                // Optionally display a fallback message or take corrective action
+                alert("Total Price could not be loaded. Please go back and reselect your options.");
             }
         });
-        });
     </script>
+
     <style>
         body, html {
             height: 100%;
@@ -151,6 +153,7 @@
         color: gold;
     }
     </style>
+
 </head>
 <body>
     <header class="header">
@@ -191,8 +194,6 @@
 </div>
 
 <main>
-
-
     <h1>Payment Page</h1>
     <h3 class="mt-4" id="totalPrice"> 
         Total Price: ₱<span id="priceValue">0.00</span>  
@@ -203,32 +204,27 @@
     <button class="btn" id="openModal">Open Modal</button>
 
     <!-- Modal structure -->
-<div id="myModal" class="modal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>Thank You for Using InstaPrint!</h2>
-        <p>Your document has been successfully printed. We appreciate your patronage and hope to see you again soon.</p>
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Thank You for Using InstaPrint!</h2>
+            <p>Your document has been successfully printed. We appreciate your patronage and hope to see you again soon.</p>
 
-        <!-- Star Rating -->
-        <h3>Rate Your Experience:</h3>
-        <div class="star-rating">
-            <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
-            <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
-            <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
-            <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
-            <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+            <!-- Star Rating -->
+            <h3>Rate Your Experience:</h3>
+            <div class="star-rating">
+                <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
+                <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
+                <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
+                <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
+                <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+            </div>
+            <br/>
+            <!-- Feedback Button -->
+            <button class="btn" id="feedbackButton" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
         </div>
-        <br/>
-        <!-- Feedback Button -->
-        <button class="btn" id="feedbackButton" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
-
-        <!-- Back to Homepage Button -->
-        <button class="btn" id="backToHomepage" onclick="location.href='file-upload.html'">Go Back to Homepage</button>
     </div>
-</div>
 </main>
-
-
      <script>
         // Get the modal
         var modal = document.getElementById("myModal");

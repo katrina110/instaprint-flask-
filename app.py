@@ -146,13 +146,10 @@ def calculate_cost_and_profit(image, is_grayscale=False):
 
     return cost_per_page, profit_per_page
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
-# Route for file-upload page after PIN validation
 @app.route('/file-upload')
 def file_upload():
     return render_template('file-upload.html')
@@ -388,12 +385,18 @@ def print_document():
     try:
         # Get latest print options from the request
         data = request.json
+        print("Received print options:", data)
+
+        # Extract and validate data
         page_from = int(data.get('pageFrom', 1))
         page_to = int(data.get('pageTo', 1))
         num_copies = int(data.get('numCopies', 1))
         page_size = data.get('pageSize', 'A4')
         color_option = data.get('colorOption', 'Color')
 
+        if page_from < 1 or page_to < page_from:
+            return jsonify({"error": "Invalid page range"}), 400
+        
         # Select the pages and regenerate previews
         selected_images = images[page_from - 1:page_to]
         temp_previews = []
@@ -456,8 +459,6 @@ def print_document():
         print(f"Error printing document: {e}")
         return jsonify({"error": f"Failed to print document: {e}"}), 500
 # END OF PRINT DOCUMENT
-
-
 
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])
