@@ -44,7 +44,6 @@ selected_previews = []  # Store paths to selected preview images
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-
 def pdf_to_images(pdf_path):
     document = fitz.open(pdf_path)
     pdf_images = []
@@ -55,7 +54,6 @@ def pdf_to_images(pdf_path):
         pdf_images.append(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     document.close()
     return pdf_images
-
 
 def docx_to_images(file_path):
     try:
@@ -82,73 +80,105 @@ def docx_to_images(file_path):
     except Exception as e:
         print(f"Error processing Word document: {e}")
         return []
-
-# Add the process_image function
+    
 def process_image(image):
-    """Process the image to calculate price and apply image segmentation."""
+
     if image is None:
         print("Error: Unable to load image.")
         return None, 0
 
-    # Define thresholds for dark and bright pixels
-    lower_dark = np.array([0, 0, 0], dtype=np.uint8)
-    upper_dark = np.array([50, 50, 50], dtype=np.uint8)
-    lower_bright = np.array([200, 200, 200], dtype=np.uint8)
-    upper_bright = np.array([255, 255, 255], dtype=np.uint8)
+    # --- Blank White Page Detection ---
+    if np.all(image == 255):
+        return image, 0.0  # Price is 0 for blank white pages
 
-    dark_mask = cv2.inRange(image, lower_dark, upper_dark)
-    bright_mask = cv2.inRange(image, lower_bright, upper_bright)
+    # --- Fully Black Page Pricing ---
+    if np.all(image == 0):
+        price_per_pixel_color = 0.0000075
+        total_pixels = image.shape[0] * image.shape[1]  # Total pixels in the image
+        total_price_black = total_pixels * price_per_pixel_color
+        rounded_price_black = round(total_price_black, 2)
+        return image, rounded_price_black
 
-    # Calculate number of bright pixels
-    num_bright_pixels = np.sum(bright_mask == 255)
+    # --- Normal Page Processing ---
+    # Convert to grayscale for easier processing
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Define price per bright pixel
-    price_per_pixel = 0.0000085
+    # Apply adaptive thresholding to find potential page areas
+    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
-    # Calculate total price based on number of bright pixels
-    price = num_bright_pixels * price_per_pixel
-    rounded_price = round(price, 2)
+    # Find contours of potential page areas
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Convert image to HSV color space for gray mask
+    # Filter contours based on area (remove noise)
+    min_area = 1000  # Adjust this value as needed
+    filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
+
+    # Create a mask to isolate the areas of interest
+    mask_pixels = np.zeros_like(gray)
+    cv2.drawContours(mask_pixels, filtered_contours, -1, 255, thickness=cv2.FILLED)
+
+    # --- Color Area Pricing ---
+    # Convert to HSV color space for easier color analysis
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    # Define thresholds for gray pixels in HSV color space
-    lower_gray = np.array([0, 0, 0], dtype=np.uint8)
-    upper_gray = np.array([179, 50, 255], dtype=np.uint8)
+    # Define color ranges (adjust these as needed)
+    lower_red = np.array([160, 50, 50])
+    upper_red = np.array([190, 255, 255])
+    lower_green = np.array([50, 50, 50])
+    upper_green = np.array([100, 255, 255])
+    lower_blue = np.array([100, 50, 50])
+    upper_blue = np.array([140, 255, 255])
 
-    # Create mask for gray pixels
-    gray_mask = cv2.inRange(hsv_image, lower_gray, upper_gray)
+    # Create masks for each color
+    red_mask = cv2.inRange(hsv_image, lower_red, upper_red)
+    green_mask = cv2.inRange(hsv_image, lower_green, upper_green)
+    blue_mask = cv2.inRange(hsv_image, lower_blue, upper_blue)
 
-    # Combine masks for dark, bright, and gray pixels
-    combined_mask = cv2.bitwise_or(dark_mask, bright_mask)
-    combined_mask = cv2.bitwise_or(combined_mask, gray_mask)
+    # Create a mask for all colors
+    mask_colors = cv2.bitwise_or(red_mask, green_mask)
+    mask_colors = cv2.bitwise_or(mask_colors, blue_mask)
 
-    # Apply combined mask to the original image to get the processed image
-    output_image = cv2.bitwise_and(image, image, mask=cv2.bitwise_not(combined_mask))
+    # --- Dark Area Detection ---
+    # Define threshold for dark pixels
+    lower_dark = np.array([0, 0, 0], dtype=np.uint8)
+    upper_dark = np.array([50, 50, 50], dtype=np.uint8) 
 
-    # Replace the black (dark) pixels with white background
-    output_image[combined_mask == 255] = [255, 255, 255]  # Set to white where mask is dark
+    # Create a mask for dark pixels
+    dark_mask = cv2.inRange(image, lower_dark, upper_dark)
 
-    return output_image, rounded_price
+    # Combine color mask with dark mask to isolate colored areas within dark regions
+    colored_in_dark_mask = cv2.bitwise_and(mask_colors, dark_mask)
 
+    # --- Price Calculation ---
+    price_per_pixel_group = 0.0000040
+    price_per_pixel_color = 0.0000055
 
-def calculate_cost_and_profit(image, is_grayscale=False):
-    """Calculate the cost and profit per page based on image type (grayscale or color)."""
-    if is_grayscale:
-        # Cost and profit calculation for grayscale
-        cost_per_page = 2  # Arbitrary cost for grayscale pages
-        profit_per_page = 3  # Arbitrary profit for grayscale pages
-    else:
-        # Cost and profit calculation for colored pages
-        num_pixels = image.shape[0] * image.shape[1]
-        cost_per_page = 1* num_pixels  # Example pricing model for color (per pixel)
-        profit_per_page = 5 * num_pixels  # Example profit for color pages
+    # Calculate non-black area for pixel groups
+    non_black_pixel_area = cv2.countNonZero(mask_pixels) 
+    total_price_pixels = non_black_pixel_area * price_per_pixel_group
 
-    return cost_per_page, profit_per_page
+    # Calculate colored areas within dark regions
+    colored_in_dark_area = cv2.countNonZero(colored_in_dark_mask)
+    total_price_colored_in_dark = colored_in_dark_area * price_per_pixel_color 
 
-# @app.route('/')
-# def index():
-#     return render_template('index.html')
+    # Calculate non-black area for color areas (excluding those within dark regions)
+    non_black_color_area = cv2.countNonZero(mask_colors) - colored_in_dark_area
+    total_price_colors = non_black_color_area * price_per_pixel_color
+
+    total_price = total_price_pixels + total_price_colors 
+
+    # --- Apply Masks and Create Output Image ---
+    # Combine masks
+    combined_mask = cv2.bitwise_or(mask_pixels, mask_colors)
+
+    # Apply the combined mask to the original image
+    segmented_image = cv2.bitwise_and(image, image, mask=combined_mask)
+
+    # Apply maximum price limit
+    max_price_per_page = 20.00
+    rounded_price = round(min(total_price, max_price_per_page), 2)
+
+    return segmented_image, rounded_price
 
 @app.route('/')
 def file_upload():
@@ -184,37 +214,6 @@ def online_upload():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global images, total_pages
-
-    # # Path to the flash drive (update to your actual mount path)
-    # flash_drive_path = "E:\\"  # Example for Windows; adjust for other OSes (e.g., `/media/usb`)
-
-    # if not os.path.exists(flash_drive_path):
-    #     return jsonify({"error": "Flash drive not connected!"}), 400
-
-    # if 'file' not in request.files:
-    #     return jsonify({"error": "No file part"}), 400
-
-    # file = request.files['file']
-    # if file.filename == '':
-    #     return jsonify({"error": "No selected file"}), 400
-
-    # if file and allowed_file(file.filename):
-    #     # Save the file to the flash drive
-    #     flash_file_path = os.path.join(flash_drive_path, file.filename)
-    #     file.save(flash_file_path)
-
-    #     # Process the file after saving
-    #     if flash_file_path.endswith('.pdf'):
-    #         images = pdf_to_images(flash_file_path)
-    #         total_pages = len(images)
-    #     elif flash_file_path.endswith(('.jpg', '.jpeg', '.png')):
-    #         images = [cv2.imread(flash_file_path)]
-    #         total_pages = 1
-    #     elif flash_file_path.endswith(('.docx', '.doc')):
-    #         images = docx_to_images(flash_file_path)
-    #         total_pages = len(images)
-    #     else:
-    #         return jsonify({"error": "Unsupported file format"}), 400
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
