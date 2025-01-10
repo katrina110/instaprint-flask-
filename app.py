@@ -146,11 +146,11 @@ def calculate_cost_and_profit(image, is_grayscale=False):
 
     return cost_per_page, profit_per_page
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
 
-@app.route('/file-upload')
+@app.route('/')
 def file_upload():
     return render_template('file-upload.html')
 

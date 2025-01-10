@@ -99,6 +99,13 @@
           transform: translate(-50%, -50%) rotate(360deg);
         }
       }
+      .buttons {
+        display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-direction: row-reverse;
+    
+      }
     </style>
   </head>
   <body>
@@ -231,13 +238,23 @@
             <span id="file-name-display">No file chosen</span>
             <!-- Display selected file name -->
           </div>
-          <button
+          <br/>
+          
+         
+          
+          
+          <div class="buttons">
+            <button
             type="submit"
             class="btn btn-primary mt-3"
             style="background-color: #700000; border: none"
           >
             Upload
           </button>
+          <br/>
+          <button class="btn btn-secondary mt-3" onclick="window.location.href='/'">Cancel</button>
+          </div>
+          
         </form>
 
         <!-- Sticky Button -->
@@ -436,8 +453,6 @@
         });
 
         $("#continueBtn").click(function () {
-          alert("Continuing with print options...");
-          // Add logic for continuing to the next step
         });
       });
 

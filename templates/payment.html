@@ -117,7 +117,8 @@
             margin: 5% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 80%;
+            width: 30%;
+            border-radius: 15px;
         }
         .close {
             color: #aaa;
@@ -138,6 +139,7 @@
         .star-rating {
         direction: rtl;
         display: inline-flex;
+        margin-bottom: 15px;
     }
     .star-rating input {
         display: none;
@@ -151,6 +153,21 @@
     .star-rating label:hover,
     .star-rating label:hover ~ label {
         color: gold;
+    }
+    .btn-feedback {
+        border-radius: 10px;
+    border: none;
+    background-color: #700000;
+    color: white;
+    padding: 10px;
+    }
+    .btn-cancel {
+        border-radius: .25rem;
+    border: none;
+    background-color: #700000;
+    color: white;
+    width: 200px;
+    height: 40px;
     }
     </style>
 
@@ -194,14 +211,15 @@
 </div>
 
 <main>
+    <img src="static/images/coins.png" alt="" style="width: 50rem; margin-bottom: 30px;">
     <h1>Payment Page</h1>
     <h3 class="mt-4" id="totalPrice"> 
         Total Price: ₱<span id="priceValue">0.00</span>  
     </h3>
     <h3 id="coin-count">Coins Inserted: <br/> <span style="font-size: 80px;">₱0  </span></h3>
     
-    <!-- Button to open the modal -->
-    <button class="btn" id="openModal">Open Modal</button>
+    <button class="btn-cancel" id="cancelPayment" onclick="window.history.back()">Cancel Payment</button>
+
 
     <!-- Modal structure -->
     <div id="myModal" class="modal">
@@ -221,7 +239,7 @@
             </div>
             <br/>
             <!-- Feedback Button -->
-            <button class="btn" id="feedbackButton" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
+            <button class="btn-feedback" id="feedbackButton" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
         </div>
     </div>
 </main>
