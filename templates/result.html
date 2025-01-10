@@ -8,8 +8,8 @@
       rel="stylesheet"
       href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
     />
-    <link href="./../static/css/result.css" rel="stylesheet">
-    <link href="./../static/css/header.css" rel="stylesheet">
+    <link href="./../static/css/result.css" rel="stylesheet" />
+    <link href="./../static/css/header.css" rel="stylesheet" />
   </head>
   <body>
     <header class="header">
@@ -17,41 +17,42 @@
       <img src="./../static/images/pup-logo.png" alt="sample" />
 
       <!-- Center text -->
-      <div class="center-text" style="background-color: white;">INSTAPRINT <h6>PRINT PREVIEW RESULTS</h6></div>
+      <div class="center-text" style="background-color: white">
+        INSTAPRINT
+        <h6>PRINT PREVIEW RESULTS</h6>
+      </div>
 
       <!-- Right logo -->
       <img src="./../static/images/cpe-logo.png" alt="sample" />
     </header>
     <div class="result-container">
       <div class="row">
-        <div class="column left" style="margin-top: 3rem;">
-
+        <div class="column left" style="margin-top: 3rem">
           <!-- Section for displaying selected print options -->
           <div id="printDetails" class="mb-4"></div>
           <div class="button">
-            
-          <!-- Button to open edit modal -->
-          <button
-          class="btn edit-btn mt-3"
-          id="editButton"
-          data-toggle="modal"
-          data-target="#editModal"
-        >
-          Edit Print Options
-        </button>
+            <!-- Button to open edit modal -->
+            <button
+              class="btn edit-btn mt-3"
+              id="editButton"
+              data-toggle="modal"
+              data-target="#editModal"
+            >
+              Edit Print Options
+            </button>
 
-        <!-- Button to print the document -->
-        <button class="btn btn-success mt-3" id="printButton">
-          Print Document
-        </button>
+            <!-- Total price -->
+            <h3 class="mt-4" id="totalPrice">
+              Total Price: ₱<span id="priceValue">0.00</span>
+            </h3>
+
+            <!-- Button to print the document -->
+            <button class="btn btn-success mt-3" id="printButton">
+              Print Document
+            </button>
           </div>
         </div>
         <div class="column right">
-          <!-- Total price -->
-          <h3 class="mt-4" id="totalPrice">
-            Total Price: ₱<span id="priceValue">0.00</span>
-          </h3>
-
           <!-- Preview container -->
           <h2>Page Previews</h2>
           <div id="previewContainer" class="d-flex flex-wrap"></div>
@@ -169,7 +170,7 @@
           // Update print details section
           const printDetails = document.getElementById("printDetails");
           printDetails.innerHTML = `
-            <h5>Selected Options:</h5>
+            <h3>Selected Options:</h3>
             <ul>
               <li><strong>File:</strong> ${options.fileName}</li>
               <li><strong>Page Range:</strong> ${options.pageFrom} to ${options.pageTo}</li>
