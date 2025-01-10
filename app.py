@@ -185,42 +185,69 @@ def online_upload():
 def upload_file():
     global images, total_pages
 
-    # Path to the flash drive (update to your actual mount path)
-    flash_drive_path = "E:\\"  # Example for Windows; adjust for other OSes (e.g., `/media/usb`)
+    # # Path to the flash drive (update to your actual mount path)
+    # flash_drive_path = "E:\\"  # Example for Windows; adjust for other OSes (e.g., `/media/usb`)
 
-    if not os.path.exists(flash_drive_path):
-        return jsonify({"error": "Flash drive not connected!"}), 400
+    # if not os.path.exists(flash_drive_path):
+    #     return jsonify({"error": "Flash drive not connected!"}), 400
+
+    # if 'file' not in request.files:
+    #     return jsonify({"error": "No file part"}), 400
+
+    # file = request.files['file']
+    # if file.filename == '':
+    #     return jsonify({"error": "No selected file"}), 400
+
+    # if file and allowed_file(file.filename):
+    #     # Save the file to the flash drive
+    #     flash_file_path = os.path.join(flash_drive_path, file.filename)
+    #     file.save(flash_file_path)
+
+    #     # Process the file after saving
+    #     if flash_file_path.endswith('.pdf'):
+    #         images = pdf_to_images(flash_file_path)
+    #         total_pages = len(images)
+    #     elif flash_file_path.endswith(('.jpg', '.jpeg', '.png')):
+    #         images = [cv2.imread(flash_file_path)]
+    #         total_pages = 1
+    #     elif flash_file_path.endswith(('.docx', '.doc')):
+    #         images = docx_to_images(flash_file_path)
+    #         total_pages = len(images)
+    #     else:
+    #         return jsonify({"error": "Unsupported file format"}), 400
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
-
+    
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
     if file and allowed_file(file.filename):
-        # Save the file to the flash drive
-        flash_file_path = os.path.join(flash_drive_path, file.filename)
-        file.save(flash_file_path)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(filepath)
 
-        # Process the file after saving
-        if flash_file_path.endswith('.pdf'):
-            images = pdf_to_images(flash_file_path)
+        if filepath.endswith('.pdf'):
+            images = pdf_to_images(filepath)
             total_pages = len(images)
-        elif flash_file_path.endswith(('.jpg', '.jpeg', '.png')):
-            images = [cv2.imread(flash_file_path)]
+
+        elif filepath.endswith(('.jpg', '.jpeg', '.png')):
+            images = [cv2.imread(filepath)]
             total_pages = 1
-        elif flash_file_path.endswith(('.docx', '.doc')):
-            images = docx_to_images(flash_file_path)
+        
+        elif filepath.endswith(('.docx', '.doc')):
+            images = docx_to_images(filepath)
             total_pages = len(images)
+
         else:
             return jsonify({"error": "Unsupported file format"}), 400
 
+
         return jsonify({
-            "message": f"File uploaded successfully!",
+            "message": "File uploaded successfully!",
             "fileName": file.filename,
             "totalPages": total_pages,
-            "flashDrivePath": flash_file_path
+            # "flashDrivePath": flash_file_path
         }), 200
 
     return jsonify({"error": "Invalid file format"}), 400
