@@ -93,7 +93,7 @@ def process_image(image):
 
     # --- Fully Black Page Pricing ---
     if np.all(image == 0):
-        price_per_pixel_color = 0.0000075
+        price_per_pixel_color = 0.0000030
         total_pixels = image.shape[0] * image.shape[1]  # Total pixels in the image
         total_price_black = total_pixels * price_per_pixel_color
         rounded_price_black = round(total_price_black, 2)
@@ -150,23 +150,22 @@ def process_image(image):
     colored_in_dark_mask = cv2.bitwise_and(mask_colors, dark_mask)
 
     # --- Price Calculation ---
-    price_per_pixel_group = 0.0000040
-    price_per_pixel_color = 0.0000055
+    price_per_pixel_group = 0.0000020
+    price_per_pixel_color = 0.0000030
 
     # Calculate non-black area for pixel groups
     non_black_pixel_area = cv2.countNonZero(mask_pixels) 
-    total_price_pixels = non_black_pixel_area * price_per_pixel_group
+    total_price_pixels = non_black_pixel_area * price_per_pixel_group 
 
     # Calculate colored areas within dark regions
     colored_in_dark_area = cv2.countNonZero(colored_in_dark_mask)
-    total_price_colored_in_dark = colored_in_dark_area * price_per_pixel_color 
+    total_price_colored_in_dark = colored_in_dark_area * price_per_pixel_color
 
     # Calculate non-black area for color areas (excluding those within dark regions)
     non_black_color_area = cv2.countNonZero(mask_colors) - colored_in_dark_area
     total_price_colors = non_black_color_area * price_per_pixel_color
 
-    total_price = total_price_pixels + total_price_colors 
-
+    total_price = total_price_pixels + total_price_colors
     # --- Apply Masks and Create Output Image ---
     # Combine masks
     combined_mask = cv2.bitwise_or(mask_pixels, mask_colors)
@@ -310,27 +309,33 @@ def preview_with_price():
         total_price = 0
 
         if color_option == 'Grayscale':
-            # Skip segmentation for grayscale; only generate previews and count pages
+            # Set price per page for grayscale
+            price_per_page = 2
+
             for idx, img in enumerate(selected_images):
                 preview_path = os.path.join(app.config['STATIC_FOLDER'], f"grayscale_preview_{page_from + idx}.jpg")
                 gray_preview = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 cv2.imwrite(preview_path, gray_preview)
                 previews.append(f"/uploads/grayscale_preview_{page_from + idx}.jpg")
 
-            # Calculate the cost and profit for grayscale
-            for img in selected_images:
-                cost, profit = calculate_cost_and_profit(img, is_grayscale=True)
-                total_price += cost
+                # Add price for grayscale page (2 per page)
+                page_price = price_per_page * num_copies
+                total_price += page_price
 
-            total_price = round(total_price)  # Round the total price to whole number
+                # Add page price breakdown for grayscale
+                page_prices.append({
+                    "page": page_from + idx,
+                    "price": page_price,
+                    "profit": 0
+                })
 
             return jsonify({
                 "totalPrice": total_price,
-                "pagePrices": [{"page": i + page_from, "price": 0, "profit": profit} for i in range(len(selected_images))],
+                "pagePrices": page_prices,
                 "previews": [{"page": page_from + idx, "path": preview} for idx, preview in enumerate(previews)]
             }), 200
 
-        # Process for color
+        # Process for color (this part remains unchanged)
         for idx, img in enumerate(selected_images):
             processed_img, page_price = process_image(img)
             page_price *= num_copies  # Multiply price by the number of copies
@@ -351,7 +356,7 @@ def preview_with_price():
                 "processed": f"/uploads/segmented_{page_from + idx}.jpg"
             })
 
-        total_price = round(total_price)  # Round the total price to whole number
+        total_price = round(total_price)  # Round the total price to a whole number
 
         return jsonify({
             "totalPrice": total_price,
