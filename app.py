@@ -82,102 +82,83 @@ def docx_to_images(file_path):
         return []
     
 def process_image(image):
+    """
+    Process the image to calculate price and apply image segmentation.
+    This version separately calculates prices for pixel groups and colored areas,
+    assigns a price of 0 for blank white pages, and charges black pages.
 
+    Args:
+        image: The input image as a NumPy array.
+
+    Returns:
+        A tuple containing:
+            - The processed image as a NumPy array.
+            - The calculated price as a float.
+    """
     if image is None:
         print("Error: Unable to load image.")
         return None, 0
 
     # --- Blank White Page Detection ---
-    if np.all(image == 255):
+    if np.all(image == 255):  # Check if the image is completely white
         return image, 0.0  # Price is 0 for blank white pages
 
     # --- Fully Black Page Pricing ---
-    if np.all(image == 0):
-        price_per_pixel_color = 0.0000030
+    if np.all(image == 0):  # Check if the image is completely black
+        price_per_pixel_color = 0.0000075
         total_pixels = image.shape[0] * image.shape[1]  # Total pixels in the image
         total_price_black = total_pixels * price_per_pixel_color
         rounded_price_black = round(total_price_black, 2)
-        return image, rounded_price_black
+        return image, min(rounded_price_black, 20.0)  # Cap price at 20
 
     # --- Normal Page Processing ---
-    # Convert to grayscale for easier processing
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Apply adaptive thresholding to find potential page areas
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for easier processing
     thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-
-    # Find contours of potential page areas
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    # Filter contours based on area (remove noise)
     min_area = 1000  # Adjust this value as needed
     filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
-
-    # Create a mask to isolate the areas of interest
     mask_pixels = np.zeros_like(gray)
     cv2.drawContours(mask_pixels, filtered_contours, -1, 255, thickness=cv2.FILLED)
 
-    # --- Color Area Pricing ---
-    # Convert to HSV color space for easier color analysis
+    # Color Area Pricing
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    # Define color ranges (adjust these as needed)
     lower_red = np.array([160, 50, 50])
     upper_red = np.array([190, 255, 255])
     lower_green = np.array([50, 50, 50])
     upper_green = np.array([100, 255, 255])
     lower_blue = np.array([100, 50, 50])
     upper_blue = np.array([140, 255, 255])
-
-    # Create masks for each color
     red_mask = cv2.inRange(hsv_image, lower_red, upper_red)
     green_mask = cv2.inRange(hsv_image, lower_green, upper_green)
     blue_mask = cv2.inRange(hsv_image, lower_blue, upper_blue)
-
-    # Create a mask for all colors
     mask_colors = cv2.bitwise_or(red_mask, green_mask)
     mask_colors = cv2.bitwise_or(mask_colors, blue_mask)
 
-    # --- Dark Area Detection ---
-    # Define threshold for dark pixels
-    lower_dark = np.array([0, 0, 0], dtype=np.uint8)
-    upper_dark = np.array([50, 50, 50], dtype=np.uint8) 
+    # Black Pixel Pricing
+    lower_black = np.array([0, 0, 0], dtype=np.uint8)
+    upper_black = np.array([50, 50, 50], dtype=np.uint8)
+    black_mask = cv2.inRange(image, lower_black, upper_black)
 
-    # Create a mask for dark pixels
-    dark_mask = cv2.inRange(image, lower_dark, upper_dark)
-
-    # Combine color mask with dark mask to isolate colored areas within dark regions
-    colored_in_dark_mask = cv2.bitwise_and(mask_colors, dark_mask)
-
-    # --- Price Calculation ---
-    price_per_pixel_group = 0.0000020
-    price_per_pixel_color = 0.0000030
-
-    # Calculate non-black area for pixel groups
-    non_black_pixel_area = cv2.countNonZero(mask_pixels) 
-    total_price_pixels = non_black_pixel_area * price_per_pixel_group 
-
-    # Calculate colored areas within dark regions
-    colored_in_dark_area = cv2.countNonZero(colored_in_dark_mask)
-    total_price_colored_in_dark = colored_in_dark_area * price_per_pixel_color
-
-    # Calculate non-black area for color areas (excluding those within dark regions)
-    non_black_color_area = cv2.countNonZero(mask_colors) - colored_in_dark_area
+    # Price Calculation
+    price_per_pixel_group = 0.0000065
+    price_per_pixel_color = 0.0000075
+    non_black_pixel_area = cv2.countNonZero(mask_pixels)
+    total_price_pixels = non_black_pixel_area * price_per_pixel_group
+    black_pixel_area = cv2.countNonZero(black_mask)
+    total_price_black = black_pixel_area * price_per_pixel_color
+    non_black_color_area = cv2.countNonZero(mask_colors)
     total_price_colors = non_black_color_area * price_per_pixel_color
+    total_price = total_price_pixels + total_price_colors + total_price_black
 
-    total_price = total_price_pixels + total_price_colors
-    # --- Apply Masks and Create Output Image ---
-    # Combine masks
+    # Cap total price at 20
+    total_price = min(total_price, 20.0)
+
+    # Apply Masks and Create Output Image
     combined_mask = cv2.bitwise_or(mask_pixels, mask_colors)
+    processed_image = cv2.bitwise_and(image, image, mask=combined_mask)
+    rounded_price = round(total_price, 2)
 
-    # Apply the combined mask to the original image
-    segmented_image = cv2.bitwise_and(image, image, mask=combined_mask)
-
-    # Apply maximum price limit
-    max_price_per_page = 20.00
-    rounded_price = round(min(total_price, max_price_per_page), 2)
-
-    return segmented_image, rounded_price
+    return processed_image, rounded_price
 
 @app.route('/')
 def file_upload():
