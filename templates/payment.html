@@ -14,7 +14,7 @@
             // Listen for coin count updates
             socket.on('update_coin_count', (data) => {
                 const coinCountElement = document.getElementById('coin-count');
-                coinCountElement.textContent = `Coins Inserted: ${data.count}`;
+                coinCountElement.textContent = `Coins Inserted: <br/><span style="font-size: 80px;">₱${data.count}</span>`;
             });
         });
     </script>
