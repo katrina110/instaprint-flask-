@@ -5,7 +5,7 @@ const unsigned long debounceDelay = 100; // Debounce delay in milliseconds
 void setup() {
   Serial.begin(9600);
   pinMode(2, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(2), coinInserted, RISING); // Trigger on FALLING instead of RISING
+  attachInterrupt(digitalPinToInterrupt(2), coinInserted, FALLING); // Trigger on FALLING instead of RISING
 }
 
 void loop() {
@@ -18,7 +18,7 @@ void coinInserted() {
   // Check for debounce
   if (currentTime - lastInterruptTime > debounceDelay) {
     // Verify the signal is stable
-    if (digitalRead(2) == HIGH) { // Adjust based on your sensor's normal state
+    if (digitalRead(2) == LOW) { // Adjust based on your sensor's normal state
       coincount++;
       Serial.print("Credits: ");
       Serial.println(coincount);
