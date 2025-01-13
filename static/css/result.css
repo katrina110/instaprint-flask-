@@ -32,6 +32,7 @@ html, body {
     overflow-y: auto; /* Enable vertical scrolling */
     height: 100%; /* Ensure it takes full height */
     padding-bottom: 50px;
+    padding-top: 30px;
 }
 
 .result-container {
