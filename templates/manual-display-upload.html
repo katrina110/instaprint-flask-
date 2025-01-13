@@ -352,7 +352,7 @@
                   </div>
                 </div>
                 <div class="preview-section">
-                  <h6>File: <span id="fileName">N/A</span></h6>
+                  <h6>File: <span id="fileName"></span></h6>
                   <h6>Total Pages: <span id="totalPages"></span></h6>
                   <h6>Preview</h6>
                   <div id="previewContainer" class="preview-container"></div>
@@ -434,7 +434,7 @@
             const fileInput = $("#file")[0];
             if (fileInput.files.length > 0) {
               $("#fileInfo").show();
-              $("#fileName").text(file.name);
+              $("#fileName").text(fileInput.files[0].name);
               $("#fileSize").text((file.size / 1024).toFixed(2) + " KB");
             }
           }, 3000); // Simulated delay for processing
@@ -566,10 +566,9 @@
         window.location.href = "/result";
       });
 
-      document.getElementById("file").addEventListener("change", function () {
-        let fileName =
-          this.files.length > 0 ? this.files[0].name : "No file chosen";
-        document.getElementById("file-name-display").textContent = fileName;
+      document.getElementById("file").addEventListener("change", function() {
+          let fileName = this.files.length > 0 ? this.files[0].name : "No file chosen";
+          document.getElementById("file-name-display").textContent = fileName;
       });
     </script>
   </body>
