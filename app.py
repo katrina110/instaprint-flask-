@@ -14,6 +14,9 @@ import time
 import threading
 from flask_socketio import SocketIO, emit
 
+import win32print
+import multiprocessing
+
 app = Flask(__name__)
 socketio = SocketIO(app)
 
@@ -39,7 +42,6 @@ os.makedirs(app.config['STATIC_FOLDER'], exist_ok=True)
 images = []  # Store images globally for simplicity
 total_pages = 0  # Keep track of total pages
 selected_previews = []  # Store paths to selected preview images
-
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -82,19 +84,7 @@ def docx_to_images(file_path):
         return []
     
 def process_image(image):
-    """
-    Process the image to calculate price and apply image segmentation.
-    This version separately calculates prices for pixel groups and colored areas,
-    assigns a price of 0 for blank white pages, and charges black pages.
 
-    Args:
-        image: The input image as a NumPy array.
-
-    Returns:
-        A tuple containing:
-            - The processed image as a NumPy array.
-            - The calculated price as a float.
-    """
     if image is None:
         print("Error: Unable to load image.")
         return None, 0
@@ -457,7 +447,7 @@ def print_document():
             img = cv2.imread(full_path)
             height, width, _ = img.shape
             aspect_ratio = width / height
-            page_width = 210  # A4 width in mm
+            page_width = 210
             page_height = page_width / aspect_ratio
 
             pdf.add_page()
@@ -466,13 +456,13 @@ def print_document():
         pdf.output(pdf_path)
 
         # Send the PDF to the printer
-        if os.name == 'nt':  # Windows
+        if os.name == 'nt':
             import win32print
             import win32api
 
             printer_name = win32print.GetDefaultPrinter()
             win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
-        else:  # Linux/MacOS
+        else:
             os.system(f'lp "{pdf_path}"')
 
         return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
@@ -492,10 +482,64 @@ def result():
 def uploaded_file(filename):
     return send_from_directory(app.config['STATIC_FOLDER'], filename)
 
+# CHECK PRINTER STATUS
+def check_printer_status(printer_name):
+    try:
+        hPrinter = win32print.OpenPrinter(printer_name)
+        jobs = win32print.EnumJobs(hPrinter, 0, -1, 2)
+        win32print.ClosePrinter(hPrinter)
+
+        if jobs:
+            return "Printing"
+        else:
+            return "Idle"
+
+    except Exception as e:
+        return f"Error: {e}"
+    
+def check_printer_status_loop(printer_name, upload_folder):
+    last_status = "Idle"  # Initialize last_status to "Idle"
+
+    while True:
+        current_status = check_printer_status(printer_name)
+
+        if current_status == "Printing" and last_status == "Idle":
+            print(f"Printer Status: {current_status}") 
+
+        elif current_status == "Idle" and last_status == "Printing":
+            print(f"Printer Status: {current_status}") 
+            # FILE DELETION AFTER PRINTING
+            for filename in os.listdir(upload_folder):
+                file_path = os.path.join(upload_folder, filename)
+                try:
+                    os.remove(file_path)
+                    print(f"Deleted file: {file_path}")
+                except FileNotFoundError:
+                    pass  # File might have already been deleted
+
+        last_status = current_status
+
+        time.sleep(1)  # Check every second
+# END OF CHECK PRINTER STATUS
+
 if __name__ == "__main__":
-    # Start the coin detection thread first
+    # Get the default printer name
+    printer_name = win32print.GetDefaultPrinter()
+
+    # Path to the uploads folder (replace with your actual path)
+    upload_folder = "uploads" 
+
+    # Start the coin detection thread (assuming it's defined elsewhere)
     detection_thread = threading.Thread(target=detect_coin, daemon=True)
     detection_thread.start()
+
+    # Create a tuple of arguments for the worker function
+    args = (printer_name, upload_folder)
+
+    # Start the printer status monitoring in a separate process
+    printer_process = multiprocessing.Process(target=check_printer_status_loop, 
+                                             args=args) 
+    printer_process.start()
 
     # Start the Flask app
     socketio.run(app, debug=False)
