@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="./../static/css/main.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <title>File Upload</title>
   </head>
   <body>
@@ -30,17 +31,19 @@
         <div class="form-container">
           <form class="form">
             <button
-              type="button"
-              class="online"
-              onclick="window.location.href='/manual-upload';"
-            >
-              Manual File Transfer
-            </button>
+            type="button"
+            class="online"
+            onclick="window.location.href='/manual-upload';"
+          >
+            <i class="fa fa-usb"></i>
+            Manual File Transfer
+          </button>
             <button
               type="button"
               class="online"
               onclick="window.location.href='/online-upload';"
             >
+            <i class="fa fa-wifi"></i>
               Wireless File Transfer
             </button>
           </form>
