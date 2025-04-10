@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+ <html lang="en">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Instaprint Dashboard</title>
+     <link href="/static/css/admin-dashboard.css" rel="stylesheet" />
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+ </head>
+ <body>
+     <div class="container">
+         <leftmenu class="menu">
+             <!--Account-->
+             <div class="account">
+                 <i class="fa-solid fa-user-circle profile-icon"></i>
+                 <div class="account-info">
+                     <p class="name">Alice Guo</p>
+                     <p class="role">Admin</p>
+                 </div>
+             </div>
+ 
+             <h2>Navigation</h2>
+             <ul>
+                <li><i class="fa-solid fa-house"></i> <a href="#home">Dashboard</a></li>
+                <li><i class="fa-solid fa-print"></i> <a href="#home">Files Upload</a></li>
+                <li><i class="fa-solid fa-comments"></i> <a href="#home">Feedbacks</a></li>
+                <li><i class="fa-solid fa-upload"></i> <a href="#home">Activity Log</a></li> 
+             </ul> 
+         </leftmenu>
+ 
+         <content class="contents">
+            <h1>Activity Log</h1>
+            <div class="log-table">
+                <div class="log-header">
+                    <div class="log-date">Date</div>
+                    <div class="log-event">Event Name</div>
+                </div>
+                {% for log in printed %}
+                <div class="log-entry">
+                    <div class="log-date">{{ log.date }}<br>{{ log.time }}</div>
+                    <div class="log-event">{{ log.event }}</div>
+                </div>
+                {% endfor %}
+            </div>
+         </content>
+ 
+     <script src="./../static/js/main.js" rel="stylesheet"></script>
+ </body>
+ </html>
