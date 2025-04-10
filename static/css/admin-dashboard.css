@@ -1,0 +1,232 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+  }
+    
+  .container {
+    display: flex;
+    min-height: 100vh;
+  }
+    
+  .menu {
+    width: 250px;
+    background-color: #FFFFFF;    color: #292929;
+    padding: 20px;
+    font-size: 14px;
+  }
+    
+  .menu h2 {
+    margin-bottom: 20px;
+    font-size: 14px;
+  }
+    
+  .menu ul {
+    list-style-type: none;
+    padding-left: 0;
+  }
+  
+  .menu li {
+    display: flex;
+    align-items: center;
+    margin: 15px 0;
+    font-size: 14px;
+    padding: 10px;
+  }
+  
+  .menu li i {
+    margin-right: 10px; /* Add spacing between the icon and text */
+    color: #292929;    /* Icon color */
+    font-size: 16px;   /* Icon size */
+  }
+  
+  .menu a {
+    color: #292929;
+    text-decoration: none;
+    flex: 1; /* Ensure text aligns properly with icon */
+  }
+  
+  .menu li:hover {
+    background-color: #C8C8C8; /* Light gray background on hover */
+    color: #700000;           /* Change text color on hover */
+    cursor: pointer;
+  }
+  
+  .menu li:hover i {
+    color: #700000; /* Change icon color to match text on hover */
+  }
+  
+  .menu a:hover {
+    text-decoration: none;
+  }
+
+  .contents {
+    flex: 1;
+    padding: 20px;
+    background-color: #700000;
+  }
+    
+    /* Account Section */
+  .account {
+    display: flex;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 20px;
+  }
+  
+  .profile-icon {
+    font-size: 40px;
+    color: #292929;
+    margin-right: 10px;
+  }
+  
+  .account-info {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .account-info .name {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 5px;
+  }
+  
+  .account-info .role {
+    font-size: 14px;
+    color: #777;
+  }
+  
+
+/* content */
+
+.stats {
+    display: flex;
+    gap: 20px;
+}
+.card {
+    background: white;
+    color: black;
+    padding: 20px;
+    border-radius: 8px;
+    flex: 1;
+    text-align: center;
+    font-size: 25px;;
+}
+.card-content {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.currency {
+    font-size: 50px;
+    font-weight: bold;
+}
+
+.amount {
+    font-size: 50px;
+}
+
+.card-label {
+    font-size: 14px;
+    color: #444;
+    margin-top: 5px;
+    font-weight: bold;
+}
+
+.charts {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+.chart-box {
+    background: white;
+    color: black;
+    padding: 20px;
+    border-radius: 8px;
+    flex: 1;
+}
+
+/* Files Upload */
+
+h1 {
+  margin-bottom: 30px;
+  font-size: 24px;
+  color: #FFF;
+}
+
+.files-table {
+  width: 100%;
+}
+
+.files-header,
+.files-entry {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  border-bottom: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background-color: #f7f7f7;
+}
+
+.files-header {
+  font-weight: bold;
+  background-color: transparent;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.files-file {
+  width: 25%;
+  font-weight: 500;
+}
+
+.files-type {
+  width: 25%;
+  font-weight: 500;
+}
+
+.files-pages {
+  width: 25%;
+  font-weight: 500;
+}
+
+.files-time {
+  width: 25%;
+  font-weight: 500;
+}
+
+/* Activity Log */
+
+.log-table {
+  width: 100%;
+}
+
+.log-header,
+.log-entry {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  border-bottom: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background-color: #f7f7f7;
+}
+
+.log-header {
+  font-weight: bold;
+  background-color: transparent;
+  border-bottom: 2px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.log-date {
+  width: 25%;
+  font-weight: 500;
+}
+
+.log-event {
+  width: 70%;
+}
