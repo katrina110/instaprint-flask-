@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="./../static/css/main.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <title>File Upload</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
+</head>
+  </head>
+  <body>
+    <div class="insta-container">
+      <div class="logo-container">
+        <div class="logo">
+          <div class="logo1">
+            <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
+          </div>
+          <div class="logo2">
+            <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
+          </div>
+          <div class="logo3">
+            <img src="./../static/images/ce-logo.png" alt="CE Logo" />
+          </div>
+        </div>
+      </div>
+      <div class="logo">
+        <img  style="height: 120px; width: auto;" src="./../static/images/logo.jpg" alt="sample">
+      </div>
+      <div class="title">INSTAPRINT</div>
+      <div class="subtitle">WELCOME TO INSTAPRINT</div>
+      <div class="form">
+        <div class="form-container">
+          <form class="form">
+            <button
+            type="button"
+            class="online"
+            onclick="window.location.href='/file-upload';"
+          >
+
+            USER
+          </button>
+            <button
+              type="button"
+              class="online"
+              onclick="window.location.href='/index';"
+            >
+
+              ADMIN
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
