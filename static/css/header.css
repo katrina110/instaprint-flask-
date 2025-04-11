@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Audiowide&display=swap');
 
 * {
   margin: 0;
@@ -50,6 +51,7 @@ header {
   text-align: center;
   font-size: 40px;
   font-weight: bold;
+  font-family: "Audiowide", sans-serif;
   color: #FDBB57;
   text-shadow:
     1px 1px 0 #510300,
@@ -63,6 +65,7 @@ header {
   
   .header .center-text h6{
   font-size: 20px;
+  font-family: "Inter", sans-serif;
   color: black;
   text-shadow: none;
   font-weight: 900;

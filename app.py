@@ -160,9 +160,9 @@ def process_image(image, page_size="A4", color_option="Color"):
 
     # === Paper cost based on size (per ream / 500 pcs) ===
     paper_costs = {
-        "Short": 185 / 500,  # ₱0.37
-        "A4": 195 / 500,     # ₱0.39
-        "Long": 210 / 500    # ₱0.42
+        "Short": 2.0,
+        "A4": 3.0,
+        "Long": 5.0
     }
     paper_cost = paper_costs.get(page_size, 195 / 500)
 
@@ -385,6 +385,7 @@ def preview_with_price():
     page_from = int(data.get('pageFrom', 1))
     page_to = int(data.get('pageTo', 1))
     num_copies = int(data.get('numCopies', 1))
+    page_size = data.get('pageSize', 'A4')
     color_option = data.get('colorOption', 'Color')
 
     try:
@@ -422,7 +423,7 @@ def preview_with_price():
 
         # Process for color (this part remains unchanged)
         for idx, img in enumerate(selected_images):
-            processed_img, page_price = process_image(img)
+            processed_img, page_price = process_image(img, page_size=page_size, color_option=color_option)
             page_price *= num_copies  # Multiply price by the number of copies
             total_price += page_price
 
