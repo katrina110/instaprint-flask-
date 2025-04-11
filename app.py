@@ -396,7 +396,7 @@ def preview_with_price():
 
         if color_option == 'Grayscale':
             for idx, img in enumerate(selected_images):
-                processed_img, page_price = process_image(img, page_size="A4", color_option="Grayscale")
+                processed_img, page_price = process_image(img, page_size=page_size, color_option="Grayscale")
                 page_price *= num_copies
                 total_price += page_price
 
