@@ -394,25 +394,25 @@ def preview_with_price():
         total_price = 0
 
         if color_option == 'Grayscale':
-            # Set price per page for grayscale
-            price_per_page = 2
-
             for idx, img in enumerate(selected_images):
+                processed_img, page_price = process_image(img, page_size="A4", color_option="Grayscale")
+                page_price *= num_copies
+                total_price += page_price
+
+        # Save grayscale preview image
                 preview_path = os.path.join(app.config['STATIC_FOLDER'], f"grayscale_preview_{page_from + idx}.jpg")
                 gray_preview = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 cv2.imwrite(preview_path, gray_preview)
                 previews.append(f"/uploads/grayscale_preview_{page_from + idx}.jpg")
 
-                # Add price for grayscale page (2 per page)
-                page_price = price_per_page * num_copies
-                total_price += page_price
-
-                # Add page price breakdown for grayscale
+                # Add pricing info
                 page_prices.append({
                     "page": page_from + idx,
                     "price": page_price,
-                    "profit": 0
+                    "processed": f"/uploads/grayscale_preview_{page_from + idx}.jpg"
                 })
+
+            total_price = round(total_price)
 
             return jsonify({
                 "totalPrice": total_price,

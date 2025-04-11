@@ -1,20 +1,52 @@
 <!DOCTYPE html>
+
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wireless File Transfer</title>
-    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
-    <link
-      rel="stylesheet"
-      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
-    />
-    <link href="./../static/css/upload_page.css" rel="stylesheet">
-    <link href="./../static/css/header.css" rel="stylesheet">
-    <style>
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Wireless File Transfer</title>
+<link href="{{ url_for('static', filename='images/logo.jpg') }}" rel="icon" type="image/x-icon"/>
+<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="./../static/css/upload_page.css" rel="stylesheet"/>
+<link href="./../static/css/header.css" rel="stylesheet"/>
+<style>
       body {
         overflow: hidden;
       }
+
+      .zoom-overlay {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        top: 0; left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0,0,0,0.8);
+        justify-content: center;
+        align-items: center;
+      }
+      .zoom-overlay img {
+        max-width: 90%;
+        max-height: 90%;
+      }
+      .close-zoom {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        font-size: 30px;
+        color: white;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .centered-text {
+        text-align: center;
+      }
+      .btn-center {
+        display: flex;
+        justify-content: center;
+        margin-top: 15px;
+      }
+
       .sticky-button {
       position: fixed;
       bottom: 20px;
@@ -46,9 +78,10 @@
       }
       .stepper {
           display: flex;
-          justify-content: space-between;
+          justify-content: center;
           align-items: center;
           margin-bottom: 20px;
+          gap: 60px;
       }
       .stepper .step-indicator {
           width: 40px;
@@ -71,12 +104,12 @@
       .stepper .step-indicator:not(:last-child)::after {
           content: '';
           position: absolute;
-          width: 500px;
+          width: 60px;
           height: 4px;
           background: #ddd;
           top: 50%;
-          left: 50%;
-          transform: translateX(20px);
+          left: 100%;
+          margin-left: 10px;
       }
       .stepper .step-indicator.active:not(:last-child)::after {
           background: #700000;
@@ -141,242 +174,210 @@
   display: flex;
     gap: 10px;
     margin-top: 10px;
-    padding: 0;
+    padding: 10px;
 }
 
-  </style>
-  </head>
-  <body>
-    <!-- Preloader -->
+  
+.qr-code-css {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  background-image: url('./../static/images/toffeshare.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<!-- Preloader -->
 <div id="preloader">
-  <div class="spinner"></div>
+<div class="spinner"></div>
 </div>
-
-    <!-- Terms and Conditions Modal -->
-    <div class="modal fade" id="termsModal" tabindex="-1" role="dialog" aria-labelledby="termsModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-          <div class="modal-header" style="background-color: #700000;">
-            <h5 class="modal-title" id="termsModalLabel">Terms and Agreements</h5>
-            
-          </div>
-          <div class="modal-body">
-            <p>We value your privacy and are committed to protecting your data. By proceeding, you agree to the following:</p>
-
+<!-- Terms and Conditions Modal -->
+<div aria-hidden="true" aria-labelledby="termsModalLabel" class="modal fade" id="termsModal" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-lg" role="document">
+<div class="modal-content">
+<div class="modal-header" style="background-color: #700000;">
+<h5 class="modal-title" id="termsModalLabel">Terms and Agreements</h5>
+</div>
+<div class="modal-body">
+<p>📌 We value your privacy and are committed to protecting your data. By proceeding, you agree to the following:</p>
 <div style="margin-left: 20px;">
-  <h5>1. Data Use:</h5>
-  <ul>
-    <li>Your files will only be accessed for the purpose of providing the requested service or functionality.</li>
-    <li>We do not store or share your files with third parties unless explicitly authorized by you.</li>
-  </ul>
-  
-  <h5>2. Permissions:</h5>
-  <ul>
-    <li>This application requires access to your files to enable the uploading of documents. This feature allows you to securely select files from your device and send them to the printer for printing.</li>
-  </ul>
-  
-  <h5>3. Security Measures:</h5>
-  <ul>
-    <li>All accessed data will be handled securely, adhering to industry-standard encryption and privacy practices.</li>
-  </ul>
+<h5>🔐 Data Use:</h5>
+<ul>
+<li>✅ Your files will only be accessed for the purpose of providing the requested service or functionality.</li>
+<li>✅ We do not store or share your files with third parties unless explicitly authorized by you.</li>
+</ul>
+<h5>📂 Permissions:</h5>
+<ul>
+<li>✅ This application requires access to your files to enable the uploading of documents. This feature allows you to securely select files from your device and send them to the printer for printing.</li>
+</ul>
+<h5>🛡️ Security Measures:</h5>
+<ul>
+<li>✅ All accessed data will be handled securely, adhering to industry-standard encryption and privacy practices.</li>
+</ul>
 </div>
-
-<p><strong>Do you agree to allow this application to access your files for the specified purpose?</strong></p>
-
-            <div class="form-group">
-              <label for="acceptTerms">
-                <input type="checkbox" id="acceptTerms" /> I agree to the terms and conditions.
+<p>❓ Do you agree to allow this application to access your files for the specified purpose?</p>
+<div class="form-group">
+<label for="acceptTerms">
+<input id="acceptTerms" type="checkbox"/> I agree to the terms and conditions.
               </label>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="window.history.back();">Decline</button>
-            <button type="button" class="btn btn-primary" id="acceptTermsButton">Accept</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <header class="header">
-      <!-- Left logo -->
-      <img src="./../static/images/pup-logo.png" alt="sample" />
-
-      <!-- Center text -->
-      <div class="center-text">INSTAPRINT <h6>WIRELESS FILE TRANSFER</h6></div>
-
-      <!-- Right logo -->
-      <img src="./../static/images/cpe-logo.png" alt="sample" />
-    </header>
-
-    <div class="container">
-      <div class="stepper">
-          <div class="step-indicator active" id="step1-indicator">1</div>
-          <div class="step-indicator" id="step2-indicator">2</div>
-          <div class="step-indicator" id="step3-indicator">3</div>
-      </div>
-
-      <div class="step active" id="step1">
-          <h2>Step 1: Go to ToffeeShare</h2>
-          <p>Use the QR code or type the link below:</p>
-          <img src="./../static/images/toffeshare.png" height="120px" alt="toffeshare"> 
-          <b>https://toffeeshare.com/</b>
-
-          <br/>
-        <div class="btn">
-          
-          <button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
-          <button class="btn btn-primary next-btn">Next</button>
-        </div>
-          
-      </div>
-
-      <div class="step" id="step2">
-          <h2>Step 2: Upload your file using Toffeeshare</h2>
-          <p>Use the <b>link below</b> to directly transfer files from your device to this kiosk. Simply click <b>'share to nearby PC'</b> on your device and <b>scan the QR code</b> to share your file.</p>
-          <a href="{{ toffee_share_link }}" target="_blank">Go To Toffeshare</a>
-         <br />
-         <br />
-         <div class="btn">
-          <button class="btn btn-success prev-btn">Previous</button>
-          <button class="btn btn-primary next-btn">Next</button>
-          <button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
-         </div>
-         
-      </div>
-
-      <div class="step" id="step3">
-        <h2>Step 3: Upload Your File</h2>
-        <form id="uploadForm">
-            <div class="form-group custom-file-upload">
-                <input type="file" class="file-input" id="file" name="file" required />
-                <label for="file" class="file-label">
-                    <span class="file-label-text">Choose a file</span>
-                    <span class="file-button" style="background-color: #700000; border: #700000;">Browse</span>
-                </label>
-            </div>
-            <div class="file-info" id="fileInfo" style="display: none;">
-                <p><strong>File Name:</strong> <span id="fileName">N/A</span></p>
-                <p><strong>File Size:</strong> <span id="fileSize">N/A</span></p>
-                <button type="button" id="removeFileBtn" class="btn btn-danger">Remove File</button>
-            </div>
-            <div class="progress" id="progressContainer" style="display: none;">
-                <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-            </div>
-            <br />
-            <div class="btn">
-              <button id="prevStepBtn" class="btn btn-success prev-btn" disabled>Previous</button>
-            <button type="submit" class="btn btn-success" style="background-color: #700000; border: #700000;">Upload</button>
-          <button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
-            </div>
-        </form>        
-      </div>
-
-      <!-- Sticky Button -->
-  <button class="sticky-button" data-toggle="modal" data-target="#videoDemoModal">Video Demo</button>
-
-  <!-- Video Demo Modal -->
-  <div id="videoDemoModal" class="modal fade" tabindex="-1" role="dialog">
-    <div class="modal-dialog modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header" style="background-color: #700000;">
-          <h5 class="modal-title">Website Usage Demo</h5>
-          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-            <span aria-hidden="true">&times;</span>
-          </button>
-        </div>
-        <div class="modal-body modal-body-video">
-          <iframe src="https://www.youtube.com/embed/61Ch4zkjcpI" frameborder="0" allowfullscreen></iframe>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  </div>
-
-  
-
-      <div id="printOptionsModal" class="modal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-          <div class="modal-content">
-            <div class="modal-header" style="background-color: #700000;">
-              <h5 class="modal-title">Print Options</h5>
-            </div>
-            <div class="preview-modal-body" style="display: flex; padding: 20px;">
-              <div class="form-section">
-                <div class="form-group">
-                  <label for="pageFrom">Page From</label>
-                  <input
-                    type="number"
-                    id="pageFrom"
-                    class="form-control"
-                    placeholder="1"
-                    min="1"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="pageTo">Page To</label>
-                  <input
-                    type="number"
-                    id="pageTo"
-                    class="form-control"
-                    placeholder="1"
-                    min="1"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="numCopies">Number of Copies</label>
-                  <input
-                    type="number"
-                    id="numCopies"
-                    class="form-control"
-                    value="1"
-                    min="1"
-                  />
-                </div>
-                <div class="form-group">
-                  <label for="pageSize">Page Size</label>
-                  <select id="pageSize" class="form-control">
-                    <option value="A4">A4</option>
-                    <option value="Short">Short</option>
-                    <option value="Long">Long</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="colorOption">Color Option</label>
-                  <select id="colorOption" class="form-control">
-                    <option value="Color">Color</option>
-                    <option value="Grayscale">Grayscale</option>
-                  </select>
-                </div>
-              </div>
-              <div class="preview-section">
-                <h6>File: <span id="printFileName"></span></h6>
-                <h6>Total Pages: <span id="totalPages"></span></h6>
-                <h6>Preview</h6>
-                <div id="previewContainer" class="preview-container"></div>
-            </div>
-            
-            </div>
-            <div class="modal-footer">
-              <button
-                id="closeModalBtn"
-                class="btn btn-secondary"
-                data-dismiss="modal"
-              >
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" onclick="window.history.back();" type="button">Decline</button>
+<button class="btn btn-primary" id="acceptTermsButton" type="button">Accept</button>
+</div>
+</div>
+</div>
+</div>
+<header class="header">
+<!-- Left logo -->
+<img alt="sample" src="./../static/images/pup-logo.png"/>
+<!-- Center text -->
+<div class="center-text">INSTAPRINT <h6>WIRELESS FILE TRANSFER</h6></div>
+<!-- Right logo -->
+<img alt="sample" src="./../static/images/cpe-logo.png"/>
+</header>
+<div class="container">
+<div class="stepper">
+<div class="step-indicator active" id="step1-indicator">1</div>
+<div class="step-indicator" id="step2-indicator">2</div>
+<div class="step-indicator" id="step3-indicator">3</div>
+</div>
+<div class="step active" id="step1">
+<div class="centered-text">
+<h2>Step 1: Go to ToffeeShare</h2>
+<p>Use the QR code or type the link below:</p>
+<div class="qr-code-css" onclick="openZoom()"></div>
+<br/>
+<b>https://toffeeshare.com/</b>
+</div>
+<!-- Zoom Overlay -->
+<div class="zoom-overlay" id="zoomOverlay" onclick="closeZoom()">
+<span class="close-zoom" onclick="closeZoom()">×</span>
+<img alt="Zoomed QR Code" src="./../static/images/toffeshare.png"/>
+</div>
+<div class="btn btn-center">
+<button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
+<button class="btn btn-primary next-btn">Next</button>
+</div>
+</div>
+<div class="step" id="step2">
+<div class="centered-text">
+<h2>Step 2: Upload your file using Toffeeshare</h2>
+<p>Use the <b>link below</b> to directly transfer files from your device to this kiosk. Simply click <b>'share to nearby PC'</b> on your device and <b>scan the QR code</b> to share your file.</p>
+<div class="btn-center">
+<a class="btn btn-primary" href="{{ toffee_share_link }}" target="_blank">Go To Toffeshare</a>
+</div>
+</div>
+<div class="btn btn-center">
+<button class="btn btn-success prev-btn">Previous</button>
+<button class="btn btn-primary next-btn">Next</button>
+<button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
+</div>
+</div>
+<div class="step" id="step3">
+<div class="centered-text"><h2>Step 3: Upload Your File</h2>
+<form id="uploadForm">
+<div class="form-group custom-file-upload">
+<input class="file-input" id="file" name="file" required="" type="file"/>
+<label class="file-label" for="file">
+<span class="file-label-text">Choose a file</span>
+<span class="file-button" style="background-color: #700000; border: #700000;">Browse</span>
+</label>
+</div>
+<div class="file-info" id="fileInfo" style="display: none;">
+<p><strong>File Name:</strong> <span id="fileName">N/A</span></p>
+<p><strong>File Size:</strong> <span id="fileSize">N/A</span></p>
+<div class="btn-center"><button class="btn btn-danger" id="removeFileBtn" type="button">Remove File</button></div>
+</div>
+<div class="btn btn-center">
+<button class="btn btn-success prev-btn" disabled="" id="prevStepBtn">Previous</button>
+<button class="btn btn-success" style="background-color: #700000; border: #700000;" type="submit">Upload</button>
+<button class="btn btn-secondary" onclick="window.location.href='/'">Cancel</button>
+</div>
+</form></div>
+</div>
+<!-- Sticky Button -->
+<button class="sticky-button" data-target="#videoDemoModal" data-toggle="modal">Video Demo</button>
+<!-- Video Demo Modal -->
+<div class="modal fade" id="videoDemoModal" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-lg" role="document">
+<div class="modal-content">
+<div class="modal-header" style="background-color: #700000;">
+<h5 class="modal-title">Website Usage Demo</h5>
+<button aria-label="Close" class="close" data-dismiss="modal" type="button">
+<span aria-hidden="true">×</span>
+</button>
+</div>
+<div class="modal-body modal-body-video">
+<iframe allowfullscreen="" frameborder="0" src="https://www.youtube.com/embed/61Ch4zkjcpI"></iframe>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" type="button">Close</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="modal" id="printOptionsModal" tabindex="-1">
+<div class="modal-dialog modal-lg">
+<div class="modal-content">
+<div class="modal-header" style="background-color: #700000;">
+<h5 class="modal-title">Print Options</h5>
+</div>
+<div class="preview-modal-body" style="display: flex; padding: 20px;">
+<div class="form-section">
+<div class="form-group">
+<label for="pageFrom">Page From</label>
+<input class="form-control" id="pageFrom" min="1" placeholder="1" type="number"/>
+</div>
+<div class="form-group">
+<label for="pageTo">Page To</label>
+<input class="form-control" id="pageTo" min="1" placeholder="1" type="number"/>
+</div>
+<div class="form-group">
+<label for="numCopies">Number of Copies</label>
+<input class="form-control" id="numCopies" min="1" type="number" value="1"/>
+</div>
+<div class="form-group">
+<label for="pageSize">Page Size</label>
+<select class="form-control" id="pageSize">
+<option value="A4">A4</option>
+<option value="Short">Short</option>
+<option value="Long">Long</option>
+</select>
+</div>
+<div class="form-group">
+<label for="colorOption">Color Option</label>
+<select class="form-control" id="colorOption">
+<option value="Color">Color</option>
+<option value="Grayscale">Grayscale</option>
+</select>
+</div>
+</div>
+<div class="preview-section">
+<h6>File: <span id="printFileName"></span></h6>
+<h6>Total Pages: <span id="totalPages"></span></h6>
+<h6>Preview</h6>
+<div class="preview-container" id="previewContainer"></div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-secondary" data-dismiss="modal" id="closeModalBtn">
                 Exit
               </button>
-              <button id="continueBtn" class="btn btn-primary">Continue</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
-    <script>
+<button class="btn btn-primary" id="continueBtn">Continue</button>
+</div>
+</div>
+</div>
+</div>
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+<script>
       // let currentStep = 1;
       // function showStep(step) {
       //     $('.step').removeClass('active');
@@ -464,7 +465,7 @@
 });
 
   </script>
-    <script>
+<script>
       $(document).ready(function() {
     // Show the Terms and Agreements modal when the page loads
     $('#termsModal').modal('show');
@@ -611,7 +612,7 @@
         window.location.href = "/result";
       });
     </script>
-    <script>
+<script>
       document.getElementById('file').addEventListener('change', function() {
     const file = this.files[0];
     if (file) {
@@ -621,6 +622,12 @@
     }
 });
 
+function openZoom() {
+    document.getElementById('zoomOverlay').style.display = 'flex';
+  }
+  function closeZoom() {
+    document.getElementById('zoomOverlay').style.display = 'none';
+  }
     </script>
-  </body>
+</body>
 </html>
