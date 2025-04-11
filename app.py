@@ -203,7 +203,7 @@ def process_image(image, page_size="A4", color_option="Color"):
         dark_content_ratio = np.sum((gray > 10) & (gray < 180)) / total_pixels
 
         if white_ratio > 0.85 and dark_content_ratio < 0.15:
-            base_price = 3.0  # logo + text
+            base_price = 1.0  # logo + text
         elif edge_density < 0.004 and entropy < 5.0:
             base_price = 2.0
         elif edge_density < 0.01 and entropy < 5.5:
@@ -211,7 +211,7 @@ def process_image(image, page_size="A4", color_option="Color"):
         elif edge_density < 0.02 and entropy < 6.0:
             base_price = 4.0
         else:
-            base_price = 7.0 if dark_ratio > 0.2 else 6.0
+            base_price = 6.0 if dark_ratio > 0.2 else 5.0
 
         final_price = base_price + paper_cost
         return image, round(min(final_price, max_cap), 2)
@@ -226,13 +226,13 @@ def process_image(image, page_size="A4", color_option="Color"):
     color_coverage = color_pixel_count / total_pixels
 
     if color_coverage == 0:
-        base_price = 2.0
+        base_price = 0.5
     elif color_coverage < 0.015:
-        base_price = 3.0
+        base_price = 1.0
     elif color_coverage < 0.25:
-        base_price = 5.0
+        base_price = 2.0
     else:
-        base_price = 8.0
+        base_price = 3.0
 
     final_price = (base_price + paper_cost) * 1.5
     return image, round(min(final_price, max_cap), 2)
