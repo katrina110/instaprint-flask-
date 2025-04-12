@@ -243,16 +243,6 @@ def process_image(image, page_size="A4", color_option="Color"):
 def admin_user():
     return render_template('admin-user.html')
 
-# Route for the file upload page
-@app.route('/file-upload')
-def file_upload():
-    return render_template('file-upload.html')
-
-# Route for the index
-@app.route('/index')
-def index():
-    return render_template('index.html')
-
 @app.route('/admin-dashboard')
 def admin_dashboard():
     data = {
@@ -267,6 +257,95 @@ def admin_dashboard():
         "sales_chart": [500, 600, 700, 800]  # Example sales data for Chart.js
     }
     return render_template('admin-dashboard.html', data=data)
+
+# Route for the admin files upload
+@app.route('/admin-files-upload')
+def admin_printed_pages():
+    uploaded = [
+        {
+            "file": "instaprint.docx",
+            "type": "docx",
+            "pages": "79 pages",
+            "time": "4:52 PM",
+        },
+        {
+            "file": "Document 1.pdf",
+            "type": "pdf",
+            "pages": "15 pages",
+            "time": "6:52 PM"
+        },
+        {
+            "file": "Final paper.pdf",
+            "type": "pdf",
+            "pages": "101 pages",
+            "time": "8:52 PM",
+        },
+        {
+            "file": "Pic.jpg",
+            "type": "jpg",
+            "pages": "1 page",
+            "time": "10:52 PM",
+        },
+        {
+            "file": "Paperr.docx",
+            "type": "docx",
+            "pages": "2 pages",
+            "time": "11:52 PM",
+        }
+    ]
+    return render_template('admin-files-upload.html', uploaded=uploaded)
+
+# Route for the admin activity log
+@app.route('/admin-activity-log')
+def admin_activity_log():
+    printed = [
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Paper Jam – The paper is stuck in the printer, causing a blockage."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Low Ink/Toner – The printer's ink or toner is running low and needs to be replaced."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Printer Offline – The printer is not connected to the network or is turned off."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Out of Paper – The printer has run out of paper in the tray."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Printer Error – A general error, often requiring troubleshooting or a reset."
+        }
+    ]
+    return render_template('admin-activity-log.html', printed=printed)
+
+# Route for the admin balance
+@app.route('/admin-balance')
+def admin_balance():
+    return render_template('admin-balance.html')
+
+# Route for the admin feedbacks
+@app.route('/admin-feedbacks')
+def admin_feedbacks():
+    return render_template('admin-feedbacks.html')
+
+# Route for the file upload page
+@app.route('/file-upload')
+def file_upload():
+    return render_template('file-upload.html')
+
+# Route for the index
+@app.route('/index')
+def index():
+    return render_template('index.html')
 
 # Route for manual file upload page
 @app.route('/manual-upload')
