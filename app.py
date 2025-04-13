@@ -173,6 +173,21 @@ def process_image(image, page_size="A4", color_option="Color"):
         "Long": 20.0
     }
     max_cap = max_price_caps.get(page_size, 18.0)
+    # === Detect text-only document ===
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    total_pixels = gray.size
+    white_ratio = np.sum(gray > 220) / total_pixels
+    dark_text_ratio = np.sum((gray > 10) & (gray < 180)) / total_pixels
+
+    # Criteria for text-only: mostly white, with light text coverage
+    if white_ratio > 0.85 and dark_text_ratio < 0.15:
+        text_only_prices = {
+            "Short": 3.0,
+            "A4": 3.0,
+            "Long": 4.0
+        }
+        return image, text_only_prices.get(page_size, 3.0)
+    
 
     # === White page ===
     if np.all(image == 255):
@@ -226,13 +241,13 @@ def process_image(image, page_size="A4", color_option="Color"):
     color_coverage = color_pixel_count / total_pixels
 
     if color_coverage == 0:
-        base_price = 0.5
-    elif color_coverage < 0.015:
         base_price = 1.0
-    elif color_coverage < 0.25:
+    elif color_coverage < 0.015:
         base_price = 2.0
-    else:
+    elif color_coverage < 0.25:
         base_price = 3.0
+    else:
+        base_price = 4.0
 
     final_price = (base_price + paper_cost) * 1.5
     return image, round(min(final_price, max_cap), 2)
