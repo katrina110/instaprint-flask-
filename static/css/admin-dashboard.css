@@ -259,14 +259,29 @@ h1 {
 .feedback-user {
   font-weight: bold;
   font-size: 16px;
+  margin-bottom: 4px;
 }
 
 .feedback-message {
-  margin: 10px 0;
+  margin: 4px 0;
   font-size: 14px;
 }
 
 .feedback-time {
   font-size: 12px;
   color: #666;
+}
+
+.feedback-rating {
+  margin: 2px 0;
+}
+
+.star {
+  font-size: 20px;
+  color: #ccc;
+  margin: 0 1px;
+}
+
+.star.filled {
+  color: #FFD700; /* gold */
 }

@@ -351,12 +351,12 @@ def admin_balance():
 @app.route('/admin-feedbacks')
 def admin_feedbacks():
     feedbacks = [
-        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM"},
-        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM"},
-        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM"},
-        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM"},
-        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM"},
-        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM"}
+        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM", "rating": 5},
+        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM", "rating": 3},
+        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM", "rating": 4},
+        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM", "rating": 4},
+        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM", "rating": 5},
+        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5}
     ]
     return render_template('admin-feedbacks.html', feedbacks=feedbacks)
 

@@ -30,11 +30,20 @@
          </leftmenu>
  
          <content class="contents">
-            <h1>Feedback Gallery</h1>
+            <h1>Feedbacks</h1>
             <div class="feedback-grid">
                 {% for feedback in feedbacks %}
                     <div class="feedback-square">
                         <div class="feedback-user">{{ feedback.user }}</div>
+                        <div class="feedback-rating">
+                            {% for i in range (1,6) %}
+                                {% if i <= feedback.rating %}
+                                    <span class="star filled">&#9733;</span> {# Filled star ★ #}
+                                {% else %}
+                                    <span class="star">&#9734;</span> {# Empty star ☆ #}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                         <div class="feedback-message">{{ feedback.message }}</div>
                         <div class="feedback-time">{{ feedback.time }}</div>
                     </div>
