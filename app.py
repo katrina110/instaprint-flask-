@@ -350,7 +350,15 @@ def admin_balance():
 # Route for the admin feedbacks
 @app.route('/admin-feedbacks')
 def admin_feedbacks():
-    return render_template('admin-feedbacks.html')
+    feedbacks = [
+        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM"},
+        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM"},
+        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM"},
+        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM"},
+        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM"},
+        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM"}
+    ]
+    return render_template('admin-feedbacks.html', feedbacks=feedbacks)
 
 # Route for the file upload page
 @app.route('/file-upload')

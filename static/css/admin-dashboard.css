@@ -230,3 +230,43 @@ h1 {
 .log-event {
   width: 70%;
 }
+
+/* Feedbacks */
+
+.feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.feedback-square {
+  background-color: white;
+  color: #333;
+  border-radius: 10px;
+  padding: 15px;
+  aspect-ratio: 1 / 1; /* Makes it a square */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.feedback-square:hover {
+  transform: scale(1.05);
+}
+
+.feedback-user {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.feedback-message {
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.feedback-time {
+  font-size: 12px;
+  color: #666;
+}
