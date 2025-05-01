@@ -8,9 +8,11 @@ from io import BytesIO
 import pythoncom
 from win32com import client
 from fpdf import FPDF
+import paymongo
 
 import serial
 import time
+from datetime import datetime
 import threading
 from flask_socketio import SocketIO, emit
 
@@ -19,6 +21,11 @@ import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+
+# Track today's stats
+printed_pages_today = 0
+files_uploaded_today = 0
+last_updated_date = datetime.now().date()
 
 @socketio.on('connect')
 def send_total_price():
@@ -262,8 +269,8 @@ def admin_user():
 def admin_dashboard():
     data = {
         "total_sales": 5000,
-        "printed_pages": 120,
-        "files_uploaded": 50,
+        "printed_pages": printed_pages_today,
+        "files_uploaded": files_uploaded_today,
         "current_balance": 3000,
         "sales_history": [
             {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
@@ -388,10 +395,47 @@ def online_upload():
         # You can provide a link to ToffeeShare or any related functionality
         toffee_share_link = "https://toffeeshare.com/nearby"
         return render_template('upload_page.html', files=files, toffee_share_link=toffee_share_link)
-    
+
+@app.route('/payment')
+def payment_page():
+    return render_template('payment.html')
+
+@app.route('/initiate_payment', methods=['POST'])
+def initiate_payment():
+    try:
+        amount = int(float(request.json['amount']) * 100)  # centavos
+
+        source = paymongo.Source.create(
+            type='gcash',
+            amount=amount,
+            currency='PHP',
+            redirect={'success': 'http://localhost:5000/payment-success', 'failed': 'http://localhost:5000/payment-failed'}
+        )
+
+        checkout_url = source['redirect']['checkout_url']
+        return jsonify({"checkout_url": checkout_url})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/paymongo_webhook', methods=['POST'])
+def paymongo_webhook():
+    event = request.json
+    print("Webhook event received:", event)
+    if event.get("data", {}).get("attributes", {}).get("status") == "succeeded":
+        print("✅ Payment confirmed!")
+    return jsonify({"status": "received"})
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     global images, total_pages
+    global printed_pages_today, files_uploaded_today, last_updated_date
+
+# Check if the day has changed
+    if datetime.now().date() != last_updated_date:
+        printed_pages_today = 0
+        files_uploaded_today = 0
+        last_updated_date = datetime.now().date()
 
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -418,6 +462,10 @@ def upload_file():
 
         else:
             return jsonify({"error": "Unsupported file format"}), 400
+
+        # ✅ Update daily counters
+        printed_pages_today += total_pages
+        files_uploaded_today += 1
 
 
         return jsonify({
@@ -548,8 +596,8 @@ def preview_with_price():
         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
 
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
-@app.route('/payment')
-def payment_page():
+@app.route('/arduino-payment')
+def arduino_payment_page():
     global arduino
     if not arduino:
         try:
@@ -562,33 +610,33 @@ def payment_page():
     
     return render_template('payment.html')
 
-@app.route('/detect_coins')
-def detect_coin():
-    global coin_count, arduino
-    print("Starting coin detection...")
-    try:
-        while True:
-            if arduino and arduino.in_waiting > 0:
-                # Read and decode the data from Arduino
-                coin_status = arduino.readline().decode('utf-8').strip()
-                print(f"Arduino Output: {coin_status}")  # Print raw data to the terminal
+# @app.route('/detect_coins')
+# def detect_coin():
+#     global coin_count, arduino
+#     print("Starting coin detection...")
+#     try:
+#         while True:
+#             if arduino and arduino.in_waiting > 0:
+#                 # Read and decode the data from Arduino
+#                 coin_status = arduino.readline().decode('utf-8').strip()
+#                 print(f"Arduino Output: {coin_status}")  # Print raw data to the terminal
                 
-                # Check if the message contains "Credits:"
-                if "Credits:" in coin_status:
-                    try:
-                        # Extract and update the coin count
-                        coin_count = int(coin_status.split(":")[1].strip())
-                        print(f"Updated Coin Count: {coin_count}")
+#                 # Check if the message contains "Credits:"
+#                 if "Credits:" in coin_status:
+#                     try:
+#                         # Extract and update the coin count
+#                         coin_count = int(coin_status.split(":")[1].strip())
+#                         print(f"Updated Coin Count: {coin_count}")
                         
-                        # Emit the updated coin count to clients (if using Flask-SocketIO)
-                        socketio.emit('update_coin_count', {'count': coin_count})
-                    except ValueError:
-                        print("Invalid coin count format received.")
+#                         # Emit the updated coin count to clients (if using Flask-SocketIO)
+#                         socketio.emit('update_coin_count', {'count': coin_count})
+#                     except ValueError:
+#                         print("Invalid coin count format received.")
                 
-                time.sleep(0.1)  # Prevent overwhelming the CPU
-    except KeyboardInterrupt:
-        print("Coin detection stopped.")
-        return "Coin detection stopped."
+#                 time.sleep(0.1)  # Prevent overwhelming the CPU
+#     except KeyboardInterrupt:
+#         print("Coin detection stopped.")
+#         return "Coin detection stopped."
 
 @app.route('/coin_count')
 def get_coin_count():
@@ -739,8 +787,8 @@ if __name__ == "__main__":
     upload_folder = "uploads" 
 
     # Start the coin detection thread (assuming it's defined elsewhere)
-    detection_thread = threading.Thread(target=detect_coin, daemon=True)
-    detection_thread.start()
+    # detection_thread = threading.Thread(target=detect_coin, daemon=True)
+    # detection_thread.start()
 
     # Create a tuple of arguments for the worker function
     args = (printer_name, upload_folder)
