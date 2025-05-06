@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, render_template, jsonify, send_from_directory
+from flask import Flask, request, render_template, jsonify, send_from_directory, redirect, url_for
 import cv2
 import numpy as np
 import fitz  # PyMuPDF
@@ -13,6 +13,8 @@ import paymongo
 import serial
 import time
 from datetime import datetime
+from PyPDF2 import PdfReader
+from docx import Document
 import threading
 from flask_socketio import SocketIO, emit
 
@@ -21,6 +23,9 @@ import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+
+# Store uploaded file info for admin view
+uploaded_files_info = []
 
 # Track today's stats
 printed_pages_today = 0
@@ -283,39 +288,8 @@ def admin_dashboard():
 # Route for the admin files upload
 @app.route('/admin-files-upload')
 def admin_printed_pages():
-    uploaded = [
-        {
-            "file": "instaprint.docx",
-            "type": "docx",
-            "pages": "79 pages",
-            "time": "4:52 PM",
-        },
-        {
-            "file": "Document 1.pdf",
-            "type": "pdf",
-            "pages": "15 pages",
-            "time": "6:52 PM"
-        },
-        {
-            "file": "Final paper.pdf",
-            "type": "pdf",
-            "pages": "101 pages",
-            "time": "8:52 PM",
-        },
-        {
-            "file": "Pic.jpg",
-            "type": "jpg",
-            "pages": "1 page",
-            "time": "10:52 PM",
-        },
-        {
-            "file": "Paperr.docx",
-            "type": "docx",
-            "pages": "2 pages",
-            "time": "11:52 PM",
-        }
-    ]
-    return render_template('admin-files-upload.html', uploaded=uploaded)
+    return render_template('admin-files-upload.html', uploaded=uploaded_files_info)
+
 
 # Route for the admin activity log
 @app.route('/admin-activity-log')
@@ -395,7 +369,7 @@ def online_upload():
         # You can provide a link to ToffeeShare or any related functionality
         toffee_share_link = "https://toffeeshare.com/nearby"
         return render_template('upload_page.html', files=files, toffee_share_link=toffee_share_link)
-
+    
 @app.route('/payment')
 def payment_page():
     return render_template('payment.html')
@@ -430,6 +404,7 @@ def paymongo_webhook():
 def upload_file():
     global images, total_pages
     global printed_pages_today, files_uploaded_today, last_updated_date
+    global uploaded_files_info
 
 # Check if the day has changed
     if datetime.now().date() != last_updated_date:
@@ -445,34 +420,41 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
 
     if file and allowed_file(file.filename):
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        filename = file.filename
+        file_ext = filename.split('.')[-1].lower()
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        if filepath.endswith('.pdf'):
+        if file_ext == 'pdf':
             images = pdf_to_images(filepath)
             total_pages = len(images)
 
-        elif filepath.endswith(('.jpg', '.jpeg', '.png')):
+        elif file_ext in ('jpg', 'jpeg', 'png'):
             images = [cv2.imread(filepath)]
             total_pages = 1
         
-        elif filepath.endswith(('.docx', '.doc')):
+        elif file_ext in ('docx', 'doc'):
             images = docx_to_images(filepath)
             total_pages = len(images)
 
         else:
             return jsonify({"error": "Unsupported file format"}), 400
 
-        # ✅ Update daily counters
         printed_pages_today += total_pages
         files_uploaded_today += 1
 
+        # ✅ Save to uploaded_files_info
+        uploaded_files_info.append({
+            'file': filename,
+            'type': file_ext,
+            'pages': total_pages,
+            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
 
         return jsonify({
             "message": "File uploaded successfully!",
-            "fileName": file.filename,
-            "totalPages": total_pages,
-            # "flashDrivePath": flash_file_path
+            "fileName": filename,
+            "totalPages": total_pages
         }), 200
 
     return jsonify({"error": "Invalid file format"}), 400
