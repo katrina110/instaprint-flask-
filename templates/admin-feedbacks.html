@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+  <html lang="en">
+  <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Instaprint Dashboard</title>
+      <link href="/static/css/admin-dashboard.css" rel="stylesheet" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+      <div class="container">
+          <leftmenu class="menu">
+              <!--Account-->
+              <div class="account">
+                  <i class="fa-solid fa-user-circle profile-icon"></i>
+                  <div class="account-info">
+                      <p class="name">Alice Guo</p>
+                      <p class="role">Admin</p>
+                  </div>
+              </div>
+  
+              <h2>Navigation</h2>
+              <ul>
+                  <li><i class="fa-solid fa-house"></i> <a href="#home">Dashboard</a></li>
+                  <li><i class="fa-solid fa-print"></i> <a href="#home">Files Upload</a></li>
+                  <li><i class="fa-solid fa-comments"></i> <a href="#home">Feedbacks</a></li>
+                  <li><i class="fa-solid fa-upload"></i> <a href="#home">Activity Log</a></li>  
+              </ul>
+          </leftmenu>
+  
+          <content class="contents">
+             <h1>Feedbacks</h1>
+             <div class="feedback-grid">
+                 {% for feedback in feedbacks %}
+                     <div class="feedback-square">
+                         <div class="feedback-user">{{ feedback.user }}</div>
+                         <div class="feedback-rating">
+                            {% for i in range (1,6) %}
+                                {% if i <= feedback.rating %}
+                                    <span class="star filled">&#9733;</span> {# Filled star ★ #}
+                                {% else %}
+                                    <span class="star">&#9734;</span> {# Empty star ☆ #}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                         <div class="feedback-message">{{ feedback.message }}</div>
+                         <div class="feedback-time">{{ feedback.time }}</div>
+                     </div>
+                 {% endfor %}
+             </div>
+          </content>
+  
+      <script src="./../static/js/main.js" rel="stylesheet"></script>
+  </body>
+  </html>

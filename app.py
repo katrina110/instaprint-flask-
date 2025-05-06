@@ -331,7 +331,15 @@ def admin_balance():
 # Route for the admin feedbacks
 @app.route('/admin-feedbacks')
 def admin_feedbacks():
-    return render_template('admin-feedbacks.html')
+    feedbacks = [
+        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM", "rating": 5},
+        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM", "rating": 3},
+        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM", "rating": 4},
+        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM", "rating": 4},
+        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM", "rating": 5},
+        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5}
+    ]
+    return render_template('admin-feedbacks.html', feedbacks=feedbacks)
 
 # Route for the file upload page
 @app.route('/file-upload')
@@ -448,7 +456,7 @@ def upload_file():
             'file': filename,
             'type': file_ext,
             'pages': total_pages,
-            'time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'time': datetime.now().strftime('%I:%M %p')
         })
 
         return jsonify({
