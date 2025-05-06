@@ -184,18 +184,21 @@ h1 {
 }
 
 .files-type {
-  width: 15%;
+  width: 12%;
   font-weight: 500;
+  text-align: center;
 }
 
 .files-pages {
-  width: 15%;
+  width: 12%;
   font-weight: 500;
+  text-align: center;
 }
 
 .files-time {
-  width: 15%;
+  width: 12%;
   font-weight: 500;
+  text-align: center;
 }
 
 /* Activity Log */
@@ -207,7 +210,7 @@ h1 {
 .log-header,
 .log-entry {
   display: flex;
-  justify-content: space-between;
+  justify-content: normal;
   padding: 15px;
   border-bottom: 1px solid #ddd;
   border-radius: 8px;
@@ -217,18 +220,18 @@ h1 {
 
 .log-header {
   font-weight: bold;
-  background-color: transparent;
+  background-color: #f7f7f7;
   border-bottom: 2px solid #ccc;
   margin-bottom: 20px;
 }
 
 .log-date {
-  width: 25%;
+  width: 15%;
   font-weight: 500;
 }
 
 .log-event {
-  width: 70%;
+  width: 80%;
 }
 
 /* Feedbacks */
@@ -237,20 +240,25 @@ h1 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
+  align-items: start; /* ✨ prevent equal height stretching */
 }
 
 .feedback-square {
   background-color: white;
   color: #333;
   border-radius: 10px;
-  padding: 15px;
-  aspect-ratio: 1 / 1; /* Makes it a square */
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transition: transform 0.2s;
+  word-wrap: break-word;
+  word-break: break-word;
+  max-height: 250px;
+  overflow-y: auto; 
 }
+
 
 .feedback-square:hover {
   transform: scale(1.05);
@@ -259,22 +267,26 @@ h1 {
 .feedback-user {
   font-weight: bold;
   font-size: 16px;
-  margin-bottom: 4px;
-}
-
-.feedback-message {
-  margin: 4px 0;
-  font-size: 14px;
-}
-
-.feedback-time {
-  font-size: 12px;
-  color: #666;
+  margin-bottom: 2px; /* reduce space */
 }
 
 .feedback-rating {
   margin: 2px 0;
 }
+
+.feedback-message {
+  margin: 2px 0;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere; /* Prevent overflow */
+}
+
+.feedback-time {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
 
 .star {
   font-size: 20px;
