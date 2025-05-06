@@ -22,11 +22,11 @@
  
              <h2>Navigation</h2>
              <ul>
-                <li><i class="fa-solid fa-house"></i> <a href="#home">Dashboard</a></li>
-                <li><i class="fa-solid fa-print"></i> <a href="#home">Files Upload</a></li>
-                <li><i class="fa-solid fa-comments"></i> <a href="#home">Feedbacks</a></li>
-                <li><i class="fa-solid fa-upload"></i> <a href="#home">Activity Log</a></li> 
-             </ul> 
+                <li><i class="fa-solid fa-house"></i> <a href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
+                <li><i class="fa-solid fa-print"></i> <a href="{{ url_for('admin_printed_pages') }}">Files Upload</a></li>
+                <li><i class="fa-solid fa-comments"></i> <a href="{{ url_for('admin_feedbacks') }}">Feedbacks</a></li>
+                <li><i class="fa-solid fa-upload"></i> <a href="{{ url_for('admin_activity_log') }}">Activity Log</a></li> 
+            </ul>            
          </leftmenu>
  
          <content class="contents">
