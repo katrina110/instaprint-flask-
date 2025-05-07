@@ -553,7 +553,7 @@ def payment_page():
     global arduino
     if not arduino:
         try:
-            arduino = serial.Serial('COM6', 9600, timeout=1)
+            arduino = serial.Serial('COM15', 9600, timeout=1)
             time.sleep(2)
             print("Arduino successfully initialized.")
         except Exception as e:
@@ -595,6 +595,11 @@ def get_coin_count():
     global coin_count
     return f"Total coins inserted: {coin_count}"
 # END OF ARDUINO AND COIN SLOT CONNECTION CODE
+
+# GCASH PAYMENT
+@app.route('/gcash-payment')
+def gcash_payment():
+    return render_template('gcash-payment.html')
 
 # START OF PRINT DOCUMENT
 @app.route('/print_document', methods=['POST'])
