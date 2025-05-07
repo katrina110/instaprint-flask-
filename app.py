@@ -736,6 +736,30 @@ def check_printer_status_loop(printer_name, upload_folder):
         time.sleep(1)  # Check every second
 # END OF CHECK PRINTER STATUS
 
+def read_serial_data():
+    """Continuously reads data from the serial port and prints to the terminal."""
+    serial_port = 'COM15'  # Replace with the actual serial port of your Arduino
+    baud_rate = 9600      # Match the baud rate in your Arduino sketch
+
+    try:
+        ser = serial.Serial(serial_port, baud_rate, timeout=1)
+        print(f"Successfully opened serial port {serial_port}")
+        while True:
+            if ser.in_waiting > 0:
+                try:
+                    message = ser.readline().decode('utf-8').strip()
+                    if message:
+                        print(f"Received SMS: {message}")
+                except UnicodeDecodeError:
+                    print("Error decoding serial data.")
+            time.sleep(0.1)  # Small delay to avoid busy-waiting
+    except serial.SerialException as e:
+        print(f"Error opening serial port {serial_port}: {e}")
+    finally:
+        if 'ser' in locals() and ser.is_open:
+            ser.close()
+            print(f"Closed serial port {serial_port}")
+
 if __name__ == "__main__":
     # Get the default printer name
     printer_name = win32print.GetDefaultPrinter()
@@ -743,6 +767,10 @@ if __name__ == "__main__":
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads" 
 
+    # Start the serial reading in a separate thread
+    serial_thread = threading.Thread(target=read_serial_data, daemon=True)
+    serial_thread.start()
+    
     # Start the coin detection thread (assuming it's defined elsewhere)
     detection_thread = threading.Thread(target=detect_coin, daemon=True)
     detection_thread.start()
