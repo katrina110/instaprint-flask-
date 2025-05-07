@@ -737,9 +737,9 @@ def check_printer_status_loop(printer_name, upload_folder):
 # END OF CHECK PRINTER STATUS
 
 def read_serial_data():
-    """Continuously reads data from the serial port and prints to the terminal."""
-    serial_port = 'COM15'  # Replace with the actual serial port of your Arduino
-    baud_rate = 9600      # Match the baud rate in your Arduino sketch
+    """Continuously reads data from the serial port, extracts amount, and emits it."""
+    serial_port = 'COM15'  # Replace with your Arduino's serial port
+    baud_rate = 9600
 
     try:
         ser = serial.Serial(serial_port, baud_rate, timeout=1)
@@ -749,16 +749,34 @@ def read_serial_data():
                 try:
                     message = ser.readline().decode('utf-8').strip()
                     if message:
-                        print(f"Received SMS: {message}")
+                        print(f"Received from Arduino: {message}")
+                        # --- Extract Payment Amount from the specific SMS format ---
+                        if "You have received PHP" in message and "via QRPH" in message:
+                            try:
+                                start_index = message.find("PHP") + 4  # Find the start of the amount
+                                end_index = message.find(" via QRPH")  # Find the end of the amount
+                                if start_index != -1 and end_index != -1 and end_index > start_index:
+                                    amount_str = message[start_index:end_index].strip()
+                                    extracted_amount = float(amount_str)
+                                    print(f"Extracted amount: {extracted_amount}")
+                                    socketio.emit('payment_received', {'amount': extracted_amount})
+                                else:
+                                    print("Could not find amount delimiters in SMS.")
+                            except ValueError:
+                                print("Could not convert extracted amount to float.")
                 except UnicodeDecodeError:
                     print("Error decoding serial data.")
-            time.sleep(0.1)  # Small delay to avoid busy-waiting
+            time.sleep(0.1)
     except serial.SerialException as e:
         print(f"Error opening serial port {serial_port}: {e}")
     finally:
         if 'ser' in locals() and ser.is_open:
             ser.close()
             print(f"Closed serial port {serial_port}")
+
+@app.route('/payment-success')
+def payment_success():
+    return render_template('payment-success.html')
 
 if __name__ == "__main__":
     # Get the default printer name
@@ -770,7 +788,7 @@ if __name__ == "__main__":
     # Start the serial reading in a separate thread
     serial_thread = threading.Thread(target=read_serial_data, daemon=True)
     serial_thread.start()
-    
+
     # Start the coin detection thread (assuming it's defined elsewhere)
     detection_thread = threading.Thread(target=detect_coin, daemon=True)
     detection_thread.start()
