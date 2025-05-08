@@ -930,6 +930,10 @@ def read_serial_data():
 def payment_success():
     return render_template('payment-success.html')
 
+@app.route('/payment-type')
+def payment_type():
+    return render_template('payment-type.html')
+
 if __name__ == "__main__":
     # Get the default printer name
     printer_name = win32print.GetDefaultPrinter()
