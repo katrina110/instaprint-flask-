@@ -245,8 +245,15 @@
         document.addEventListener("DOMContentLoaded", function() {
             const paymentAmountElement = document.getElementById("paymentAmount");
             const totalPrice = sessionStorage.getItem("totalPrice");
-            const modal = document.getElementById("myModal"); // Get the modal element
-            const closeBtn = document.getElementsByClassName("close")[0]; // Get the close button
+            const modal = document.getElementById("myModal");
+            const closeBtn = document.getElementsByClassName("close")[0];
+            const printOptions = JSON.parse(sessionStorage.getItem("printOptions")); // Get print options
+    
+            if (!printOptions) {
+                alert("Print options not found! Please start the process again.");
+                window.location.href = "/manual-display-upload";
+                return;
+            }
     
             if (totalPrice) {
                 paymentAmountElement.textContent = `₱${parseFloat(totalPrice).toFixed(2)}`;
@@ -289,21 +296,39 @@
                 console.log("Expected Amount:", expectedAmount, typeof expectedAmount);
     
                 if (receivedAmount === expectedAmount) {
-                    console.log("Payment confirmed. Showing modal...");
-                    modal.style.display = "flex";
-                    document.body.style.overflow = "hidden"; // Disable scroll
-                    // Remove the redirection to payment-success
-                    // window.location.href = "/payment-success";
+                    console.log("Payment confirmed. Triggering print...");
+                    fetch("/print_document", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(printOptions), // Send the print options
+                    })
+                    .then((response) => response.json())
+                    .then((responseData) => {
+                        if (responseData.success) {
+                            console.log("Print triggered successfully. Showing modal.");
+                            modal.style.display = "flex";
+                            document.body.style.overflow = "hidden"; // Disable scroll
+                            // Optionally, you might want to emit an event to the server
+                            // to acknowledge the successful print after GCash payment.
+                            // socket.emit('print_acknowledged');
+                        } else {
+                            console.error(`Error triggering print: ${responseData.error}`);
+                            // Optionally, display an error message to the user
+                            alert(`Error: ${responseData.error}`);
+                        }
+                    })
+                    .catch((error) => console.error("Error triggering print:", error));
                 } else {
                     console.log("Payment amount mismatch.");
-                    // Optionally, display an error message to the user (e.g., in a dedicated div)
+                    // Optionally, display an error message to the user
+                    // (e.g., in a dedicated div)
                 }
             });
     
             // Close the modal when the close button is clicked
             closeBtn.onclick = function() {
                 modal.style.display = "none";
-                // Optionally, redirect to another page after closing the modal
+                document.body.style.overflow = ""; // Enable scroll
                 window.location.href = "/index"; // Example: Redirect to the main page
             }
     
@@ -311,7 +336,7 @@
             window.onclick = function(event) {
                 if (event.target == modal) {
                     modal.style.display = "none";
-                    // Optionally, redirect to another page after closing the modal
+                    document.body.style.overflow = ""; // Enable scroll
                     window.location.href = "/index"; // Example: Redirect to the main page
                 }
             }
