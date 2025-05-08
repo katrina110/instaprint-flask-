@@ -8,7 +8,6 @@ from io import BytesIO
 import pythoncom
 from win32com import client
 from fpdf import FPDF
-import paymongo
 
 import serial
 import time
@@ -401,32 +400,6 @@ def online_upload():
 @app.route('/payment')
 def payment_page():
     return render_template('payment.html')
-
-@app.route('/initiate_payment', methods=['POST'])
-def initiate_payment():
-    try:
-        amount = int(float(request.json['amount']) * 100)  # centavos
-
-        source = paymongo.Source.create(
-            type='gcash',
-            amount=amount,
-            currency='PHP',
-            redirect={'success': 'http://localhost:5000/payment-success', 'failed': 'http://localhost:5000/payment-failed'}
-        )
-
-        checkout_url = source['redirect']['checkout_url']
-        return jsonify({"checkout_url": checkout_url})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/paymongo_webhook', methods=['POST'])
-def paymongo_webhook():
-    event = request.json
-    print("Webhook event received:", event)
-    if event.get("data", {}).get("attributes", {}).get("status") == "succeeded":
-        print("✅ Payment confirmed!")
-    return jsonify({"status": "received"})
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
