@@ -150,6 +150,26 @@ def docx_to_images(file_path):
 
 #     return processed_image, rounded_price
 
+def parse_page_selection(selection, total_pages):
+    """Parses a page selection string like '1-3,5,7-9' into a sorted list of unique page indices (0-based)."""
+    import re
+    pages = set()
+    if not selection:
+        return list(range(total_pages))  # default: all pages
+
+    parts = re.split(r',\s*', selection)
+    for part in parts:
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            pages.update(range(start - 1, end))  # 0-based
+        elif part.isdigit():
+            page_num = int(part)
+            if 1 <= page_num <= total_pages:
+                pages.add(page_num - 1)
+    return sorted(p for p in pages if 0 <= p < total_pages)
+
+
+
 def process_image(image, page_size="A4", color_option="Color"):
     import cv2
     import numpy as np
@@ -433,40 +453,93 @@ def upload_file():
 def generate_preview():
     global images, selected_previews
     data = request.json
-    page_from = int(data.get('pageFrom', 1))
-    page_to = int(data.get('pageTo', 1))
+    page_selection = data.get('pageSelection', '')  # e.g., '1-2,4'
     num_copies = int(data.get('numCopies', 1))
     page_size = data.get('pageSize', 'A4')
     color_option = data.get('colorOption', 'Color')
+    orientation = data.get('orientationOption', 'portrait')  # Get the orientation
 
     try:
-        selected_images = images[page_from-1:page_to]
-
+        selected_indexes = parse_page_selection(page_selection, len(images))
         previews = []
-        for idx, img in enumerate(selected_images):
-            processed_img = img.copy()
 
-            if page_size == 'Short':
-                processed_img = cv2.resize(processed_img, (800, 1000))
-            elif page_size == 'Long':
-                processed_img = cv2.resize(processed_img, (800, 1200))
-            elif page_size == 'A4':
-                processed_img = cv2.resize(processed_img, (800, 1100))
+        for idx in selected_indexes:
+            if idx >= len(images):
+                continue
+            processed_img = images[idx].copy()
 
+            # Calculate aspect ratio of the image
+            aspect_ratio = processed_img.shape[1] / processed_img.shape[0]
+
+            # Set the new dimensions based on the orientation
+            if orientation == 'landscape':
+                # Landscape orientation - Width is larger
+                new_width = 1200  # Example landscape width
+                new_height = int(new_width / aspect_ratio)  # Scale proportionally
+                processed_img = cv2.resize(processed_img, (new_width, new_height))
+            else:  # Portrait orientation
+                # Portrait orientation - Height is larger
+                new_height = 1200  # Example portrait height
+                new_width = int(new_height * aspect_ratio)  # Scale proportionally
+                processed_img = cv2.resize(processed_img, (new_width, new_height))
+
+            # Handle color option (Grayscale or Color)
             if color_option == 'Grayscale':
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
 
-            for _ in range(num_copies):
-                preview_path = os.path.join(app.config['STATIC_FOLDER'], f"preview_{idx + 1}_{page_size}_{color_option}.jpg")
+            # Save the preview for each copy
+            for copy_idx in range(num_copies):
+                filename = f"preview_{idx + 1}_{page_size}_{color_option}_{orientation}_{copy_idx}.jpg"
+                preview_path = os.path.join(app.config['STATIC_FOLDER'], filename)
                 cv2.imwrite(preview_path, processed_img)
-                previews.append(f"/uploads/preview_{idx + 1}_{page_size}_{color_option}.jpg")
+                previews.append(f"/uploads/{filename}")
 
-        selected_previews = previews  # Save for rendering in result.html
+        selected_previews = previews
         return jsonify({"previews": previews}), 200
 
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews: {e}"}), 500
+
+
+# def generate_preview():
+#     global images, selected_previews
+#     data = request.json
+#     page_from = int(data.get('pageFrom', 1))
+#     page_to = int(data.get('pageTo', 1))
+#     num_copies = int(data.get('numCopies', 1))
+#     page_size = data.get('pageSize', 'A4')
+#     color_option = data.get('colorOption', 'Color')
+
+#     try:
+#         selected_images = images[page_from-1:page_to]
+
+#         previews = []
+#         for idx, img in enumerate(selected_images):
+#             processed_img = img.copy()
+
+#             if page_size == 'Short':
+#                 processed_img = cv2.resize(processed_img, (800, 1000))
+#             elif page_size == 'Long':
+#                 processed_img = cv2.resize(processed_img, (800, 1200))
+#             elif page_size == 'A4':
+#                 processed_img = cv2.resize(processed_img, (800, 1100))
+
+#             if color_option == 'Grayscale':
+#                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
+#                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
+
+#             for _ in range(num_copies):
+#                 preview_path = os.path.join(app.config['STATIC_FOLDER'], f"preview_{idx + 1}_{page_size}_{color_option}.jpg")
+#                 cv2.imwrite(preview_path, processed_img)
+#                 previews.append(f"/uploads/preview_{idx + 1}_{page_size}_{color_option}.jpg")
+
+#         selected_previews = previews  # Save for rendering in result.html
+#         return jsonify({"previews": previews}), 200
+
+#     except Exception as e:
+#         return jsonify({"error": f"Failed to generate previews: {e}"}), 500
+
 
 @app.route('/preview_with_price', methods=['POST'])
 def preview_with_price():
@@ -483,6 +556,7 @@ def preview_with_price():
     color_option = data.get('colorOption', 'Color')
 
     try:
+        # Fetch selected pages based on the range
         selected_images = images[page_from - 1:page_to]
         previews = []
         page_prices = []
@@ -494,7 +568,7 @@ def preview_with_price():
                 page_price *= num_copies
                 total_price += page_price
 
-        # Save grayscale preview image
+                # Save grayscale preview image
                 preview_path = os.path.join(app.config['STATIC_FOLDER'], f"grayscale_preview_{page_from + idx}.jpg")
                 gray_preview = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 cv2.imwrite(preview_path, gray_preview)
@@ -515,7 +589,7 @@ def preview_with_price():
                 "previews": [{"page": page_from + idx, "path": preview} for idx, preview in enumerate(previews)]
             }), 200
 
-        # Process for color (this part remains unchanged)
+        # Process for color pages
         for idx, img in enumerate(selected_images):
             processed_img, page_price = process_image(img, page_size=page_size, color_option=color_option)
             page_price *= num_copies  # Multiply price by the number of copies
@@ -546,6 +620,84 @@ def preview_with_price():
 
     except Exception as e:
         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
+
+# def preview_with_price():
+#     """Generate previews and calculate prices for selected pages."""
+#     global images
+#     if not images:
+#         return jsonify({"error": "No images available. Please upload a file first."}), 400
+
+#     data = request.json
+#     page_from = int(data.get('pageFrom', 1))
+#     page_to = int(data.get('pageTo', 1))
+#     num_copies = int(data.get('numCopies', 1))
+#     page_size = data.get('pageSize', 'A4')
+#     color_option = data.get('colorOption', 'Color')
+
+#     try:
+#         selected_images = images[page_from - 1:page_to]
+#         previews = []
+#         page_prices = []
+#         total_price = 0
+
+#         if color_option == 'Grayscale':
+#             for idx, img in enumerate(selected_images):
+#                 processed_img, page_price = process_image(img, page_size=page_size, color_option="Grayscale")
+#                 page_price *= num_copies
+#                 total_price += page_price
+
+#         # Save grayscale preview image
+#                 preview_path = os.path.join(app.config['STATIC_FOLDER'], f"grayscale_preview_{page_from + idx}.jpg")
+#                 gray_preview = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+#                 cv2.imwrite(preview_path, gray_preview)
+#                 previews.append(f"/uploads/grayscale_preview_{page_from + idx}.jpg")
+
+#                 # Add pricing info
+#                 page_prices.append({
+#                     "page": page_from + idx,
+#                     "price": page_price,
+#                     "processed": f"/uploads/grayscale_preview_{page_from + idx}.jpg"
+#                 })
+
+#             total_price = round(total_price)
+
+#             return jsonify({
+#                 "totalPrice": total_price,
+#                 "pagePrices": page_prices,
+#                 "previews": [{"page": page_from + idx, "path": preview} for idx, preview in enumerate(previews)]
+#             }), 200
+
+#         # Process for color (this part remains unchanged)
+#         for idx, img in enumerate(selected_images):
+#             processed_img, page_price = process_image(img, page_size=page_size, color_option=color_option)
+#             page_price *= num_copies  # Multiply price by the number of copies
+#             total_price += page_price
+
+#             # Save original preview
+#             preview_path = os.path.join(app.config['STATIC_FOLDER'], f"preview_{page_from + idx}.jpg")
+#             cv2.imwrite(preview_path, img)
+#             previews.append(f"/uploads/preview_{page_from + idx}.jpg")
+
+#             # Save segmented/processed image
+#             segmented_path = os.path.join(app.config['STATIC_FOLDER'], f"segmented_{page_from + idx}.jpg")
+#             cv2.imwrite(segmented_path, processed_img)
+#             page_prices.append({
+#                 "page": page_from + idx,
+#                 "price": page_price,
+#                 "original": f"/uploads/preview_{page_from + idx}.jpg",
+#                 "processed": f"/uploads/segmented_{page_from + idx}.jpg"
+#             })
+
+#         total_price = round(total_price)  # Round the total price to a whole number
+
+#         return jsonify({
+#             "totalPrice": total_price,
+#             "pagePrices": page_prices,
+#             "previews": previews
+#         }), 200
+
+#     except Exception as e:
+#         return jsonify({"error": f"Failed to generate previews with pricing: {e}"}), 500
 
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
 @app.route('/payment')
