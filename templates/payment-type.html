@@ -30,6 +30,10 @@
             max-width: 300px;
             height: auto;
             margin: 75px auto 20px auto; /* Adjust top/bottom margin and center horizontally */
+            filter: none; /* Default: no filter */
+        }
+        .payment-section.disabled img {
+            filter: grayscale(100%);
         }
         .right-section .payment-section img { /* Target GCash logo */
             max-width: 150px;
@@ -55,6 +59,7 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 15px;
+            filter: none; /* Default: no filter */
         }
         .btn-gcash {
             border-radius: 1.50rem;
@@ -67,6 +72,11 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 15px;
+        }
+        .btn-gcash.disabled {
+            background-color: gray;
+            cursor: not-allowed;
+            filter: grayscale(100%);
         }
         .left-section {
             padding-left: 100px; /* Add some spacing between the sections */
@@ -86,15 +96,50 @@
         <div class="left-section payment-section">
             <h1>Pay with Coins</h1>
             <img src="./../static/images/coins.png" alt="Pay with Coins" style="max-width: 400px; height: auto; margin:75px">
-            <p>It is recommended to choose this type of payment<br>for amounts ₱19.00 and below.</p>
-            <button class="btn-coins">Choose this Payment</button>
+            <p>It is recommended to choose this type of payment<br>for amounts <strong>₱19.00 and below</strong>.</p>
+            <button class="btn-coins" id="coinsButton">Choose this Payment</button>
         </div>
-        <div class="right-section payment-section">
+        <div class="right-section payment-section" id="gcashSection">
             <h1>Pay with GCash</h1>
-            <img src="./../static/images/gcash-logo.png" alt="Pay with GCash" style="max-width: 150px; height: auto; margin:25px">
-            <p>It is <br>Scan the QR code to proceed.</p>
-            <button class="btn-gcash">Pay with GCash</button>
+            <img id="gcashLogo" src="./../static/images/gcash-logo.png" alt="Pay with GCash" style="max-width: 150px; height: auto; margin:25px">
+            <p>This payment option is only available <br>for amounts <strong>₱20.00 and up</strong>.</p>
+            <button class="btn-gcash" id="gcashButton">Pay with GCash</button>
         </div>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const totalPrice = parseFloat(sessionStorage.getItem('totalPrice'));
+            const gcashSection = document.getElementById('gcashSection');
+            const gcashLogo = document.getElementById('gcashLogo');
+            const gcashButton = document.getElementById('gcashButton');
+
+            if (totalPrice < 20.00) {
+                gcashSection.classList.add('disabled');
+                gcashLogo.style.filter = 'grayscale(100%)';
+                gcashButton.classList.add('disabled');
+                gcashButton.disabled = true;
+            } else {
+                gcashSection.classList.remove('disabled');
+                gcashLogo.style.filter = 'none';
+                gcashButton.classList.remove('disabled');
+                gcashButton.disabled = false;
+            }
+
+            // You can add event listeners to your buttons here to handle the actual payment processing
+            const coinsButton = document.getElementById('coinsButton');
+            coinsButton.addEventListener('click', () => {
+                alert('Proceeding with Coins payment (Total: ₱' + totalPrice.toFixed(2) + ')');
+                // Replace the alert with your actual coins payment logic
+            });
+
+            gcashButton.addEventListener('click', () => {
+                if (!gcashButton.disabled) {
+                    alert('Proceeding with GCash payment (Total: ₱' + totalPrice.toFixed(2) + ')');
+                    // Replace the alert with your actual GCash payment logic
+                }
+            });
+        });
+    </script>
 </body>
 </html>
