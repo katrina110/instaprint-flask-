@@ -149,8 +149,7 @@
 
             // Event listener for the Coins button (you can modify this as needed)
             coinsButtonElement.addEventListener('click', () => {
-                alert('Proceeding with Coins payment (Total: ₱' + totalPrice.toFixed(2) + ')');
-                // Replace the alert with your actual coins payment logic or redirection
+                window.location.href = '/payment';
             });
 
             // Redirect to gcash-payment.html when gcashButton is clicked

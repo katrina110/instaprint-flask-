@@ -32,9 +32,10 @@ files_uploaded_today = 0
 last_updated_date = datetime.now().date()
 
 @socketio.on('connect')
-def send_total_price():
-    total_price = 45.75
-    emit('update_total_price', {'price': total_price})
+def send_initial_coin_count():
+    global coin_value_sum
+    print(f"WebSocket client connected. Emitting initial coin count: {coin_value_sum}") # ADD THIS LINE
+    emit('update_coin_count', {'count': coin_value_sum})
 
 # Emit updates to connected clients
 def update_coin_count(count):
@@ -42,6 +43,7 @@ def update_coin_count(count):
 
 arduino = None
 coin_count = 0
+coin_value_sum = 0  # Track the total value of inserted coins
 
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'uploads')
 app.config['STATIC_FOLDER'] = os.path.join(os.getcwd(), 'static', 'uploads')
@@ -769,7 +771,7 @@ def arduino_payment_page():
     global arduino
     if not arduino:
         try:
-            arduino = serial.Serial('COM15', 9600, timeout=1)
+            arduino = serial.Serial('COM6', 9600, timeout=1)
             time.sleep(2)
             print("Arduino successfully initialized.")
         except Exception as e:
@@ -778,38 +780,49 @@ def arduino_payment_page():
     
     return render_template('payment.html')
 
-# @app.route('/detect_coins')
-# def detect_coin():
-#     global coin_count, arduino
-#     print("Starting coin detection...")
-#     try:
-#         while True:
-#             if arduino and arduino.in_waiting > 0:
-#                 # Read and decode the data from Arduino
-#                 coin_status = arduino.readline().decode('utf-8').strip()
-#                 print(f"Arduino Output: {coin_status}")  # Print raw data to the terminal
-                
-#                 # Check if the message contains "Credits:"
-#                 if "Credits:" in coin_status:
-#                     try:
-#                         # Extract and update the coin count
-#                         coin_count = int(coin_status.split(":")[1].strip())
-#                         print(f"Updated Coin Count: {coin_count}")
-                        
-#                         # Emit the updated coin count to clients (if using Flask-SocketIO)
-#                         socketio.emit('update_coin_count', {'count': coin_count})
-#                     except ValueError:
-#                         print("Invalid coin count format received.")
-                
-#                 time.sleep(0.1)  # Prevent overwhelming the CPU
-#     except KeyboardInterrupt:
-#         print("Coin detection stopped.")
-#         return "Coin detection stopped."
+def read_serial_data_arduino():
+    global arduino, coin_value_sum
+    serial_port = 'COM15'  # Replace with your Arduino's serial port
+    baud_rate = 9600
+    try:
+        arduino = serial.Serial(serial_port, baud_rate, timeout=1)
+        print(f"Successfully opened serial port {serial_port} for Arduino coin detection.")
+        while True:
+            if arduino.in_waiting > 0:
+                try:
+                    message = arduino.readline().decode('utf-8').strip()
+                    print(f"Received from Arduino: {message}")
+                    if message.startswith("Detected coin worth ₱"):
+                        try:
+                            value = int(message.split("₱")[1])
+                            coin_value_sum += value  # ACCUMULATE THE VALUE HERE
+                            print(f"Coin inserted: ₱{value}, Total: ₱{coin_value_sum}")
+                            print(f"Emitting WebSocket event: update_coin_count - {coin_value_sum}")
+                            socketio.emit('update_coin_count', {'count': coin_value_sum})
+                        except ValueError:
+                            print("Error: Could not parse coin value.")
+                    elif message.startswith("Unknown coin"):
+                        print(f"Warning: {message}")
+                except UnicodeDecodeError:
+                    print("Error decoding serial data from Arduino.")
+            time.sleep(0.1)
+    except serial.SerialException as e:
+        print(f"Error opening serial port {serial_port} for Arduino: {e}")
+        arduino = None
+    finally:
+        if arduino and arduino.is_open:
+            arduino.close()
+            print(f"Closed serial port {serial_port} for Arduino.")
+
+@app.route('/detect_coins')
+def start_coin_detection():
+    # This route is no longer needed as the coin detection runs in a background thread.
+    return "Coin detection service is running in the background."
 
 @app.route('/coin_count')
 def get_coin_count():
-    global coin_count
-    return f"Total coins inserted: {coin_count}"
+    global coin_value_sum
+    return jsonify({'count': coin_value_sum})
 # END OF ARDUINO AND COIN SLOT CONNECTION CODE
 
 # GCASH PAYMENT
@@ -887,8 +900,6 @@ def print_document():
         print(f"Error printing document: {e}")
         return jsonify({"error": f"Failed to print document: {e}"}), 500
     
-
-
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])
 def result():
@@ -941,7 +952,7 @@ def check_printer_status_loop(printer_name, upload_folder):
 
 def read_serial_data():
     """Continuously reads data from the serial port, extracts amount, and emits it."""
-    serial_port = 'COM15'  # Replace with your Arduino's serial port
+    serial_port = 'COM6'  # Replace with your Arduino's serial port
     baud_rate = 9600
 
     try:
@@ -997,8 +1008,8 @@ if __name__ == "__main__":
     serial_thread.start()
 
     # Start the coin detection thread (assuming it's defined elsewhere)
-    # detection_thread = threading.Thread(target=detect_coin, daemon=True)
-    # detection_thread.start()
+    arduino_thread = threading.Thread(target=read_serial_data_arduino, daemon=True)
+    arduino_thread.start()
 
     # Create a tuple of arguments for the worker function
     args = (printer_name, upload_folder)
