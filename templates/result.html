@@ -4,7 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Result Page</title>
-    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='images/logo.jpg') }}"
+      type="image/x-icon"
+    />
     <link
       rel="stylesheet"
       href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
@@ -52,8 +56,12 @@
               Proceed to Payment
             </button>
 
-            <button class="btn edit-btn mt-3" onclick="window.location.href='/'">Cancel</button>
-
+            <button
+              class="btn edit-btn mt-3"
+              onclick="window.location.href='/'"
+            >
+              Cancel
+            </button>
           </div>
         </div>
         <div class="column right">
@@ -92,27 +100,21 @@
           <div class="modal-body">
             <form id="editForm">
               <div class="form-group">
-                <label for="editPageFrom">Page From:</label>
+                <label for="editPageSelection">Pages to Print</label>
                 <input
-                  type="number"
+                  type="text"
                   class="form-control"
-                  id="editPageFrom"
-                  name="pageFrom"
-                  min="1"
+                  id="editPageSelection"
+                  name="pageSelection"
+                  placeholder="e.g. 1-2,4,7"
                   required
                 />
+                <small class="form-text text-muted">
+                  Enter page numbers separated by commas. You can use dashes for
+                  ranges (e.g., 1-2, 5, 7-9).
+                </small>
               </div>
-              <div class="form-group">
-                <label for="editPageTo">Page To:</label>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="editPageTo"
-                  name="pageTo"
-                  min="1"
-                  required
-                />
-              </div>
+
               <div class="form-group">
                 <label for="editNumCopies">Number of Copies:</label>
                 <input
@@ -124,6 +126,19 @@
                   required
                 />
               </div>
+              <div class="form-group">
+                <label for="editOrientationOption">Orientation</label>
+                <select
+                  class="form-control"
+                  id="editOrientationOption"
+                  name="orientationOption"
+                  required
+                >
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </select>
+              </div>
+
               <div class="form-group">
                 <label for="editPageSize">Page Size:</label>
                 <select
@@ -177,8 +192,9 @@
             <h3>Selected Options:</h3>
             <ul>
               <li><strong>File:</strong> ${options.fileName}</li>
-              <li><strong>Page Range:</strong> ${options.pageFrom} to ${options.pageTo}</li>
+              <li><strong>Pages to Print:</strong> ${options.pageSelection}</li>
               <li><strong>Number of Copies:</strong> ${options.numCopies}</li>
+              <li><strong>Orientation:</strong> ${options.orientationOption}</li>
               <li><strong>Page Size:</strong> ${options.pageSize}</li>
               <li><strong>Color Option:</strong> ${options.colorOption}</li>
             </ul>
@@ -258,12 +274,13 @@
         // Populate edit modal with the current options
         const editForm = document.getElementById("editForm");
         const fields = [
-          "pageFrom",
-          "pageTo",
+          "pageSelection",
           "numCopies",
           "pageSize",
           "colorOption",
+          "orientationOption", // <-- added
         ];
+
         fields.forEach((field) => {
           document.getElementById(
             `edit${field.charAt(0).toUpperCase() + field.slice(1)}`
@@ -302,7 +319,7 @@
           sessionStorage.setItem("totalPrice", totalPrice);
 
           // Redirect to the /payment page
-          window.location.href = "/payment";
+          window.location.href = "/payment-type";
         });
       });
     </script>

@@ -1,0 +1,79 @@
+#include <SoftwareSerial.h>
+
+SoftwareSerial sim800(10, 11); // RX, TX
+
+String currentLine = "";
+bool waitingForSMS = false;
+
+void setup() {
+  Serial.begin(9600);
+  sim800.begin(9600);
+
+  Serial.println("Initializing SIM800L...");
+  delay(1000);
+
+  sim800.println("AT+CMGF=1"); // Text mode
+  delay(500);
+
+  sim800.println("AT+CNMI=2,2,0,0,0"); // Push new SMS
+  delay(500);
+
+  Serial.println("Ready to receive SMS...");
+}
+
+void loop() {
+  while (sim800.available()) {
+    char c = sim800.read();
+    if (c == '\r') continue;
+
+    if (c == '\n') {
+      currentLine.trim();
+
+      if (currentLine.startsWith("+CMT:")) {
+        waitingForSMS = true;
+      } else if (waitingForSMS && currentLine.length() > 0) {
+        Serial.println("\n[SMS TEXT]");
+        Serial.println(currentLine);
+        Serial.println("[END OF SMS]");
+
+        // Extract the PHP value
+        String phpAmount = extractPHPAmount(currentLine);
+        if (phpAmount != "") {
+          Serial.print(">>> [PHP Amount Found: ");
+          Serial.print(phpAmount);
+          Serial.println("]");
+        }
+
+        waitingForSMS = false;
+      }
+
+      currentLine = "";
+    } else {
+      currentLine += c;
+    }
+  }
+}
+
+// Function to extract the amount after 'PHP'
+String extractPHPAmount(String message) {
+  String amount = "";
+  int phpIndex = message.indexOf("PHP ");  // Look for 'PHP ' in the message
+  
+  if (phpIndex >= 0) {
+    // Extract everything after 'PHP '
+    message = message.substring(phpIndex + 4);  // Remove 'PHP '
+    
+    // Now, find the first space after the PHP value
+    int spaceIndex = message.indexOf(" ");
+    
+    if (spaceIndex >= 0) {
+      // Extract the amount up to the first space (usually the currency value)
+      amount = message.substring(0, spaceIndex);
+    } else {
+      // If no space is found, just return the whole remaining string
+      amount = message;
+    }
+  }
+
+  return amount;
+}

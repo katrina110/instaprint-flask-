@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
+    <link href="./../static/css/header.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+    <style>
+        body, html {
+        height: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        }
+        header.header {
+            /* Existing header styles */
+            z-index: 10; /* Ensure header is below the modal (which will have a higher z-index) */
+        }
+        main {
+            display: flex; /* Enable Flexbox for the main section */
+            flex: 1;
+            align-items: center; /* Vertically center the content within main */
+            padding: 20px; /* Add some padding around the main content */
+        }
+        .left-section {
+            flex: 1; /* Takes up remaining space on the left */
+            display: flex; /* Enable Flexbox for the left section */
+            flex-direction: column; /* Stack items vertically */
+            align-items: center; /* Horizontally center items */
+            padding-right: 20px; /* Add some spacing between the sections */
+        }
+        .right-section {
+            flex: 1; /* Takes up remaining space on the right */
+            text-align: center; /* Center the image container */
+        }
+        .right-section img {
+            max-width: 300px; /* Adjust the maximum width of the image */
+            height: auto;
+            margin-right: 150px; /* Add some left margin to move the image right */
+            margin-top: 30px;
+        }
+        main h1, main h3, main p {
+            margin: 10px 0;
+        }
+        .icons {
+            margin-top: 20px;
+        }
+        .icons i {
+            font-size: 2rem;
+            margin: 0 15px;
+            color: #007BFF;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover, .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .star-rating {
+            direction: rtl;
+            display: inline-flex;
+            margin-bottom: 15px;
+        }
+        .star-rating input {
+            display: none;
+        }
+        .star-rating label {
+            font-size: 2rem;
+            color: #ddd;
+            cursor: pointer;
+        }
+        .star-rating input:checked ~ label,
+        .star-rating label:hover,
+        .star-rating label:hover ~ label {
+            color: gold;
+        }
+        .btn-feedback {
+            border-radius: 10px;
+            border: none;
+            background-color: #700000;
+            color: white;
+            padding: 10px;
+        }
+        .btn-cancel {
+            border-radius: .25rem;
+            border: none;
+            background-color: #700000;
+            color: white;
+            width: 200px;
+            height: 40px;
+            margin-top: 15px; /* Add some space above the button */
+            cursor: pointer;
+        }
+    </style>
+
+<!-- Modal CSS -->
+    <style>
+        /* Existing styles... */
+    
+        /* The Modal (hidden by default) */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: rgba(0,0,0,0.4);
+            
+            /* Centering will be handled when displayed */
+            align-items: center;
+            justify-content: center;
+        }
+    
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto; /* Center horizontally and vertically with flex */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* The Close Button */
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+    
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    
+        .star-rating {
+            direction: rtl;
+            display: inline-flex;
+            margin-bottom: 15px;
+        }
+    
+        .star-rating input {
+            display: none;
+        }
+    
+        .star-rating label {
+            font-size: 2rem;
+            color: #ddd;
+            cursor: pointer;
+        }
+    
+        .star-rating input:checked ~ label,
+        .star-rating label:hover,
+        .star-rating label:hover ~ label {
+            color: gold;
+        }
+    
+        .btn-feedback {
+            border-radius: 10px;
+            border: none;
+            background-color: #700000;
+            color: white;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        .btn-homepage {
+            border-radius: 1.50rem;
+            border: none;
+            background-color: #700000;
+            color: white;
+            width: 200px;
+            height: 50px;
+            margin-top: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 15px;
+            filter: none; /* Default: no filter */
+        }
+    </style>
+
+</head>
+<body>
+    <header class="header">
+        <img src="./../static/images/pup-logo.png" alt="sample" />
+        <div class="center-text" style="background-color: white;">INSTAPRINT <h6>GCash Payment</h6></div>
+        <img src="./../static/images/cpe-logo.png" alt="sample" />
+    </header>
+    <main>
+        <div class="left-section">
+            <h1 id="paymentAmount">₱0.00</h1>
+            <h1>Waiting for Payment</h1>
+            <p>The page will redirect whenever the payment is received.</p>
+            <p><strong>NOTE:</strong> only send the exact amount to avoid inconveniences.</p>
+            <button class="btn-cancel" id="cancelPayment" onclick="window.history.back()"><strong>Cancel Payment</strong></button>
+        </div>
+        <div class="right-section">
+            <img src="./../static/images/gcash-qr.png" alt="GCash QR Code" style="max-width: 400px; height: auto;">
+        </div>
+    </main>
+
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <h1>Payment Received!</h1>
+            <br>
+            <h2>Thank you for using InstaPrint!</h2>
+            <br>
+            <p>Your document has been is now printing.<br>We appreciate your patronage and hope to see you again soon.</p>
+            <br>
+            <h3>Rate Your Experience:</h3>
+            <div class="star-rating">
+                <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
+                <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
+                <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
+                <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
+                <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+            </div>
+            <br>
+            <button class="btn-homepage">Back to Home Page</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const paymentAmountElement = document.getElementById("paymentAmount");
+            const totalPrice = sessionStorage.getItem("totalPrice");
+            const modal = document.getElementById("myModal");
+            const closeBtn = document.getElementsByClassName("close")[0];
+            const printOptions = JSON.parse(sessionStorage.getItem("printOptions")); // Get print options
+    
+            if (!printOptions) {
+                alert("Print options not found! Please start the process again.");
+                window.location.href = "/manual-display-upload";
+                return;
+            }
+    
+            if (totalPrice) {
+                paymentAmountElement.textContent = `₱${parseFloat(totalPrice).toFixed(2)}`;
+            } else {
+                paymentAmountElement.textContent = "₱0.00 (Price not found)";
+                console.error("Total price not found in sessionStorage.");
+                // Optionally, redirect back
+                // window.location.href = "/result";
+            }
+    
+            console.log("JavaScript file loaded!");
+            console.log("DOMContentLoaded event fired!");
+    
+            const socket = io.connect();
+    
+            socket.on('connect', function() {
+                console.log('SocketIO connected to the server!');
+            });
+    
+            socket.on('disconnect', function() {
+                console.log('SocketIO disconnected from the server!');
+            });
+    
+            socket.on('connect_error', function(error) {
+                console.error('SocketIO connection error:', error);
+            });
+    
+            socket.on('connect_timeout', function(timeout) {
+                console.error('SocketIO connection timeout:', timeout);
+            });
+    
+            socket.on('payment_received', function(data) {
+                console.log("Received data:", data);
+                const receivedAmount = parseFloat(data.amount);
+                const expectedAmountStr = paymentAmountElement.textContent.replace('₱', '');
+                const expectedAmount = parseFloat(expectedAmountStr);
+    
+                console.log("paymentAmountElement.textContent:", paymentAmountElement.textContent);
+                console.log("Received Amount:", receivedAmount, typeof receivedAmount);
+                console.log("Expected Amount:", expectedAmount, typeof expectedAmount);
+    
+                if (receivedAmount === expectedAmount) {
+                    console.log("Payment confirmed. Triggering print...");
+                    fetch("/print_document", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(printOptions), // Send the print options
+                    })
+                    .then((response) => response.json())
+                    .then((responseData) => {
+                        if (responseData.success) {
+                            console.log("Print triggered successfully. Showing modal.");
+                            modal.style.display = "flex";
+                            document.body.style.overflow = "hidden"; // Disable scroll
+                            // Optionally, you might want to emit an event to the server
+                            // to acknowledge the successful print after GCash payment.
+                            // socket.emit('print_acknowledged');
+                        } else {
+                            console.error(`Error triggering print: ${responseData.error}`);
+                            // Optionally, display an error message to the user
+                            alert(`Error: ${responseData.error}`);
+                        }
+                    })
+                    .catch((error) => console.error("Error triggering print:", error));
+                } else {
+                    console.log("Payment amount mismatch.");
+                    // Optionally, display an error message to the user
+                    // (e.g., in a dedicated div)
+                }
+            });
+    
+            // Close the modal when the close button is clicked
+            closeBtn.onclick = function() {
+                modal.style.display = "none";
+                document.body.style.overflow = ""; // Enable scroll
+                window.location.href = "/index"; // Example: Redirect to the main page
+            }
+    
+            // Close the modal if the user clicks outside of it
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                    document.body.style.overflow = ""; // Enable scroll
+                    window.location.href = "/index"; // Example: Redirect to the main page
+                }
+            }
+        });
+    </script>
+</body>
+</html>
