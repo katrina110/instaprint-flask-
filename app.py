@@ -32,6 +32,12 @@ printed_pages_today = 0
 files_uploaded_today = 0
 last_updated_date = datetime.now().date()
 
+# Connect printer to website
+printer_name = "HP Smart Tank 210 series"
+printer_info = win32print.GetPrinter(win32print.OpenPrinter(printer_name), 2)
+status = printer_info['Status']
+print("Printer status code:", status)
+
 @socketio.on('connect')
 def send_total_price():
     total_price = 45.75
@@ -284,6 +290,16 @@ def process_image(image, page_size="A4", color_option="Color"):
     final_price = (base_price + paper_cost) * 1.5
     return image, round(min(final_price, max_cap), 2)
 
+# Printer real-time status
+def get_printer_status():
+    return [
+        {
+            "date": datetime.date.today().strftime("%m/%d/%Y"),
+            "time": datetime.datetime.now().strftime("%I:%M %p"),
+            "event": "Low Ink – Please refill the cyan cartridge."
+        }
+    ]
+
 
 # Route for the main page
 @app.route('/')
@@ -314,33 +330,7 @@ def admin_printed_pages():
 # Route for the admin activity log
 @app.route('/admin-activity-log')
 def admin_activity_log():
-    printed = [
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Paper Jam – The paper is stuck in the printer, causing a blockage."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Low Ink/Toner – The printer's ink or toner is running low and needs to be replaced."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Offline – The printer is not connected to the network or is turned off."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Out of Paper – The printer has run out of paper in the tray."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Error – A general error, often requiring troubleshooting or a reset."
-        }
-    ]
+    printed = get_printer_status()
     return render_template('admin-activity-log.html', printed=printed)
 
 # Route for the admin balance
@@ -360,6 +350,11 @@ def admin_feedbacks():
         {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5}
     ]
     return render_template('admin-feedbacks.html', feedbacks=feedbacks)
+
+# Provide an API endpoint for AJAX polling
+@app.route('/api/printer-status')
+def printer_status_api():
+    return jsonify(get_printer_status())
 
 # Route for the file upload page
 @app.route('/file-upload')
