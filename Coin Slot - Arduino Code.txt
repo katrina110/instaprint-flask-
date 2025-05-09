@@ -26,3 +26,73 @@ void coinInserted() {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+const int coinSlotPin = 2;
+volatile int pulseCount = 0;
+unsigned long lastPulseTime = 0;
+
+const unsigned long pulseTimeout = 800;      // Time to end a burst
+const unsigned long pulseBufferTime = 500;   // Wait for all pulses
+const unsigned long debounceDelay = 100;     // Debounce for ISR
+
+int totalAmount = 0; // Total inserted amount
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(coinSlotPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(coinSlotPin), pulseISR, FALLING);
+
+  Serial.println("Coin detection started...");
+}
+
+void loop() {
+  if (pulseCount > 0 && millis() - lastPulseTime > pulseTimeout) {
+    unsigned long pulseEndTime = millis();
+
+    if (pulseEndTime - lastPulseTime >= pulseBufferTime) {
+      int coinValue = getCoinValue(pulseCount);
+      if (coinValue > 0) {
+        totalAmount += coinValue;  // Add to total
+        Serial.print("Detected coin worth ₱");
+        Serial.println(coinValue);
+        Serial.print("Total inserted: ₱");
+        Serial.println(totalAmount);
+      } else {
+        Serial.print("Unknown coin (");
+        Serial.print(pulseCount);
+        Serial.println(" pulses).");
+      }
+      pulseCount = 0;
+    }
+  }
+}
+
+// ISR to count pulses with debounce
+void pulseISR() {
+  static unsigned long lastInterruptTime = 0;
+  unsigned long currentTime = millis();
+  if (currentTime - lastInterruptTime > debounceDelay) {
+    lastInterruptTime = currentTime;
+    pulseCount++;
+    lastPulseTime = currentTime;
+  }
+}
+
+// Map pulse count to coin value
+int getCoinValue(int pulseCount) {
+  switch (pulseCount) {
+    case 1: return 1;
+    case 5: return 5;
+    case 10: return 10;
+    case 20: return 20;
+    default: return 0;
+  }
+}
