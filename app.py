@@ -25,17 +25,6 @@ import multiprocessing
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-PAYMENT_ENABLED = False  # Set to True to re-enable payments
-
-# For running tests in printer errors
-mock_events = [
-    "Paper Jam – The paper is stuck in the printer.",
-    "Low Ink – Please refill the cyan cartridge.",
-    "Printer Offline – The printer is not connected.",
-    "Out of Paper – Load paper into the tray.",
-    "Printer Error – General error, reset may be required."
-]
-
 # Store uploaded file info for admin view
 uploaded_files_info = []
 
@@ -43,17 +32,6 @@ uploaded_files_info = []
 printed_pages_today = 0
 files_uploaded_today = 0
 last_updated_date = datetime.now().date()
-
-# Connect printer to website
-# printer_name = "HP Smart Tank 210 series"
-printer_name = "EPSON L210 Series (Copy 1)"  # For testing purposes
-
-# try: # For testing purposes
-printer_info = win32print.GetPrinter(win32print.OpenPrinter(printer_name), 2) # Remove indent after testing
-status = printer_info ['Status'] #remove status hashtag after testing # Remove indent after testing
-print("Printer status code:", status)
-#except Exception as e: # For testing purposes
-#    print(f"Error accessing printer: {e}") # For testing purposes
 
 @socketio.on('connect')
 def send_total_price():
@@ -347,8 +325,33 @@ def admin_printed_pages():
 # Route for the admin activity log
 @app.route('/admin-activity-log')
 def admin_activity_log():
-    printed = get_printer_status()
-#    printed = get_mock_printer_status() # For testing purposes
+    printed = [
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Paper Jam – The paper is stuck in the printer, causing a blockage."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Low Ink/Toner – The printer's ink or toner is running low and needs to be replaced."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Printer Offline – The printer is not connected to the network or is turned off."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Out of Paper – The printer has run out of paper in the tray."
+        },
+        {
+            "date": "9/18/2024",
+            "time": "11:52 PM",
+            "event": "Printer Error – A general error, often requiring troubleshooting or a reset."
+        }
+    ]
     return render_template('admin-activity-log.html', printed=printed)
 
 # Route for the admin balance
@@ -368,12 +371,6 @@ def admin_feedbacks():
         {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5}
     ]
     return render_template('admin-feedbacks.html', feedbacks=feedbacks)
-
-# Provide an API endpoint for AJAX polling
-@app.route('/api/printer-status')
-def printer_status_api():
-#    return jsonify(get_printer_status())
-    return jsonify(get_printer_status()) # For testing purposes
 
 # Route for the file upload page
 @app.route('/file-upload')
@@ -864,12 +861,6 @@ def print_document():
     global images
     if not images:
         return jsonify({"error": "No file uploaded or processed yet."}), 400
-
-    if PAYMENT_ENABLED:
-        # Normally check if payment is confirmed (e.g., a session flag or webhook status)
-        payment_confirmed = session.get('payment_confirmed', False)
-        if not payment_confirmed:
-            return jsonify({"error": "Payment required before printing."}), 403
 
     try:
         data = request.json
