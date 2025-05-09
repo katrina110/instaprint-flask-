@@ -22,10 +22,13 @@ import threading
 from flask_socketio import SocketIO, emit
 
 import win32print
+import pywintypes
 import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+
+
 
 # Store uploaded file info for admin view
 uploaded_files_info = []
@@ -291,13 +294,49 @@ def process_image(image, page_size="A4", color_option="Color"):
 
 # Printer real-time status
 def get_printer_status():
-    return [
-        {
-            "date": datetime.date.today().strftime("%m/%d/%Y"),
-            "time": datetime.datetime.now().strftime("%I:%M %p"),
-            "event": "Low Ink – Please refill the cyan cartridge."
+    try:
+        printer_handle = win32print.OpenPrinter(printer_name)
+        printer_info = win32print.GetPrinter(printer_handle, 2)
+        win32print.ClosePrinter(printer_handle)
+
+        status_code = printer_info['Status']
+        status_messages = []
+
+        # Simulated logic based on printer status codes
+        if status_code & 0x00000002:
+            status_messages.append("Printer Paused")
+        if status_code & 0x00000004:
+            status_messages.append("Error")
+        if status_code & 0x00000008:
+            status_messages.append("Pending Deletion")
+        if status_code & 0x00000010:
+            status_messages.append("Paper Jam")
+        if status_code & 0x00000020:
+            status_messages.append("Out of Paper")
+        if status_code & 0x00000040:
+            status_messages.append("Manual Feed")
+        if status_code & 0x00000080:
+            status_messages.append("Paper Problem")
+        if status_code & 0x00000100:
+            status_messages.append("Offline")
+        if status_code == 0:
+            status_messages.append("Ready")
+
+    except pywintypes.error as e:
+        status_messages = [f"Error accessing printer: {e}"]
+
+    now = datetime.now()
+    logs = []
+    for message in status_messages:
+        log = {
+            "date": now.strftime("%m/%d/%Y"),
+            "time": now.strftime("%I:%M %p"),
+            "event": message
         }
-    ]
+        if log not in activity_log:  # Avoid duplicates
+            activity_log.append(log)
+        logs.append(log)
+    return logs
 
 
 # Route for the main page
@@ -329,34 +368,11 @@ def admin_printed_pages():
 # Route for the admin activity log
 @app.route('/admin-activity-log')
 def admin_activity_log():
-    printed = [
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Paper Jam – The paper is stuck in the printer, causing a blockage."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Low Ink/Toner – The printer's ink or toner is running low and needs to be replaced."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Offline – The printer is not connected to the network or is turned off."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Out of Paper – The printer has run out of paper in the tray."
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Error – A general error, often requiring troubleshooting or a reset."
-        }
-    ]
-    return render_template('admin-activity-log.html', printed=printed)
+    return render_template('admin-activity-log.html', printed=activity_log)
+
+@app.route('/api/printer-status')
+def printer_status_api():
+    return jsonify(get_printer_status())
 
 # Route for the admin balance
 @app.route('/admin-balance')
@@ -1026,6 +1042,7 @@ def payment_type():
 if __name__ == "__main__":
     # Get the default printer name
     printer_name = win32print.GetDefaultPrinter()
+    activity_log = []
 
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads" 

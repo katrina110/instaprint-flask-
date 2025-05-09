@@ -309,18 +309,49 @@
         });
 
         // PRINT BUTTON
-        document.getElementById("printButton").addEventListener("click", () => {
+//        document.getElementById("printButton").addEventListener("click", () => {
           // Prevent default form submission behavior (if applicable)
-          event.preventDefault();
+//          event.preventDefault();
 
           // Store the Total Price in sessionStorage
-          const priceValueElement = document.getElementById("priceValue");
-          const totalPrice = parseFloat(priceValueElement.textContent);
-          sessionStorage.setItem("totalPrice", totalPrice);
+//          const priceValueElement = document.getElementById("priceValue");
+//          const totalPrice = parseFloat(priceValueElement.textContent);
+//          sessionStorage.setItem("totalPrice", totalPrice);
 
           // Redirect to the /payment page
-          window.location.href = "/payment-type";
+//          window.location.href = "/payment-type";
+//        });
+
+        // -------- TESTING PURPOSES ONLY --------
+        document.getElementById("printButton").addEventListener("click", async (event) => {
+          event.preventDefault();
+
+          const options = JSON.parse(sessionStorage.getItem("printOptions"));
+
+          try {
+            const response = await fetch("/print_document", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(options),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+              alert("Print job sent successfully!");
+              window.location.href = "/";  // Or wherever you want to redirect after printing
+            } else {
+              alert("Error: " + result.error);
+            }
+          } catch (error) {
+            console.error("Printing failed:", error);
+            alert("An unexpected error occurred while printing.");
+          }
         });
+
+        // ----------------- END OF TESTING -------------------
       });
     </script>
 
