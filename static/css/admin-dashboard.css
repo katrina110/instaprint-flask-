@@ -256,6 +256,7 @@ h1 {
   word-wrap: break-word;
   word-break: break-word;
   max-height: 250px;
+  max-width: 250px;
   overflow-y: auto; 
 }
 
