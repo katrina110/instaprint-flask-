@@ -22,7 +22,7 @@ from PyPDF2 import PdfReader
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
-import multiprocessing
+# import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -727,7 +727,7 @@ def check_printer_status(printer_name):
         if jobs:  # Printer is busy (printing)
             return "Printing"
         else:  # Printer is idle
-            socketio.emit("printer_status_idle")  # Emit idle status to the frontend
+            # socketio.emit("printer_status_idle")  # We'll handle the emission in the monitoring loop
             return "Idle"
 
     except Exception as e:
@@ -736,54 +736,40 @@ def check_printer_status(printer_name):
 
 
 
-def check_printer_status_loop(printer_name, upload_folder):
+def monitor_printer_status(printer_name, upload_folder):
     """
-    Continuously checks the printer status and deletes files from the upload folder
-    when the printer becomes idle after printing.
-
-    Args:
-        printer_name (str): The name of the printer to monitor.
-        upload_folder (str): The path to the folder containing files to delete.
+    Continuously checks the printer status and resets the coin count
+    and deletes files from the upload folder when the printer becomes
+    idle after printing. Runs as a background thread.
     """
-    last_status = "Idle"  # Initialize last_status to "Idle"
+    global coin_value_sum
+    last_status = "Idle"
 
     while True:
-        current_status = check_printer_status(
-            printer_name
-        )  # Get the current printer status
+        current_status = check_printer_status(printer_name)
 
-        if (
-            current_status == "Printing" and last_status == "Idle"
-        ):  # Transition from Idle to Printing
-            print(f"Printer Status: {current_status}")  # Log the status change
+        if current_status == "Printing" and last_status == "Idle":
+            print(f"Printer Status: {current_status}")
 
-        elif (
-            current_status == "Idle" and last_status == "Printing"
-        ):  # Transition from Printing to Idle
-            print(f"Printer Status: {current_status}")  # Log the status change
+        elif current_status == "Idle" and last_status == "Printing":
+            print(f"Printer Status: {current_status}")
+            # Reset coin count
+            coin_value_sum = 0
+            print(f"Coin count reset to: {coin_value_sum}")
+            # Emit update to all connected clients
+            socketio.emit('update_coin_count', {'count': coin_value_sum})
+
             # File deletion after printing
-            for filename in os.listdir(
-                upload_folder
-            ):  # Iterate through files in the upload folder
-                file_path = os.path.join(
-                    upload_folder, filename
-                )  # Get the full file path
+            for filename in os.listdir(upload_folder):
+                file_path = os.path.join(upload_folder, filename)
                 try:
-                    os.remove(
-                        file_path
-                    )  # Attempt to delete the file.  This is the core functionality.
-                    print(f"Deleted file: {file_path}")  # Log the deletion
+                    os.remove(file_path)
+                    print(f"Deleted file: {file_path}")
                 except FileNotFoundError:
-                    pass  # File might have already been deleted by another process
+                    pass
 
-        last_status = (
-            current_status
-        )  # Update last_status for the next iteration.  Crucial for detecting transitions.
-
-        time.sleep(
-            1
-        )  # Check the printer status every second.  Adjust as needed for performance.
-
+        last_status = current_status
+        time.sleep(1) # Check status every second
 
 
 def read_serial_data():
@@ -879,14 +865,11 @@ if __name__ == "__main__":
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads"
 
+    # Start the Arduino coin detection thread
     socketio.start_background_task(read_serial_data_arduino)
 
-
-    # Start the printer status monitoring in a separate process
-    printer_process = multiprocessing.Process(
-        target=check_printer_status_loop, args=(printer_name, upload_folder)
-    )
-    printer_process.start()
+    # Start the printer status monitoring thread in the same process
+    socketio.start_background_task(monitor_printer_status, printer_name, upload_folder)
 
     # Start the Flask app
     socketio.run(app, debug=False)

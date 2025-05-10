@@ -167,27 +167,28 @@
         const value = parseInt(data.count) || 0;
         if (coinCountSpan) coinCountSpan.textContent = value;
 
-        if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
-          fetch("/print_document", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(printOptions),
-          })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success) {
-              modal.style.display = "block";  // Display the first modal while printing
-              socket.emit("reset_coin_count");
-            }
-            setTimeout(() => {
-              window.location.href = "/";  // Redirect to home page after 30 seconds
-            }, 30000); // 30 seconds
-          })
-          .catch((err) => console.error("Print error:", err));
-        }
+        // Removed the automatic print trigger
+         if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
+           fetch("/print_document", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(printOptions),
+           })
+           .then((res) => res.json())
+           .then((data) => {
+             if (data.success) {
+               modal.style.display = "block";  // Display the first modal while printing
+               // socket.emit("reset_coin_count"); // Removed: Backend handles reset on printer idle
+             }
+             setTimeout(() => {
+               window.location.href = "/";  // Redirect to home page after 30 seconds
+             }, 30000); // 30 seconds
+           })
+           .catch((err) => console.error("Print error:", err));
+         }
       });
 
-      // WebSocket: Reset coin count display
+      // WebSocket: Reset coin count display (Kept for robustness, but backend update_coin_count is primary)
       socket.on("coin_count_reset", () => {
         if (coinCountSpan) coinCountSpan.textContent = "0";
       });
