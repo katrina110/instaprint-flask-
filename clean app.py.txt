@@ -25,7 +25,7 @@ import win32print
 import multiprocessing
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -863,9 +863,7 @@ if __name__ == "__main__":
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads"
 
-    # Start the serial reading in a separate thread
-    serial_thread = threading.Thread(target=read_serial_data, daemon=True)
-    serial_thread.start()
+    socketio.start_background_task(read_serial_data_arduino)
 
     # Start the arduino coin detection
     arduino_thread = threading.Thread(target=read_serial_data_arduino, daemon=True)
