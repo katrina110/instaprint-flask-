@@ -104,7 +104,7 @@
       font-size: 15px;
       margin-top: 15px;
       color: gray;
-      text-align: center; /* Center the amount text */
+      text-align: center;
       opacity: 0.75;
     }
   </style>
@@ -138,7 +138,6 @@
         </div>
         <br>
         <h4>Give Us Your Feedback</h4>
-        <!-- QR Code Image (now smaller) -->
         <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" />
         <p class="amount"><i>Redirecting to home page after 30 seconds.</i></p>
       </div>
@@ -151,8 +150,6 @@
       const coinCountH3 = document.getElementById("coin-count");
       const coinCountSpan = coinCountH3.querySelector("span");
       const modal = document.getElementById("myModal");
-      const returnHomeBtn = document.getElementById("returnHomeBtn");
-      const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
       // Load total price from sessionStorage
       const totalPrice = sessionStorage.getItem("totalPrice");
@@ -168,22 +165,14 @@
         const value = parseInt(data.count) || 0;
         if (coinCountSpan) coinCountSpan.textContent = value;
 
-        if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
-          fetch("/print_document", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(printOptions),
-          })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success) {
-              modal.style.display = "block";  // Display the first modal while printing
-              socket.emit("reset_coin_count");
-            } else {
-              alert(`Error: ${data.error}`);
-            }
-          })
-          .catch((err) => console.error("Print error:", err));
+        if (value >= parseFloat(priceValueElement.textContent)) {
+          // Show the first modal after payment is received
+          modal.style.display = "block";  
+
+          // Start timer for 30 seconds before redirecting
+          setTimeout(() => {
+            window.location.href = "/";  // Redirect to home page after 30 seconds
+          }, 30000); // 30 seconds
         }
       });
 
@@ -192,16 +181,17 @@
         if (coinCountSpan) coinCountSpan.textContent = "0";
       });
 
-      // Modal close handler for both modals
-      const closeModal = (modalElement) => {
-        modalElement.style.display = "none";
-        window.location.href = "/";
+      // Modal close handler
+      const closeModal = () => {
+        modal.style.display = "none";
+        window.location.href = "/";  // Redirect to home page
       };
 
       document.querySelectorAll(".close").forEach((closeButton) => {
-        closeButton.onclick = () => closeModal(modal);
+        closeButton.onclick = closeModal;
       });
     });
   </script>
+
 </body>
 </html>
