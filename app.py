@@ -50,6 +50,7 @@ selected_previews = []  # Store paths to selected preview images.  May not be ne
 arduino = None
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
+coin_detection_active = False # Flag to control coin detection
 
 
 # WebSocket Connection
@@ -319,7 +320,6 @@ def file_upload():
 def index():
     return render_template("index.html")
 
-
 @app.route("/manual-upload")
 def manual_upload():
     files = os.listdir(UPLOAD_FOLDER)  # List all files in the upload folder
@@ -344,10 +344,28 @@ def online_upload():
         )
 
 
+
 @app.route("/payment")
 def payment_page():
+    global coin_detection_active
+    coin_detection_active = True
+    # Start the arduino thread if it's not running.
+    global arduino_thread
+    if 'arduino_thread' not in globals() or not arduino_thread.is_alive():
+        arduino_thread = threading.Thread(target=read_serial_data_arduino, daemon=True)
+        arduino_thread.start()
+        print("Arduino coin detection thread started.")
+    else:
+        print("Arduino coin detection thread is already running.")
     return render_template("payment.html")
 
+
+@app.route("/stop_coin_detection", methods=["POST"])
+def stop_coin_detection():
+    global coin_detection_active
+    coin_detection_active = False
+    print("Coin detection stopped.")
+    return jsonify({"success": True, "message": "Coin detection stopped."})
 
 # File Upload and Processing
 @app.route("/upload", methods=["POST"])
@@ -498,6 +516,7 @@ def preview_with_price():
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             cv2.imwrite(processed_path, gray)
 
+
         page_prices.append({
             "page": idx + 1,
             "price": page_price,
@@ -544,6 +563,9 @@ def read_serial_data_arduino():
         local_arduino = serial.Serial(serial_port, baud_rate, timeout=1)
         print(f"Successfully opened serial port {serial_port} for Arduino coin detection.")
         while True:
+            if not coin_detection_active:
+                time.sleep(0.5) # Avoid busy waiting
+                continue
             if local_arduino.in_waiting > 0:
                 try:
                     message = local_arduino.readline().decode('utf-8').strip()
@@ -859,9 +881,6 @@ if __name__ == "__main__":
 
     socketio.start_background_task(read_serial_data_arduino)
 
-    # Start the arduino coin detection
-    arduino_thread = threading.Thread(target=read_serial_data_arduino, daemon=True)
-    arduino_thread.start()
 
     # Start the printer status monitoring in a separate process
     printer_process = multiprocessing.Process(
