@@ -100,6 +100,13 @@
       border: none;
       cursor: pointer;
     }
+    .amount {
+      font-size: 15px;
+      margin-top: 15px;
+      color: gray;
+      text-align: center; /* Center the amount text */
+      opacity: 0.75;
+    }
   </style>
 </head>
 <body>
@@ -116,9 +123,9 @@
     <h3 id="coin-count">Coins Inserted: ₱<span style="font-size: 80px;">0</span></h3>
     <button class="btn-cancel" id="cancelPayment" onclick="window.history.back()">Cancel Payment</button>
 
-    <!-- Modal 1: Processing Modal (while printing) -->
     <div id="myModal" class="modal">
       <div class="modal-content">
+        <span class="close">&times;</span>
         <h2>Thank You for Using InstaPrint!</h2>
         <p>Your document is now being processed and will start to print soon.</p>
         <h3>Rate Your Experience:</h3>
@@ -133,9 +140,9 @@
         <h4>Give Us Your Feedback</h4>
         <!-- QR Code Image (now smaller) -->
         <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" />
+        <p class="amount"><i>Redirecting to home page after 30 seconds.</i></p>
       </div>
     </div>
-  </main>
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -144,6 +151,8 @@
       const coinCountH3 = document.getElementById("coin-count");
       const coinCountSpan = coinCountH3.querySelector("span");
       const modal = document.getElementById("myModal");
+      const returnHomeBtn = document.getElementById("returnHomeBtn");
+      const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
       // Load total price from sessionStorage
       const totalPrice = sessionStorage.getItem("totalPrice");
@@ -159,14 +168,22 @@
         const value = parseInt(data.count) || 0;
         if (coinCountSpan) coinCountSpan.textContent = value;
 
-        if (value >= parseFloat(priceValueElement.textContent)) {
-          // Simulating the modal pop-up after payment is received
-          modal.style.display = "block";  // Show the first modal
-
-          // Start timer of 30 seconds before redirecting
-          setTimeout(() => {
-            window.location.href = "/";  // Redirect to home page
-          }, 30000); // 30 seconds
+        if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
+          fetch("/print_document", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(printOptions),
+          })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              modal.style.display = "block";  // Display the first modal while printing
+              socket.emit("reset_coin_count");
+            } else {
+              alert(`Error: ${data.error}`);
+            }
+          })
+          .catch((err) => console.error("Print error:", err));
         }
       });
 
@@ -175,21 +192,15 @@
         if (coinCountSpan) coinCountSpan.textContent = "0";
       });
 
-      // Modal close handler
-      const closeModal = () => {
-        modal.style.display = "none";
-        window.location.href = "/";  // Redirect to the home page
+      // Modal close handler for both modals
+      const closeModal = (modalElement) => {
+        modalElement.style.display = "none";
+        window.location.href = "/";
       };
 
       document.querySelectorAll(".close").forEach((closeButton) => {
-        closeButton.onclick = closeModal;
+        closeButton.onclick = () => closeModal(modal);
       });
-
-      window.onclick = (e) => {
-        if (e.target == modal) {
-          closeModal();
-        }
-      };
     });
   </script>
 </body>
