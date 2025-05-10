@@ -576,7 +576,7 @@ def read_serial_data_arduino():
                             coin_value_sum += value
                             print(f"Coin inserted: ₱{value}, Total: ₱{coin_value_sum}")
                             print(
-                                f"Emitting WebSocket event: update_coin_count - {coin_value_sum}"
+                                f"Emitting WebSocket event: Total Coins Inserted: {coin_value_sum}"
                             )
                             socketio.emit('update_coin_count', {'count': coin_value_sum})
                         except ValueError:
