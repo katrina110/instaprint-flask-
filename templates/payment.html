@@ -97,7 +97,7 @@
 <body>
   <header class="header">
     <img src="./../static/images/pup-logo.png" alt="PUP Logo" />
-    <div class="center-text" style="background-color: white;">INSTAPRINT <h6>PRINT PREVIEW RESULTS</h6></div>
+    <div class="center-text" style="background-color: white;">INSTAPRINT <h6>COINS PAYMENT</h6></div>
     <img src="./../static/images/cpe-logo.png" alt="CPE Logo" />
   </header>
 
@@ -113,7 +113,7 @@
       <div class="modal-content">
         <span class="close">&times;</span>
         <h2>Thank You for Using InstaPrint!</h2>
-        <p>Your document has been successfully printed.</p>
+        <p>Your document is now being processed will start to print soon.</p>
         <h3>Rate Your Experience:</h3>
         <div class="star-rating">
           <input type="radio" id="star5" name="rating" value="5"><label for="star5">☆</label>
@@ -122,7 +122,13 @@
           <input type="radio" id="star2" name="rating" value="2"><label for="star2">☆</label>
           <input type="radio" id="star1" name="rating" value="1"><label for="star1">☆</label>
         </div>
-        <button class="btn-feedback" onclick="window.open('https://forms.gle/your-google-form-link', '_blank')">Give Us Feedback</button>
+        <br>
+        <h4>Give Us Your Feedback</h4>
+        <!-- QR Code Image (now smaller) -->
+        <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" />
+        <br>
+        <!-- Feedback Button under QR Code -->
+        <button class="btn-feedback" style="margin-top: 10px;">Return to Home</button>
       </div>
     </div>
   </main>
