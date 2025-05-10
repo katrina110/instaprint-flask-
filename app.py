@@ -696,27 +696,21 @@ def uploaded_file(filename):
 def check_printer_status(printer_name):
     """
     Checks the status of the specified printer.
-
-    Args:
-        printer_name (str): The name of the printer.
-
-    Returns:
-        str: "Printing", "Idle", or an error message.
     """
     try:
         hPrinter = win32print.OpenPrinter(printer_name)  # Open a handle to the printer
-        jobs = win32print.EnumJobs(
-            hPrinter, 0, -1, 2
-        )  # Get information about the print jobs
+        jobs = win32print.EnumJobs(hPrinter, 0, -1, 2)  # Get information about the print jobs
         win32print.ClosePrinter(hPrinter)  # Close the printer handle
 
-        if jobs:
-            return "Printing"  # If there are any jobs, the printer is printing
-        else:
-            return "Idle"  # If there are no jobs, the printer is idle
+        if jobs:  # Printer is busy (printing)
+            return "Printing"
+        else:  # Printer is idle
+            socketio.emit("printer_status_idle")  # Emit idle status to the frontend
+            return "Idle"
 
     except Exception as e:
-        return f"Error: {e}"  # Return an error message if an exception occurs
+        return f"Error: {e}"
+
 
 
 
