@@ -135,15 +135,6 @@
         <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" />
       </div>
     </div>
-
-    <!-- Modal 2: Document Printed Modal (shown when printer is idle) -->
-    <div id="printModal" class="modal">
-      <div class="modal-content">
-        <span class="close">&times;</span>
-        <h2>Your Document Has Been Printed!</h2>
-        <button class="btn-return-home" id="returnHomeBtn" onclick="window.location.href='/';">Return to Home</button>
-      </div>
-    </div>
   </main>
 
   <script>
@@ -153,9 +144,6 @@
       const coinCountH3 = document.getElementById("coin-count");
       const coinCountSpan = coinCountH3.querySelector("span");
       const modal = document.getElementById("myModal");
-      const printModal = document.getElementById("printModal");
-      const returnHomeBtn = document.getElementById("returnHomeBtn");
-      const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
       // Load total price from sessionStorage
       const totalPrice = sessionStorage.getItem("totalPrice");
@@ -171,22 +159,14 @@
         const value = parseInt(data.count) || 0;
         if (coinCountSpan) coinCountSpan.textContent = value;
 
-        if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
-          fetch("/print_document", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(printOptions),
-          })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.success) {
-              modal.style.display = "block";  // Display the first modal while printing
-              socket.emit("reset_coin_count");
-            } else {
-              alert(`Error: ${data.error}`);
-            }
-          })
-          .catch((err) => console.error("Print error:", err));
+        if (value >= parseFloat(priceValueElement.textContent)) {
+          // Simulating the modal pop-up after payment is received
+          modal.style.display = "block";  // Show the first modal
+
+          // Start timer of 30 seconds before redirecting
+          setTimeout(() => {
+            window.location.href = "/";  // Redirect to home page
+          }, 30000); // 30 seconds
         }
       });
 
@@ -195,24 +175,19 @@
         if (coinCountSpan) coinCountSpan.textContent = "0";
       });
 
-      // WebSocket: Listen for printer status change to idle
-      socket.on("printer_status_idle", () => {
-        printModal.style.display = "block";  // Show second modal when printer is idle
-      });
-
-      // Modal close handler for both modals
-      const closeModal = (modalElement) => {
-        modalElement.style.display = "none";
-        window.location.href = "/";
+      // Modal close handler
+      const closeModal = () => {
+        modal.style.display = "none";
+        window.location.href = "/";  // Redirect to the home page
       };
 
       document.querySelectorAll(".close").forEach((closeButton) => {
-        closeButton.onclick = () => closeModal(printModal);
+        closeButton.onclick = closeModal;
       });
 
-      window.onclick = (e) => { 
-        if (e.target == printModal) {
-          closeModal(printModal);
+      window.onclick = (e) => {
+        if (e.target == modal) {
+          closeModal();
         }
       };
     });
