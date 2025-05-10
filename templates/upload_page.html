@@ -216,51 +216,38 @@
         background-color: #f0f0f0;
         color: #888;
       }
+
+      /* Custom style for the theme red button */
+      .btn-theme-red {
+        color: #fff;
+        background-color: #700000;
+        border-color: #700000;
+      }
+
+      .btn-theme-red:hover {
+        color: #fff;
+        background-color: #5a0000;
+        border-color: #5a0000;
+      }
+
+      .btn-theme-red:focus,
+      .btn-theme-red.focus {
+        box-shadow: 0 0 0 0.2rem rgba(112, 0, 0, 0.5);
+      }
+
+      .btn-theme-red.disabled,
+      .btn-theme-red:disabled {
+        color: #fff;
+        background-color: #700000;
+        border-color: #700000;
+        opacity: 0.65;
+      }
     </style>
   </head>
   <body>
-    <!-- Preloader -->
     <div id="preloader">
       <div class="spinner"></div>
     </div>
-    <!-- Terms and Conditions Modal -->
-    <!-- <div aria-hidden="true" aria-labelledby="termsModalLabel" class="modal fade" id="termsModal" role="dialog" tabindex="-1">
-<div class="modal-dialog modal-lg" role="document">
-<div class="modal-content">
-<div class="modal-header" style="background-color: #700000;">
-<h5 class="modal-title" id="termsModalLabel">Terms and Agreements</h5>
-</div>
-<div class="modal-body">
-<p>📌 We value your privacy and are committed to protecting your data. By proceeding, you agree to the following:</p>
-<div style="margin-left: 20px;">
-<h5>🔐 Data Use:</h5>
-<ul>
-<li>✅ Your files will only be accessed for the purpose of providing the requested service or functionality.</li>
-<li>✅ We do not store or share your files with third parties unless explicitly authorized by you.</li>
-</ul>
-<h5>📂 Permissions:</h5>
-<ul>
-<li>✅ This application requires access to your files to enable the uploading of documents. This feature allows you to securely select files from your device and send them to the printer for printing.</li>
-</ul>
-<h5>🛡️ Security Measures:</h5>
-<ul>
-<li>✅ All accessed data will be handled securely, adhering to industry-standard encryption and privacy practices.</li>
-</ul>
-</div>
-<p>❓ Do you agree to allow this application to access your files for the specified purpose?</p>
-<div class="form-group">
-<label for="acceptTerms">
-<input id="acceptTerms" type="checkbox"/> I agree to the terms and conditions.
-              </label>
-</div>
-</div>
-<div class="modal-footer">
-<button class="btn btn-secondary" data-dismiss="modal" onclick="window.history.back();" type="button">Decline</button>
-<button class="btn btn-primary" id="acceptTermsButton" type="button">Accept</button>
-</div>
-</div>
-</div>
-</div> -->
     <div
       class="modal fade"
       id="termsModal"
@@ -333,8 +320,9 @@
             </button>
             <button
               type="button"
-              class="btn btn-primary"
+              class="btn btn-secondary"
               id="acceptTermsButton"
+              disabled
             >
               Accept
             </button>
@@ -343,14 +331,11 @@
       </div>
     </div>
     <header class="header">
-      <!-- Left logo -->
       <img alt="sample" src="./../static/images/pup-logo.png" />
-      <!-- Center text -->
       <div class="center-text">
         INSTAPRINT
         <h6>WIRELESS FILE TRANSFER</h6>
       </div>
-      <!-- Right logo -->
       <img alt="sample" src="./../static/images/cpe-logo.png" />
     </header>
     <div class="container">
@@ -367,7 +352,6 @@
           <br />
           <b>https://toffeeshare.com/</b>
         </div>
-        <!-- Zoom Overlay -->
         <div class="zoom-overlay" id="zoomOverlay" onclick="closeZoom()">
           <span class="close-zoom" onclick="closeZoom()">×</span>
           <img alt="Zoomed QR Code" src="./../static/images/toffeshare.png" />
@@ -459,7 +443,6 @@
           </form>
         </div>
       </div>
-      <!-- Sticky Button -->
       <button
         class="sticky-button"
         data-target="#videoDemoModal"
@@ -467,7 +450,6 @@
       >
         Video Demo
       </button>
-      <!-- Video Demo Modal -->
       <div class="modal fade" id="videoDemoModal" role="dialog" tabindex="-1">
         <div class="modal-dialog modal-lg" role="document">
           <div class="modal-content">
@@ -580,27 +562,6 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
-      // let currentStep = 1;
-      // function showStep(step) {
-      //     $('.step').removeClass('active');
-      //     $('#step' + step).addClass('active');
-      //     $('.step-indicator').removeClass('active');
-      //     $('#step' + step + '-indicator').addClass('active');
-      // }
-
-      // $('.next-btn').on('click', function () {
-      //     if (currentStep < 3) {
-      //         currentStep++;
-      //         showStep(currentStep);
-      //     }
-      // });
-
-      // $('.prev-btn').on('click', function () {
-      //     if (currentStep > 1) {
-      //         currentStep--;
-      //         showStep(currentStep);
-      //     }
-      // });
       $(document).ready(function () {
         let currentStep = 1;
 
@@ -646,6 +607,8 @@
           }
         });
 
+
+        
         // Handle file removal
         $("#removeFileBtn").on("click", function () {
           $("#file").val("");
@@ -657,8 +620,25 @@
 
         // Terms Modal functionality
         $("#termsModal").modal("show");
-        $("#acceptTermsButton").click(function () {
-          if ($("#acceptTerms").is(":checked")) {
+
+        const acceptTermsButton = $("#acceptTermsButton");
+        const acceptTermsCheckbox = $("#acceptTerms");
+
+        // Initially set the button state
+        acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+
+        // Enable Accept button and change color when checkbox is checked
+        acceptTermsCheckbox.on("change", function() {
+            if ($(this).is(":checked")) {
+                acceptTermsButton.prop("disabled", false).removeClass("btn-secondary").addClass("btn-theme-red");
+            } else {
+                acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+            }
+        });
+
+
+        acceptTermsButton.click(function () {
+          if (acceptTermsCheckbox.is(":checked")) {
             $("#termsModal").modal("hide");
           } else {
             alert(
@@ -681,8 +661,24 @@
         // Prevent closing with Esc key or clicking outside
         termsModal.modal("show");
 
-        $("#acceptTermsButton").click(function () {
-          if ($("#acceptTerms").is(":checked")) {
+        const acceptTermsButton = $("#acceptTermsButton");
+        const acceptTermsCheckbox = $("#acceptTerms");
+
+        // Initially set the button state
+        acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+
+        // Enable Accept button and change color when checkbox is checked
+        acceptTermsCheckbox.on("change", function() {
+            if ($(this).is(":checked")) {
+                acceptTermsButton.prop("disabled", false).removeClass("btn-secondary").addClass("btn-theme-red");
+            } else {
+                acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+            }
+        });
+
+
+        acceptTermsButton.click(function () {
+          if (acceptTermsCheckbox.is(":checked")) {
             termsModal.modal("hide");
           } else {
             alert(
@@ -761,47 +757,6 @@
         });
       });
 
-      // $("#uploadForm").on("submit", function (e) {
-      //   e.preventDefault();
-      //   const formData = new FormData(this);
-
-      //   // Show Preloader
-      //   $("#preloader").css("display", "flex");
-
-      //   $.ajax({
-      //     url: "/upload",
-      //     method: "POST",
-      //     data: formData,
-      //     contentType: false,
-      //     processData: false,
-      //     success: function (response) {
-      //       const previewContainer = $("#previewContainer");
-      //       previewContainer.empty();
-
-      //       fileName = response.fileName;
-      //       totalPages = response.totalPages;
-
-      //       $("#pageSelection").val("1"); // ✅ Set default selection to page 1
-
-      //       $("#fileName").text(fileName);
-      //       $("#printFileName").text(fileName);
-      //       $("#totalPages").text(totalPages);
-
-      //       $("#printOptionsModal").modal("show");
-      //       $("#previewContainer").html("<p>Loading preview...</p>");
-
-      //       updatePreview();
-      //     },
-
-      //     error: function (err) {
-      //       alert(err.responseJSON.error || "Upload failed.");
-      //     },
-      //     complete: function () {
-      //       // Hide Preloader after upload is done (success or failure)
-      //       $("#preloader").css("display", "none");
-      //     },
-      //   });
-      // });
 
       function updatePreview() {
     const orientationOption = $("#orientationOption").val();
@@ -850,50 +805,6 @@
     }, 300);
 }
 
-
-      // function updatePreview() {
-      //   const orientationOption = $("#orientationOption").val();
-      //   const pageSelection = $("#pageSelection").val();
-      //   const numCopies = $("#numCopies").val();
-      //   const pageSize = $("#pageSize").val();
-      //   const colorOption = $("#colorOption").val();
-
-      //   if (!pageSelection || totalPages === 0) return;
-
-      //   clearTimeout(previewTimeout);
-
-      //   previewTimeout = setTimeout(() => {
-      //     $.ajax({
-      //       url: "/generate_preview",
-      //       method: "POST",
-      //       contentType: "application/json",
-      //       data: JSON.stringify({
-      //         pageSelection,
-      //         numCopies,
-      //         pageSize,
-      //         colorOption,
-      //         orientationOption, // <-- added
-      //       }),
-      //       success: function (response) {
-      //         const previewContainer = $("#previewContainer");
-      //         previewContainer.html("<p>Loading preview...</p>");
-
-      //         response.previews.forEach((preview) => {
-      //           const timestampedURL = preview + "?t=" + new Date().getTime();
-      //           const pageDiv = $("<div>")
-      //             .addClass("preview-page")
-      //             .append($("<img>").attr("src", timestampedURL));
-      //           previewContainer.append(pageDiv);
-      //         });
-      //       },
-      //       error: function (error) {
-      //         console.error(
-      //           error.responseJSON.error || "Failed to generate previews."
-      //         );
-      //       },
-      //     });
-      //   }, 300);
-      // }
 
       $(
         "#pageSelection, #numCopies, #pageSize, #colorOption, #orientationOption"
