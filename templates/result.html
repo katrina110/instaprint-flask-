@@ -54,6 +54,24 @@
         max-height: 100%;
         object-fit: contain;
       }
+
+      .page-button {
+        width: 50px;
+        height: 50px;
+        margin: 4px;
+        border: 2px solid #ccc;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        user-select: none;
+        touch-action: manipulation;
+      }
+      .page-button.selected {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+      }
     </style>
   </head>
   <body>
@@ -125,16 +143,19 @@
           <div class="modal-body">
             <form id="editForm">
               <div class="form-group">
-                <label for="editPageSelection">Pages to Print</label>
+                <label>Pages to Print</label>
+                <div
+                  id="editPageSelectionContainer"
+                  class="d-flex flex-wrap"
+                ></div>
                 <input
-                  type="text"
-                  class="form-control"
+                  type="hidden"
                   id="editPageSelection"
                   name="pageSelection"
-                  placeholder="e.g. 1-2,4,7"
                   required
                 />
               </div>
+
               <div class="form-group">
                 <label for="editNumCopies">Number of Copies</label>
                 <input
@@ -204,157 +225,209 @@
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        let previewsData = [];
+   <script>
+document.addEventListener("DOMContentLoaded", () => {
+  let previewsData = [];
 
-        // Utility to map size/orientation → thumbnail class
-        function thumbClass(size, orient) {
-          const o = orient === "auto" ? "portrait" : orient;
-          return `thumb-${size} ${o}`;
-        }
+  // 0) Helper to parse comma-and-range strings into individual page numbers
+  function parseSelection(str) {
+    const pages = new Set();
+    (str || "").split(",").forEach(token => {
+      token = token.trim();
+      if (!token) return;
+      if (token.includes("-")) {
+        let [s, e] = token.split("-").map(Number);
+        if (s > e) [s, e] = [e, s];
+        for (let i = s; i <= e; i++) pages.add(String(i));
+      } else {
+        pages.add(token);
+      }
+    });
+    return pages;
+  }
 
-        // Refreshes both the Selected-Options panel and the previews
-        function refreshUI(options) {
-          // 1) Selected options list
-          document.getElementById("printDetails").innerHTML = `
-            <h3>Selected Options:</h3>
-            <ul>
-              <li><strong>File:</strong> ${options.fileName}</li>
-              <li><strong>Pages:</strong> ${options.pageSelection}</li>
-              <li><strong>Copies:</strong> ${options.numCopies}</li>
-              <li><strong>Orientation:</strong> ${options.orientationOption}</li>
-              <li><strong>Page Size:</strong> ${options.pageSize}</li>
-              <li><strong>Color:</strong> ${options.colorOption}</li>
-            </ul>
-          `;
+  // Utility to map size/orientation → thumbnail class
+  function thumbClass(size, orient) {
+    const o = orient === "auto" ? "portrait" : orient;
+    return `thumb-${size} ${o}`;
+  }
 
-          // 2) Apply to modal form defaults
+  // The main UI refresh function
+  function refreshUI(options) {
+    // 1) Update the “Selected Options” sidebar
+    document.getElementById("printDetails").innerHTML = `
+      <h3>Selected Options:</h3>
+      <ul>
+        <li><strong>File:</strong> ${options.fileName}</li>
+        <li><strong>Pages:</strong> ${options.pageSelection}</li>
+        <li><strong>Copies:</strong> ${options.numCopies}</li>
+        <li><strong>Orientation:</strong> ${options.orientationOption}</li>
+        <li><strong>Page Size:</strong> ${options.pageSize}</li>
+        <li><strong>Color:</strong> ${options.colorOption}</li>
+      </ul>
+    `;
+
+    // 2) Seed the modal form fields (including our hidden input)
+    document.getElementById("editPageSelection").value =
+      options.pageSelection || "";
+    document.getElementById("editNumCopies").value =
+      options.numCopies || 1;
+    document.getElementById("editOrientationOption").value =
+      options.orientationOption || "auto";
+    document.getElementById("editPageSize").value =
+      options.pageSize || "A4";
+    document.getElementById("editColorOption").value =
+      options.colorOption || "Color";
+
+    // 3) Fetch new previews + pricing
+    fetch("/preview_with_price", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+    })
+    .then(r => r.json())
+    .then(data => {
+      // Update total price
+      document.getElementById("priceValue").textContent =
+        data.totalPrice.toFixed(2);
+
+      // Clear old containers
+      const pC = document.getElementById("previewContainer");
+      const sC = document.getElementById("segmentedContainer");
+      pC.innerHTML = "";
+      sC.innerHTML = "";
+
+      // 4) Build page thumbnails
+      data.pagePrices.forEach(p => {
+        const thumb = document.createElement("div");
+        thumb.className =
+          "thumb-container " +
+          thumbClass(options.pageSize, options.orientationOption);
+
+        const img = document.createElement("img");
+        img.src = p.original;
+        img.style.cursor = "pointer";
+        img.addEventListener("click", () => showModal(p.original));
+
+        thumb.appendChild(img);
+        pC.appendChild(thumb);
+
+        // Segmented image + price
+        const seg = document.createElement("div");
+        seg.className = "m-2 p-2 border";
+        seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(2)}):</p>`;
+
+        const segImg = document.createElement("img");
+        segImg.src = p.highlighted;
+        segImg.style = "max-width:200px; cursor:pointer;";
+        segImg.addEventListener("click", () => showModal(p.highlighted));
+
+        seg.appendChild(segImg);
+        sC.appendChild(seg);
+      });
+
+      // 5) Build the **full** page-button grid
+      const grid = document.getElementById("editPageSelectionContainer");
+      grid.innerHTML = "";
+
+      // Use data.previews.length to get total pages in the doc
+      const totalPages = data.totalPages;
+      const selectedPages = parseSelection(options.pageSelection);
+
+      for (let i = 1; i <= totalPages; i++) {
+        const btn = document.createElement("div");
+        btn.className = "page-button";
+        btn.textContent = i;
+        if (selectedPages.has(String(i))) btn.classList.add("selected");
+
+        btn.addEventListener("click", () => {
+          const nowSelected = btn.classList.toggle("selected");
+          if (nowSelected) {
+            selectedPages.add(String(i));
+          } else {
+            selectedPages.delete(String(i));
+          }
+          // Keep the hidden input updated
           document.getElementById("editPageSelection").value =
-            options.pageSelection || "";
-          document.getElementById("editNumCopies").value =
-            options.numCopies || 1;
-          document.getElementById("editOrientationOption").value =
-            options.orientationOption || "auto";
-          document.getElementById("editPageSize").value =
-            options.pageSize || "A4";
-          document.getElementById("editColorOption").value =
-            options.colorOption || "Color";
-
-          // 3) Fetch previews + prices
-          fetch("/preview_with_price", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(options),
-          })
-            .then((r) => r.json())
-            .then((data) => {
-              const pc = document.getElementById("priceValue");
-              pc.textContent = data.totalPrice.toFixed(2);
-
-              // Clear old
-              const pC = document.getElementById("previewContainer");
-              const sC = document.getElementById("segmentedContainer");
-              pC.innerHTML = "";
-              sC.innerHTML = "";
-
-              // 4) Build new preview thumbnails
-              data.pagePrices.forEach((p) => {
-                const container = document.createElement("div");
-                container.className =
-                  "thumb-container " +
-                  thumbClass(options.pageSize, options.orientationOption);
-
-                const img = document.createElement("img");
-                img.src = p.original;
-                img.style.cursor = "pointer";
-                img.addEventListener("click", () => showModal(p.original));
-
-                container.appendChild(img);
-                pC.appendChild(container);
-
-                // Segmented View (Clickable)
-                const seg = document.createElement("div");
-                seg.className = "m-2 p-2 border";
-                seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(
-                  2
-                )}):</p>`;
-
-                const segImg = document.createElement("img");
-                segImg.src = p.highlighted;
-                segImg.style = "max-width:200px; cursor: pointer;";
-                segImg.addEventListener("click", () =>
-                  showModal(p.highlighted)
-                );
-
-                seg.appendChild(segImg);
-                sC.appendChild(seg);
-              });
-
-              // Modal Logic
-              function showModal(imageSrc) {
-                const modalImage = document.getElementById("modalImage");
-                modalImage.src = imageSrc;
-                $("#imageModal").modal("show");
-              }
-
-              previewsData = data.previews;
-            })
-            .catch(() =>
-              alert("Failed to load preview data. Please try again.")
-            );
-        }
-
-        // Load from sessionStorage on entry
-        const opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
-        refreshUI(opts);
-
-        // Handle “Apply Changes” from the modal
-        document.getElementById("editForm").addEventListener("submit", (e) => {
-          e.preventDefault();
-          // Collect updated values
-          const updated = {
-            fileName: opts.fileName,
-            pageSelection: document.getElementById("editPageSelection").value,
-            numCopies: parseInt(
-              document.getElementById("editNumCopies").value,
-              10
-            ),
-            orientationOption: document.getElementById("editOrientationOption")
-              .value,
-            pageSize: document.getElementById("editPageSize").value,
-            colorOption: document.getElementById("editColorOption").value,
-          };
-          sessionStorage.setItem("printOptions", JSON.stringify(updated));
-          refreshUI(updated);
-          $("#editModal").modal("hide");
+            Array.from(selectedPages)
+              .sort((a, b) => a - b)
+              .join(",");
         });
 
-        // Proceed to payment
-        document
-          .getElementById("printButton")
-          .addEventListener("click", (ev) => {
-            ev.preventDefault();
-            if (
-              !previewsData.length ||
-              parseFloat(document.getElementById("priceValue").textContent) ===
-                0
-            ) {
-              return alert(
-                previewsData.length === 0
-                  ? "Previews not ready yet."
-                  : "Total price is ₱0. Cannot proceed."
-              );
-            }
-            sessionStorage.setItem(
-              "totalPrice",
-              document.getElementById("priceValue").textContent
-            );
-            sessionStorage.setItem("previews", JSON.stringify(previewsData));
-            window.location.href = "/payment-type";
-          });
-      });
-    </script>
+        grid.appendChild(btn);
+      }
+
+      // Initialize hidden input one last time
+      document.getElementById("editPageSelection").value =
+        Array.from(selectedPages)
+          .sort((a, b) => a - b)
+          .join(",");
+
+      // Modal image preview helper
+      function showModal(src) {
+        const img = document.getElementById("modalImage");
+        img.src = src;
+        $("#imageModal").modal("show");
+      }
+
+      // Store for “Proceed to Payment”
+      previewsData = data.previews;
+    })
+    .catch(() =>
+      alert("Failed to load preview data. Please try again.")
+    );
+  }
+
+  // 6) On load, grab from sessionStorage and render
+  let opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
+  refreshUI(opts);
+
+  // 7) Handle “Apply Changes”
+  document.getElementById("editForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const updated = {
+      fileName: opts.fileName,
+      pageSelection: document.getElementById("editPageSelection").value,
+      numCopies: parseInt(
+        document.getElementById("editNumCopies").value,
+        10
+      ),
+      orientationOption: document.getElementById("editOrientationOption")
+        .value,
+      pageSize: document.getElementById("editPageSize").value,
+      colorOption: document.getElementById("editColorOption").value,
+    };
+    // **Keep opts in sync** so reopening the modal uses the latest
+    opts = updated;
+    sessionStorage.setItem("printOptions", JSON.stringify(updated));
+    refreshUI(updated);
+    $("#editModal").modal("hide");
+  });
+
+  // 8) Proceed to payment
+  document.getElementById("printButton").addEventListener("click", ev => {
+    ev.preventDefault();
+    if (
+      !previewsData.length ||
+      parseFloat(document.getElementById("priceValue").textContent) === 0
+    ) {
+      return alert(
+        previewsData.length === 0
+          ? "Previews not ready yet."
+          : "Total price is ₱0. Cannot proceed."
+      );
+    }
+    sessionStorage.setItem(
+      "totalPrice",
+      document.getElementById("priceValue").textContent
+    );
+    sessionStorage.setItem("previews", JSON.stringify(previewsData));
+    window.location.href = "/payment-type";
+  });
+});
+</script>
+
+
     <!-- Fullscreen Image Modal -->
     <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">

@@ -243,6 +243,25 @@
         border-color: #700000;
         opacity: 0.65;
       }
+
+      #pageSelectionContainer button {
+        width: 48px;
+        height: 48px;
+        margin: 4px;
+        padding: 0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 16px;
+        align-items: center;
+        justify-content: center;
+      }
+      #pageSelectionContainer button.selected {
+        background-color: #700000;
+        color: #fff;
+        border-color: #600;
+        align-items: center;
+        justify-content: center;
+      }
     </style>
   </head>
   <body>
@@ -268,32 +287,32 @@
           </div>
           <div class="modal-body">
             <p>
-            We value your privacy and are committed to protecting your
-              data. By proceeding, you agree to the following:
+              We value your privacy and are committed to protecting your data.
+              By proceeding, you agree to the following:
             </p>
             <div style="margin-left: 20px">
               <h5>Data Use:</h5>
-              <ul style="list-style-type: none;">
+              <ul style="list-style-type: none">
                 <li>
-                  ✅ Your files will only be accessed for the purpose of providing
-                  the requested service or functionality.
+                  ✅ Your files will only be accessed for the purpose of
+                  providing the requested service or functionality.
                 </li>
                 <li>
-                  ✅ We do not store or share your files with third parties unless
-                  explicitly authorized by you.
+                  ✅ We do not store or share your files with third parties
+                  unless explicitly authorized by you.
                 </li>
               </ul>
               <h5>Permissions:</h5>
-              <ul style="list-style-type: none;">
+              <ul style="list-style-type: none">
                 <li>
-                  ✅ This application requires access to your files to enable the
-                  uploading of documents. This feature allows you to securely
-                  select files from your device and send them to the printer for
-                  printing.
+                  ✅ This application requires access to your files to enable
+                  the uploading of documents. This feature allows you to
+                  securely select files from your device and send them to the
+                  printer for printing.
                 </li>
               </ul>
               <h5>Security Measures:</h5>
-              <ul style="list-style-type: none;">
+              <ul style="list-style-type: none">
                 <li>
                   ✅ All accessed data will be handled securely, adhering to
                   industry-standard encryption and privacy practices.
@@ -494,18 +513,19 @@
           <div class="preview-modal-body" style="display: flex; padding: 20px">
             <div class="form-section">
               <div class="form-group">
-                <label for="pageSelection">Pages to Print</label>
-                <input
-                  type="text"
-                  class="form-control"
-                  id="pageSelection"
-                  placeholder="e.g. 1-2,4,7"
-                />
+                <label>Pages to Print</label>
+                <!-- touch-driven picker -->
+                <div
+                  id="pageSelectionContainer"
+                  class="d-flex flex-wrap mb-2"
+                ></div>
+                <!-- keep the old input hidden so your existing code still reads from it -->
+                <input type="hidden" id="pageSelection" />
                 <small class="form-text text-muted">
-                  Enter page numbers separated by commas. You can use dashes for
-                  ranges (e.g., 1-2, 5, 7-9).
+                  Tap each page you want to print.
                 </small>
               </div>
+
               <div class="form-group">
                 <label for="numCopies">Number of Copies</label>
                 <input
@@ -566,331 +586,185 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
       $(document).ready(function () {
-        let currentStep = 1;
+        let previewTimeout;
+        let totalPages = 0;
+        let fileName = "";
 
-        // Show the corresponding step
+        // ========== STEP NAVIGATION & TERMS ==========
+        let currentStep = 1;
         function showStep(step) {
           $(".step").removeClass("active");
           $("#step" + step).addClass("active");
           $(".step-indicator").removeClass("active");
           $("#step" + step + "-indicator").addClass("active");
-
-          // Disable or enable Previous button in Step 3 based on file status
-          if (step === 3 && $("#file").val() !== "") {
-            $("#prevStepBtn").prop("disabled", true);
-          } else {
-            $("#prevStepBtn").prop("disabled", false);
-          }
+          $("#prevStepBtn").prop(
+            "disabled",
+            step === 3 && $("#file").val() !== ""
+          );
         }
-
-        // Next button logic
-        $(".next-btn").on("click", function () {
-          if (currentStep < 3) {
-            currentStep++;
-            showStep(currentStep);
-          }
+        $(".next-btn").click(() => {
+          if (currentStep < 3) showStep(++currentStep);
+        });
+        $(".prev-btn").click(() => {
+          if (currentStep > 1) showStep(--currentStep);
+        });
+        $("#termsModal")
+          .modal({ backdrop: "static", keyboard: false })
+          .modal("show");
+        $("#acceptTerms").change(function () {
+          $("#acceptTermsButton")
+            .prop("disabled", !this.checked)
+            .toggleClass("btn-secondary btn-theme-red");
+        });
+        $("#acceptTermsButton").click(function () {
+          this.disabled
+            ? alert("Please agree…")
+            : $("#termsModal").modal("hide");
         });
 
-        // Previous button logic
-        $(".prev-btn").on("click", function () {
-          if (currentStep > 1) {
-            currentStep--;
-            showStep(currentStep);
-          }
-        });
-
-        // Handle file input change
-        $("#file").on("change", function () {
-          const file = this.files[0];
-          if (file) {
+        // ========== FILE UPLOAD HANDLING ==========
+        $("#file").change(function () {
+          const f = this.files[0];
+          if (f) {
             $("#fileInfo").show();
-            $("#fileName").text(file.name);
-            $("#fileSize").text((file.size / 1024).toFixed(2) + " KB");
-            $("#prevStepBtn").prop("disabled", true); // Disable Previous button when a file is present
+            $("#fileName").text(f.name);
+            $("#fileSize").text((f.size / 1024).toFixed(2) + " KB");
+            showStep(3);
           }
         });
-
-        // Handle file removal
-        $("#removeFileBtn").on("click", function () {
+        $("#removeFileBtn").click(() => {
           $("#file").val("");
           $("#fileInfo").hide();
-          $("#fileName").text("N/A");
-          $("#fileSize").text("N/A");
-          $("#prevStepBtn").prop("disabled", false); // Enable Previous button after removing file
+          $("#fileName, #fileSize").text("N/A");
+          showStep(2);
         });
 
-        // Terms Modal functionality
-        $("#termsModal").modal("show");
-
-        const acceptTermsButton = $("#acceptTermsButton");
-        const acceptTermsCheckbox = $("#acceptTerms");
-
-        // Initially set the button state
-        acceptTermsButton
-          .prop("disabled", true)
-          .removeClass("btn-theme-red")
-          .addClass("btn-secondary");
-
-        // Enable Accept button and change color when checkbox is checked
-        acceptTermsCheckbox.on("change", function () {
-          if ($(this).is(":checked")) {
-            acceptTermsButton
-              .prop("disabled", false)
-              .removeClass("btn-secondary")
-              .addClass("btn-theme-red");
-          } else {
-            acceptTermsButton
-              .prop("disabled", true)
-              .removeClass("btn-theme-red")
-              .addClass("btn-secondary");
+        // ========== PAGE PICKER & PREVIEW ==========
+        function buildPagePicker(n) {
+          totalPages = n;
+          const c = $("#pageSelectionContainer").empty();
+          for (let i = 1; i <= n; i++) {
+            $("<button>")
+              .attr("type", "button")
+              .text(i)
+              .addClass("btn btn-outline-secondary")
+              .on("click", function () {
+                $(this).toggleClass("selected");
+                updatePageSelection();
+              })
+              .appendTo(c);
           }
-        });
-
-        acceptTermsButton.click(function () {
-          if (acceptTermsCheckbox.is(":checked")) {
-            $("#termsModal").modal("hide");
-          } else {
-            alert(
-              "Please agree to the terms and conditions before proceeding."
-            );
-          }
-        });
-      });
-    </script>
-    <script>
-      $(document).ready(function () {
-        const termsModal = $("#termsModal");
-
-        // Show the Terms modal on load
-        termsModal.modal({
-          backdrop: "static",
-          keyboard: false,
-        });
-
-        // Prevent closing with Esc key or clicking outside
-        termsModal.modal("show");
-
-        const acceptTermsButton = $("#acceptTermsButton");
-        const acceptTermsCheckbox = $("#acceptTerms");
-
-        // Initially set the button state
-        acceptTermsButton
-          .prop("disabled", true)
-          .removeClass("btn-theme-red")
-          .addClass("btn-secondary");
-
-        // Enable Accept button and change color when checkbox is checked
-        acceptTermsCheckbox.on("change", function () {
-          if ($(this).is(":checked")) {
-            acceptTermsButton
-              .prop("disabled", false)
-              .removeClass("btn-secondary")
-              .addClass("btn-theme-red");
-          } else {
-            acceptTermsButton
-              .prop("disabled", true)
-              .removeClass("btn-theme-red")
-              .addClass("btn-secondary");
-          }
-        });
-
-        acceptTermsButton.click(function () {
-          if (acceptTermsCheckbox.is(":checked")) {
-            termsModal.modal("hide");
-          } else {
-            alert(
-              "Please agree to the terms and conditions before proceeding."
-            );
-          }
-        });
-      });
-      let previewTimeout;
-      let totalPages = 0;
-      let fileName = "";
-
-      $("#file").on("change", function () {
-        const file = this.files[0];
-        if (file) {
-          $("#fileInfo").show();
-          $("#fileName").text(file.name);
-          $("#fileSize").text((file.size / 1024).toFixed(2) + " KB");
+          c.find("button").addClass("selected");
+          updatePageSelection();
         }
-      });
-
-      $("#removeFileBtn").on("click", function () {
-        $("#file").val("");
-        $("#fileInfo").hide();
-        $("#fileName").text("N/A");
-        $("#fileSize").text("N/A");
-      });
-
-      $("#uploadForm").on("submit", function (e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-
-        // Show Preloader
-        $("#preloader").css("display", "flex");
-
-        $.ajax({
-          url: "/upload",
-          method: "POST",
-          data: formData,
-          contentType: false,
-          processData: false,
-          success: function (response) {
-            const previewContainer = $("#previewContainer");
-            previewContainer.empty();
-
-            fileName = response.fileName;
-            totalPages = response.totalPages;
-
-            // Automatically set the page range to all pages if multiple pages
-            $("#pageSelection").val(`1-${totalPages}`);
-
-            // Disable page range selection if there is only one page
-            if (totalPages === 1) {
-              $("#pageSelection").prop("disabled", true); // Disable if one page
-            } else {
-              $("#pageSelection").prop("disabled", false); // Enable if more than one page
-            }
-
-            // Set other fields
-            $("#fileName").text(fileName);
-            $("#printFileName").text(fileName);
-            $("#totalPages").text(totalPages);
-
-            $("#printOptionsModal").modal("show");
-            $("#previewContainer").html("<p>Loading preview...</p>");
-
-            updatePreview();
-          },
-          error: function (err) {
-            alert(err.responseJSON.error || "Upload failed.");
-          },
-          complete: function () {
-            // Hide Preloader after upload is done
-            $("#preloader").css("display", "none");
-          },
-        });
-      });
-
-      function updatePreview() {
-        const orientationOption = $("#orientationOption").val();
-        const pageSelection = $("#pageSelection").val();
-        const numCopies = $("#numCopies").val();
-        const pageSize = $("#pageSize").val();
-        const colorOption = $("#colorOption").val();
-
-        if (!pageSelection || totalPages === 0) return;
-
-        const previewContainer = $("#previewContainer");
-        previewContainer.html("<p>Loading preview...</p>"); // Show loading message
-
-        clearTimeout(previewTimeout);
-        previewTimeout = setTimeout(() => {
+        function updatePageSelection() {
+          const sel = $("#pageSelectionContainer button.selected")
+            .map((_, b) => $(b).text())
+            .get()
+            .sort((a, b) => a - b);
+          $("#pageSelection").val(sel.join(","));
+          schedulePreview();
+        }
+        function schedulePreview() {
+          clearTimeout(previewTimeout);
+          previewTimeout = setTimeout(updatePreview, 300);
+        }
+        function updatePreview() {
+          if (!$("#pageSelection").val() || totalPages === 0) return;
+          const data = {
+            pageSelection: $("#pageSelection").val(),
+            numCopies: $("#numCopies").val(),
+            pageSize: $("#pageSize").val(),
+            colorOption: $("#colorOption").val(),
+            orientationOption: $("#orientationOption").val() || "auto",
+          };
+          const pc = $("#previewContainer").html("<p>Loading preview…</p>");
           $.ajax({
             url: "/generate_preview",
             method: "POST",
             contentType: "application/json",
-            data: JSON.stringify({
-              pageSelection,
-              numCopies,
-              pageSize,
-              colorOption,
-              orientationOption, // Pass orientation here
-            }),
-            success: function (response) {
-              previewContainer.empty(); // Remove loading message
-
-              if (!response.previews || response.previews.length === 0) {
-                previewContainer.html(
-                  "<p>No previews generated. Check your page selection.</p>"
-                );
-                return;
+            data: JSON.stringify(data),
+            success(resp) {
+              pc.empty();
+              if (!resp.previews?.length) {
+                return pc.html("<p>No previews found.</p>");
               }
-
-              response.previews.forEach((preview) => {
-                const timestampedURL = preview + "?t=" + new Date().getTime();
-                const imgElement = $("<img>")
-                  .attr("src", timestampedURL)
-                  .css({
-                    "max-width": "200px",
-                    "aspect-ratio":
-                      $("#orientationOption").val() === "landscape"
-                        ? "16/9"
-                        : "9/16",
-                    "object-fit": "contain",
-                  });
-                const pageDiv = $("<div>")
+              resp.previews.forEach((url) => {
+                $("<div>")
                   .addClass("preview-page")
-                  .append(imgElement);
-
-                previewContainer.append(pageDiv);
+                  .append(
+                    $("<img>")
+                      .attr("src", url + "?t=" + Date.now())
+                      .css({
+                        "max-width": "200px",
+                        "aspect-ratio":
+                          data.orientationOption === "landscape"
+                            ? "16/9"
+                            : "9/16",
+                        "object-fit": "contain",
+                      })
+                  )
+                  .appendTo(pc);
               });
             },
-            error: function (error) {
-              previewContainer.html("<p>Error generating preview.</p>");
-              console.error(
-                "Preview generation failed:",
-                error.responseText || error
-              );
+            error() {
+              pc.html("<p>Error generating preview.</p>");
             },
           });
-        }, 300);
-      }
-
-      $(
-        "#pageSelection, #numCopies, #pageSize, #colorOption, #orientationOption"
-      ).on("input change", function () {
-        updatePreview();
-      });
-
-      $("#continueBtn").on("click", function () {
-        const options = {
-          pageSelection: $("#pageSelection").val(),
-          numCopies: $("#numCopies").val(),
-          pageSize: $("#pageSize").val(),
-          colorOption: $("#colorOption").val(),
-          orientationOption: $("#orientationOption").val(),
-          fileName: fileName,
-        };
-
-        // ✅ Ensure orientation defaults to 'auto' if not selected
-        if (!options.orientationOption) {
-          options.orientationOption = "auto";
         }
 
-        // Apply selected orientation to the modal dropdown immediately
-        const orientationSelect = document.getElementById(
-          "editOrientationOption"
+        // ========== UPLOAD FORM SUBMISSION ==========
+        $("#uploadForm").submit(function (e) {
+          e.preventDefault();
+          $("#preloader").show();
+          $.ajax({
+            url: "/upload",
+            method: "POST",
+            data: new FormData(this),
+            contentType: false,
+            processData: false,
+            success(response) {
+              fileName = response.fileName;
+              buildPagePicker(response.totalPages);
+              $("#printFileName").text(fileName);
+              $("#totalPages").text(response.totalPages);
+              $("#printOptionsModal").modal("show");
+              $("#previewContainer").html("<p>Loading preview…</p>");
+              updatePreview();
+            },
+            error(err) {
+              alert(err.responseJSON?.error || "Upload failed.");
+            },
+            complete() {
+              $("#preloader").hide();
+            },
+          });
+        });
+
+        // ========== SETTINGS CHANGE TRIGGERS ==========
+        $("#numCopies, #pageSize, #colorOption, #orientationOption").on(
+          "change",
+          schedulePreview
         );
-        if (orientationSelect) {
-          orientationSelect.value = options.orientationOption;
-        }
 
-        sessionStorage.setItem("printOptions", JSON.stringify(options));
+        // ========== CONTINUE BUTTON ==========
+        $("#continueBtn").click(function () {
+          const opts = {
+            pageSelection: $("#pageSelection").val(),
+            numCopies: $("#numCopies").val(),
+            pageSize: $("#pageSize").val(),
+            colorOption: $("#colorOption").val(),
+            orientationOption: $("#orientationOption").val() || "auto",
+            fileName,
+          };
+          sessionStorage.setItem("printOptions", JSON.stringify(opts));
+          window.location.href = "/result";
+        });
 
-        // Redirect to result.html
-        window.location.href = "/result";
+        // ========== ZOOM HANDLERS ==========
+        $(".qr-code-css").click(() => $("#zoomOverlay").show());
+        $(".close-zoom, #zoomOverlay").click(() => $("#zoomOverlay").hide());
       });
-    </script>
-    <script>
-      document.getElementById("file").addEventListener("change", function () {
-        const file = this.files[0];
-        if (file) {
-          document.getElementById("fileInfo").style.display = "block";
-          document.getElementById("fileName").textContent = file.name;
-          document.getElementById("fileSize").textContent =
-            (file.size / 1024).toFixed(2) + " KB";
-        }
-      });
-
-      function openZoom() {
-        document.getElementById("zoomOverlay").style.display = "flex";
-      }
-      function closeZoom() {
-        document.getElementById("zoomOverlay").style.display = "none";
-      }
     </script>
   </body>
 </html>

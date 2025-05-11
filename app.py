@@ -562,9 +562,10 @@ def preview_with_price():
 
 
     return jsonify({
-        "totalPrice": round(total_price, 2),
-        "pagePrices": page_prices,
-        "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices]
+    "totalPrice": round(total_price, 2),
+    "pagePrices": page_prices,
+    "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices],
+    "totalPages": len(images)    # <<< add this
     })
 
 
