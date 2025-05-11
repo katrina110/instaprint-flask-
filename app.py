@@ -574,7 +574,10 @@ def read_serial_data_arduino():
                         try:
                             value = int(message.split("₱")[1])
                             coin_value_sum += value
-                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
+                            print(f"Coin inserted: ₱{value}, Total: ₱{coin_value_sum}")
+                            print(
+                                f"Emitting WebSocket event: Total Coins Inserted: {coin_value_sum}"
+                            )
                             socketio.emit('update_coin_count', {'count': coin_value_sum})
                         except ValueError:
                             print("Error: Could not parse coin value.")
@@ -724,7 +727,7 @@ def check_printer_status(printer_name):
         if jobs:  # Printer is busy (printing)
             return "Printing"
         else:  # Printer is idle
-            socketio.emit("printer_status_idle")  # Emit idle status to the frontend
+            # socketio.emit("printer_status_idle")  # We'll handle the emission in the monitoring loop
             return "Idle"
 
     except Exception as e:
@@ -736,8 +739,8 @@ def check_printer_status(printer_name):
 def monitor_printer_status(printer_name, upload_folder):
     """
     Continuously checks the printer status and resets the coin count
-    when the printer becomes Printing, and deletes files from the upload folder
-    when the printer becomes idle after printing. Runs as a background thread.
+    and deletes files from the upload folder when the printer becomes
+    idle after printing. Runs as a background thread.
     """
     global coin_value_sum
     last_status = "Idle"
@@ -747,15 +750,15 @@ def monitor_printer_status(printer_name, upload_folder):
 
         if current_status == "Printing" and last_status == "Idle":
             print(f"Printer Status: {current_status}")
-            # Reset coin count when printing starts
+
+        elif current_status == "Idle" and last_status == "Printing":
+            print(f"Printer Status: {current_status}")
+            # Reset coin count
             coin_value_sum = 0
             print(f"Coin count reset to: {coin_value_sum}")
             # Emit update to all connected clients
             socketio.emit('update_coin_count', {'count': coin_value_sum})
 
-
-        elif current_status == "Idle" and last_status == "Printing":
-            print(f"Printer Status: {current_status}")
             # File deletion after printing
             for filename in os.listdir(upload_folder):
                 file_path = os.path.join(upload_folder, filename)
@@ -847,10 +850,12 @@ def payment_success():
     return render_template('payment-success.html')
 
 
+
 @app.route('/payment-type')
 def payment_type():
     """Renders the payment type selection page."""
     return render_template('payment-type.html')
+
 
 
 if __name__ == "__main__":
