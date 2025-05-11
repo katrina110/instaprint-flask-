@@ -265,19 +265,38 @@
                   "thumb-container " +
                   thumbClass(options.pageSize, options.orientationOption);
 
-                // original preview
                 const img = document.createElement("img");
                 img.src = p.original;
+                img.style.cursor = "pointer";
+                img.addEventListener("click", () => showModal(p.original));
+
                 container.appendChild(img);
                 pC.appendChild(container);
 
-                // segmented view
+                // Segmented View (Clickable)
                 const seg = document.createElement("div");
                 seg.className = "m-2 p-2 border";
-                seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(2)}):</p>
-                  <img src="${p.processed}" style="max-width:200px;"/>`;
+                seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(
+                  2
+                )}):</p>`;
+
+                const segImg = document.createElement("img");
+                segImg.src = p.highlighted;
+                segImg.style = "max-width:200px; cursor: pointer;";
+                segImg.addEventListener("click", () =>
+                  showModal(p.highlighted)
+                );
+
+                seg.appendChild(segImg);
                 sC.appendChild(seg);
               });
+
+              // Modal Logic
+              function showModal(imageSrc) {
+                const modalImage = document.getElementById("modalImage");
+                modalImage.src = imageSrc;
+                $("#imageModal").modal("show");
+              }
 
               previewsData = data.previews;
             })
@@ -336,5 +355,20 @@
           });
       });
     </script>
+    <!-- Fullscreen Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-body text-center p-0">
+            <img
+              id="modalImage"
+              src=""
+              class="img-fluid"
+              style="max-height: 90vh"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

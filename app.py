@@ -146,6 +146,21 @@ def parse_page_selection(selection, total_pages):
                 pages.add(page_num - 1)  # 0-based indexing
     return sorted(p for p in pages if 0 <= p < total_pages)
 
+def highlight_bright_pixels(image, dark_threshold=50):
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Create a mask for dark pixels (below threshold)
+    dark_mask = gray < dark_threshold
+
+    # Start with a white background
+    result = np.ones_like(image, dtype=np.uint8) * 255
+
+    # Keep only pixels that are not too dark
+    result[~dark_mask] = image[~dark_mask]
+
+    return result
+
 
 
 def process_image(image, page_size="A4", color_option="Color"):
@@ -506,13 +521,8 @@ def preview_with_price():
 
     for idx in selected_indexes:
         original_img = images[idx].copy()
-
-        # Ignore orientation for pricing; only used for preview fitting
         orientation = data.get("orientationOption") or "auto"
-        orientation = determine_orientation(original_img, orientation)  # Correct variable
-
-
-
+        orientation = determine_orientation(original_img, orientation)
         canvas_size = calculate_canvas_size(page_size, orientation)
         processed_img = fit_image_to_canvas(original_img, canvas_size)
 
@@ -520,10 +530,18 @@ def preview_with_price():
         page_price *= num_copies
         total_price += page_price
 
+        # Save original preview
         preview_filename = f"preview_{idx+1}.jpg"
         preview_path = os.path.join(app.config['STATIC_FOLDER'], preview_filename)
         cv2.imwrite(preview_path, original_img)
 
+        # Generate and save highlighted bright pixels image
+        highlighted_img = highlight_bright_pixels(original_img)
+        highlighted_filename = f"bright_pixels_{idx+1}.jpg"
+        highlighted_path = os.path.join(app.config['STATIC_FOLDER'], highlighted_filename)
+        cv2.imwrite(highlighted_path, highlighted_img)
+
+        # Save processed image based on color option
         if color_option == "grayscale":
             processed_filename = f"grayscale_preview_{idx+1}.jpg"
             gray_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2GRAY)
@@ -538,8 +556,10 @@ def preview_with_price():
             "page": idx + 1,
             "price": page_price,
             "original": f"/uploads/{preview_filename}",
-            "processed": f"/uploads/{processed_filename}"
+            "processed": f"/uploads/{processed_filename}",
+            "highlighted": f"/uploads/{highlighted_filename}"  # 👈 ADD THIS!
         })
+
 
     return jsonify({
         "totalPrice": round(total_price, 2),
