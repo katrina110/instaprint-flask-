@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <title>File Upload</title>
     <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
-</head>
   </head>
   <body>
     <div class="insta-container">
@@ -25,7 +24,7 @@
         </div>
       </div>
       <div class="logo">
-        <img  style="height: 120px; width: auto;" src="./../static/images/logo.jpg" alt="sample">
+        <img style="height: 120px; width: auto;" src="./../static/images/logo.jpg" alt="sample" />
       </div>
       <div class="title">INSTAPRINT</div>
       <div class="subtitle">FILE UPLOAD</div>
@@ -37,8 +36,16 @@
               class="online"
               onclick="window.location.href='/online-upload';"
             >
-            <i class="fa fa-wifi"></i>
-              Wireless File Transfer
+              <i class="fa fa-wifi"></i>
+               Wireless File Transfer
+            </button>
+            <button
+              type="button"
+              class="online"
+              onclick="history.back();"
+            >
+              <i class="fa fa-arrow-left"></i>
+               Back
             </button>
           </form>
         </div>

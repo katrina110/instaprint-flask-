@@ -421,15 +421,16 @@
             <div class="btn btn-center">
               <button
                 class="btn btn-success prev-btn"
-                disabled=""
                 id="prevStepBtn"
               >
                 Previous
               </button>
               <button
                 class="btn btn-success"
-                style="background-color: #700000; border: #700000"
+                id="uploadBtn"
                 type="submit"
+                style="background-color: #700000; border: #700000"
+                disabled
               >
                 Upload
               </button>
@@ -645,6 +646,29 @@
               "Please agree to the terms and conditions before proceeding."
             );
           }
+        });
+      });
+    </script>
+    <script>
+      $(document).ready(function () {
+        $("#file").on("change", function () {
+          const file = this.files[0];
+          if (file) {
+            $("#fileInfo").show();
+            $("#fileName").text(file.name);
+            $("#fileSize").text((file.size / 1024).toFixed(2) + " KB");
+            $("#uploadBtn").prop("disabled", false); // Enable Upload button
+          } else {
+            $("#uploadBtn").prop("disabled", true); // No file selected
+          }
+        });
+
+        $("#removeFileBtn").on("click", function () {
+          $("#file").val("");
+          $("#fileInfo").hide();
+          $("#fileName").text("N/A");
+          $("#fileSize").text("N/A");
+          $("#uploadBtn").prop("disabled", true); // Disable Upload button
         });
       });
     </script>
