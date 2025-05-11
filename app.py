@@ -23,6 +23,9 @@ import threading
 from flask_socketio import SocketIO, emit
 import win32print
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
+import pywintypes
+import wmi
+import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -31,6 +34,13 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static", "uploads")
 ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "docx", "doc"}
+printer_name = None  # Initialize printer_name here
+activity_log = []
+logged_errors = set()  # Set to track logged errors
+last_status = None  # Track last printer status
+
+# Store uploaded file info for admin view
+uploaded_files_info = []
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["STATIC_FOLDER"] = STATIC_FOLDER
@@ -247,6 +257,71 @@ def process_image(image, page_size="A4", color_option="Color"):
     final_price = (base_price + paper_cost) * 1.5
     return image, round(min(final_price, max_cap), 2)
 
+# Printer real-time status
+def get_printer_status_wmi():
+    global printer_name, activity_log, logged_errors
+    c = wmi.WMI()
+    logs = []
+    now = datetime.now()
+
+    status_map = {
+        1: "Other",
+        2: "Unknown",
+        3: "Idle",
+        4: "Printing",
+        5: "Warming Up",
+        6: "Stopped Printing",
+        7: "Offline"
+    }
+
+    error_state_map = {
+        0: "Unknown",
+        1: "Other",
+        2: "No Paper",
+        3: "No Toner",
+        4: "Door Open",
+        5: "Jammed",
+        6: "Service Requested",
+        7: "Output Bin Full"
+    }
+
+    try:
+        for printer in c.Win32_Printer(Name=printer_name):
+            status_msg = status_map.get(printer.PrinterStatus, "Unknown")
+            error_msg = error_state_map.get(printer.DetectedErrorState, None)
+
+            messages = []
+
+            if error_msg and error_msg != "Unknown":
+                messages.append(error_msg)
+            elif status_msg and status_msg not in ["Idle", "Unknown"]:
+                messages.append(status_msg)
+
+            for msg in messages:
+                if msg not in logged_errors:
+                    log = {
+                        "date": now.strftime("%m/%d/%Y"),
+                        "time": now.strftime("%I:%M %p"),
+                        "event": msg
+                    }
+                    activity_log.append(log)
+                    logs.append(log)
+                    logged_errors.add(msg)
+
+    except Exception as e:
+        error_msg = f"WMI error: {e}"
+        if error_msg not in logged_errors:
+            log = {
+                "date": now.strftime("%m/%d/%Y"),
+                "time": now.strftime("%I:%M %p"),
+                "event": error_msg
+            }
+            activity_log.append(log)
+            logs.append(log)
+            logged_errors.add(error_msg)
+
+    return logs
+
 
 # Routes - Admin
 @app.route("/")
@@ -277,34 +352,14 @@ def admin_printed_pages():
 
 @app.route("/admin-activity-log")
 def admin_activity_log():
-    printed = [
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Paper Jam – The paper is stuck in the printer, causing a blockage.",
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Low Ink/Toner – The printer's ink or toner is running low and needs to be replaced.",
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Offline – The printer is not connected to the network or is turned off.",
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Out of Paper – The printer has run out of paper in the tray.",
-        },
-        {
-            "date": "9/18/2024",
-            "time": "11:52 PM",
-            "event": "Printer Error – A general error, often requiring troubleshooting or a reset.",
-        },
-    ]
-    return render_template("admin-activity-log.html", printed=printed)
+    return render_template('admin-activity-log.html', printed=activity_log)
+
+@app.route('/api/printer-status')
+def printer_status_api():
+    global printer_name  # Declare printer_name as global here
+    if printer_name is None:  # Initialize printer_name if not already initialized
+        printer_name = win32print.GetDefaultPrinter()
+    return jsonify(get_printer_status_wmi())
 
 
 @app.route("/admin-balance")
@@ -923,6 +978,7 @@ def payment_type():
 if __name__ == "__main__":
     # Get the default printer name
     printer_name = win32print.GetDefaultPrinter()
+    activity_log = []
 
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads"
