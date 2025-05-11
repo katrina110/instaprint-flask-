@@ -144,6 +144,7 @@
       .preview-page {
         margin-bottom: 10px;
         border: 1px solid #ddd;
+        background-color: #212529;
       }
       .preview-page img {
         max-width: 100%; /* Ensures image does not stretch horizontally */
@@ -274,21 +275,21 @@
               <h5>🔐 Data Use:</h5>
               <ul>
                 <li>
-                  Your files will only be accessed for the purpose of
-                  providing the requested service or functionality.
+                  Your files will only be accessed for the purpose of providing
+                  the requested service or functionality.
                 </li>
                 <li>
-                  We do not store or share your files with third parties
-                  unless explicitly authorized by you.
+                  We do not store or share your files with third parties unless
+                  explicitly authorized by you.
                 </li>
               </ul>
               <h5>📂 Permissions:</h5>
               <ul>
                 <li>
-                  This application requires access to your files to enable
-                  the uploading of documents. This feature allows you to
-                  securely select files from your device and send them to the
-                  printer for printing.
+                  This application requires access to your files to enable the
+                  uploading of documents. This feature allows you to securely
+                  select files from your device and send them to the printer for
+                  printing.
                 </li>
               </ul>
               <h5>🛡️ Security Measures:</h5>
@@ -429,10 +430,7 @@
               <button
                 class="btn btn-success"
                 style="background-color: #700000; border: #700000"
-                id="uploadBtn"
                 type="submit"
-                style="background-color: #700000; border: #700000"
-                disabled
               >
                 Upload
               </button>
@@ -521,6 +519,8 @@
               <div class="form-group">
                 <label for="orientationOption">Orientation</label>
                 <select class="form-control" id="orientationOption">
+                  <option value="auto">Auto</option>
+                  <!-- Add this line -->
                   <option value="portrait">Portrait</option>
                   <option value="landscape">Landscape</option>
                 </select>
@@ -610,8 +610,6 @@
           }
         });
 
-
-
         // Handle file removal
         $("#removeFileBtn").on("click", function () {
           $("#file").val("");
@@ -628,17 +626,25 @@
         const acceptTermsCheckbox = $("#acceptTerms");
 
         // Initially set the button state
-        acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+        acceptTermsButton
+          .prop("disabled", true)
+          .removeClass("btn-theme-red")
+          .addClass("btn-secondary");
 
         // Enable Accept button and change color when checkbox is checked
-        acceptTermsCheckbox.on("change", function() {
-            if ($(this).is(":checked")) {
-                acceptTermsButton.prop("disabled", false).removeClass("btn-secondary").addClass("btn-theme-red");
-            } else {
-                acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
-            }
+        acceptTermsCheckbox.on("change", function () {
+          if ($(this).is(":checked")) {
+            acceptTermsButton
+              .prop("disabled", false)
+              .removeClass("btn-secondary")
+              .addClass("btn-theme-red");
+          } else {
+            acceptTermsButton
+              .prop("disabled", true)
+              .removeClass("btn-theme-red")
+              .addClass("btn-secondary");
+          }
         });
-
 
         acceptTermsButton.click(function () {
           if (acceptTermsCheckbox.is(":checked")) {
@@ -648,29 +654,6 @@
               "Please agree to the terms and conditions before proceeding."
             );
           }
-        });
-      });
-    </script>
-    <script>
-      $(document).ready(function () {
-        $("#file").on("change", function () {
-          const file = this.files[0];
-          if (file) {
-            $("#fileInfo").show();
-            $("#fileName").text(file.name);
-            $("#fileSize").text((file.size / 1024).toFixed(2) + " KB");
-            $("#uploadBtn").prop("disabled", false); // Enable Upload button
-          } else {
-            $("#uploadBtn").prop("disabled", true); // No file selected
-          }
-        });
-
-        $("#removeFileBtn").on("click", function () {
-          $("#file").val("");
-          $("#fileInfo").hide();
-          $("#fileName").text("N/A");
-          $("#fileSize").text("N/A");
-          $("#uploadBtn").prop("disabled", true); // Disable Upload button
         });
       });
     </script>
@@ -691,17 +674,25 @@
         const acceptTermsCheckbox = $("#acceptTerms");
 
         // Initially set the button state
-        acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
+        acceptTermsButton
+          .prop("disabled", true)
+          .removeClass("btn-theme-red")
+          .addClass("btn-secondary");
 
         // Enable Accept button and change color when checkbox is checked
-        acceptTermsCheckbox.on("change", function() {
-            if ($(this).is(":checked")) {
-                acceptTermsButton.prop("disabled", false).removeClass("btn-secondary").addClass("btn-theme-red");
-            } else {
-                acceptTermsButton.prop("disabled", true).removeClass("btn-theme-red").addClass("btn-secondary");
-            }
+        acceptTermsCheckbox.on("change", function () {
+          if ($(this).is(":checked")) {
+            acceptTermsButton
+              .prop("disabled", false)
+              .removeClass("btn-secondary")
+              .addClass("btn-theme-red");
+          } else {
+            acceptTermsButton
+              .prop("disabled", true)
+              .removeClass("btn-theme-red")
+              .addClass("btn-secondary");
+          }
         });
-
 
         acceptTermsButton.click(function () {
           if (acceptTermsCheckbox.is(":checked")) {
@@ -783,54 +774,70 @@
         });
       });
 
-
       function updatePreview() {
-    const orientationOption = $("#orientationOption").val();
-    const pageSelection = $("#pageSelection").val();
-    const numCopies = $("#numCopies").val();
-    const pageSize = $("#pageSize").val();
-    const colorOption = $("#colorOption").val();
+        const orientationOption = $("#orientationOption").val();
+        const pageSelection = $("#pageSelection").val();
+        const numCopies = $("#numCopies").val();
+        const pageSize = $("#pageSize").val();
+        const colorOption = $("#colorOption").val();
 
-    if (!pageSelection || totalPages === 0) return;
+        if (!pageSelection || totalPages === 0) return;
 
-    const previewContainer = $("#previewContainer");
-    previewContainer.html("<p>Loading preview...</p>"); // Show loading message
+        const previewContainer = $("#previewContainer");
+        previewContainer.html("<p>Loading preview...</p>"); // Show loading message
 
-    clearTimeout(previewTimeout);
-    previewTimeout = setTimeout(() => {
-        $.ajax({
+        clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(() => {
+          $.ajax({
             url: "/generate_preview",
             method: "POST",
             contentType: "application/json",
             data: JSON.stringify({
-                pageSelection,
-                numCopies,
-                pageSize,
-                colorOption,
-                orientationOption, // Pass orientation here
+              pageSelection,
+              numCopies,
+              pageSize,
+              colorOption,
+              orientationOption, // Pass orientation here
             }),
             success: function (response) {
-                previewContainer.empty(); // Remove loading message
+              previewContainer.empty(); // Remove loading message
 
-                if (!response.previews || response.previews.length === 0) {
-                    previewContainer.html("<p>No previews generated. Check your page selection.</p>");
-                    return;
-                }
+              if (!response.previews || response.previews.length === 0) {
+                previewContainer.html(
+                  "<p>No previews generated. Check your page selection.</p>"
+                );
+                return;
+              }
 
-                response.previews.forEach((preview) => {
-                    const timestampedURL = preview + "?t=" + new Date().getTime();
-                    const pageDiv = $("<div>").addClass("preview-page").append($("<img>").attr("src", timestampedURL));
-                    previewContainer.append(pageDiv);
-                });
+              response.previews.forEach((preview) => {
+                const timestampedURL = preview + "?t=" + new Date().getTime();
+                const imgElement = $("<img>")
+                  .attr("src", timestampedURL)
+                  .css({
+                    "max-width": "200px",
+                    "aspect-ratio":
+                      $("#orientationOption").val() === "landscape"
+                        ? "16/9"
+                        : "9/16",
+                    "object-fit": "contain",
+                  });
+                const pageDiv = $("<div>")
+                  .addClass("preview-page")
+                  .append(imgElement);
+
+                previewContainer.append(pageDiv);
+              });
             },
             error: function (error) {
-                previewContainer.html("<p>Error generating preview.</p>");
-                console.error("Preview generation failed:", error.responseText || error);
+              previewContainer.html("<p>Error generating preview.</p>");
+              console.error(
+                "Preview generation failed:",
+                error.responseText || error
+              );
             },
-        });
-    }, 300);
-}
-
+          });
+        }, 300);
+      }
 
       $(
         "#pageSelection, #numCopies, #pageSize, #colorOption, #orientationOption"
@@ -844,11 +851,23 @@
           numCopies: $("#numCopies").val(),
           pageSize: $("#pageSize").val(),
           colorOption: $("#colorOption").val(),
-          orientationOption: $("#orientationOption").val(), // <-- added
+          orientationOption: $("#orientationOption").val(),
           fileName: fileName,
         };
 
-        // Store options in session storage to retrieve in result.html
+        // ✅ Ensure orientation defaults to 'auto' if not selected
+        if (!options.orientationOption) {
+          options.orientationOption = "auto";
+        }
+
+        // Apply selected orientation to the modal dropdown immediately
+        const orientationSelect = document.getElementById(
+          "editOrientationOption"
+        );
+        if (orientationSelect) {
+          orientationSelect.value = options.orientationOption;
+        }
+
         sessionStorage.setItem("printOptions", JSON.stringify(options));
 
         // Redirect to result.html

@@ -432,90 +432,107 @@ def upload_file():
 
 @app.route("/generate_preview", methods=["POST"])
 def generate_preview():
-    """Generates preview images based on user selections."""
-    global images
-    data = request.json;
-    page_selection = data.get('pageSelection', '');
-    num_copies = int(data.get('numCopies', 1));
-    page_size = data.get('pageSize', 'A4');
-    color_option = data.get('colorOption', 'Color');
-    orientation = data.get('orientationOption', 'portrait');
+    global images, selected_previews
+    data = request.json
+    page_selection = data.get('pageSelection', '')
+    num_copies = int(data.get('numCopies', 1))
+    page_size = data.get('pageSize', 'A4')
+    color_option = data.get('colorOption', 'Color')
+    orientation = data.get('orientationOption', 'portrait')
 
     try:
-        selected_indexes = parse_page_selection(page_selection, len(images));
+        selected_indexes = parse_page_selection(page_selection, len(images))
         previews = []
 
         for idx in selected_indexes:
-            if idx >= len(images):
-                continue
-            processed_img = images[idx].copy()
-            aspect_ratio = processed_img.shape[1] / processed_img.shape[0]
+            img = images[idx].copy()
+            orientation = data.get("orientationOption") or "auto"
+            orientation = determine_orientation(img, orientation)
+            canvas_size = calculate_canvas_size(page_size, orientation)
+            processed_img = fit_image_to_canvas(img, canvas_size)
 
-            if orientation == 'landscape':
-                new_width = 1200
-                new_height = int(new_width / aspect_ratio)
-                processed_img = cv2.resize(processed_img, (new_width, new_height))
-            else:
-                new_height = 1200
-                new_width = int(new_height * aspect_ratio)
-                processed_img = cv2.resize(processed_img, (new_width, new_height))
-
-            if color_option == 'Grayscale':
+            if color_option.lower() == 'grayscale':
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
 
             for copy_idx in range(num_copies):
-                filename = f"preview_{idx + 1}_{page_size}_{color_option}_{orientation}_{copy_idx}.jpg"
-                preview_path = os.path.join(app.config['STATIC_FOLDER'], filename)
-                cv2.imwrite(preview_path, processed_img)
+                filename = f"print_preview_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
+                path = os.path.join(app.config['STATIC_FOLDER'], filename)
+                cv2.imwrite(path, processed_img)
+                # Ensure correct URL path for frontend
                 previews.append(f"/uploads/{filename}")
+
+        selected_previews = previews
+
+        if not previews:
+            return jsonify({"error": "No previews generated. Check your page selection."}), 400
+
         return jsonify({"previews": previews}), 200
+
     except Exception as e:
-        return jsonify({"error": f"Failed to generate previews: {e}"}), 500
+        print(f"Error generating preview: {e}")
+        return jsonify({"error": f"Failed to generate preview: {str(e)}"}), 500
+    
+@app.route("/check_images", methods=["GET"])
+def check_images():
+    global images
+    # If images are available but previews aren't generated yet, allow to proceed
+    return jsonify({"imagesAvailable": bool(images)})
+
 
 
 
 @app.route('/preview_with_price', methods=['POST'])
 def preview_with_price():
-    """Generates previews with pricing information for selected pages."""
     global images
     if not images:
         return jsonify({"error": "No images available. Please upload a file first."}), 400
 
     data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON payload."}), 400
+
     selection = data.get("pageSelection", "")
     num_copies = int(data.get("numCopies", 1))
     page_size = data.get("pageSize", "A4")
-    color_option = data.get("colorOption", "Color")
+    color_option = data.get("colorOption", "Color").lower()
 
     selected_indexes = parse_page_selection(selection, len(images))
     if not selected_indexes:
         return jsonify({"error": "No valid pages selected."}), 400
 
-    previews = []
     page_prices = []
     total_price = 0
 
     for idx in selected_indexes:
-        img = images[idx]
-        processed_img, page_price = process_image(img, page_size=page_size, color_option=color_option)
+        original_img = images[idx].copy()
+
+        # Ignore orientation for pricing; only used for preview fitting
+        orientation = data.get("orientationOption") or "auto"
+        orientation = determine_orientation(original_img, orientation)  # Correct variable
+
+
+
+        canvas_size = calculate_canvas_size(page_size, orientation)
+        processed_img = fit_image_to_canvas(original_img, canvas_size)
+
+        processed_img, page_price = process_image(processed_img, page_size=page_size, color_option=color_option)
         page_price *= num_copies
         total_price += page_price
 
         preview_filename = f"preview_{idx+1}.jpg"
         preview_path = os.path.join(app.config['STATIC_FOLDER'], preview_filename)
-        cv2.imwrite(preview_path, img)
+        cv2.imwrite(preview_path, original_img)
 
-        if color_option != "Grayscale":
+        if color_option == "grayscale":
+            processed_filename = f"grayscale_preview_{idx+1}.jpg"
+            gray_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2GRAY)
+            processed_path = os.path.join(app.config['STATIC_FOLDER'], processed_filename)
+            cv2.imwrite(processed_path, gray_img)
+        else:
             processed_filename = f"segmented_{idx+1}.jpg"
             processed_path = os.path.join(app.config['STATIC_FOLDER'], processed_filename)
             cv2.imwrite(processed_path, processed_img)
-        else:
-            processed_filename = f"grayscale_preview_{idx+1}.jpg"
-            processed_path = os.path.join(app.config['STATIC_FOLDER'], processed_filename)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            cv2.imwrite(processed_path, gray)
-
 
         page_prices.append({
             "page": idx + 1,
@@ -529,6 +546,7 @@ def preview_with_price():
         "pagePrices": page_prices,
         "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices]
     })
+
 
 
 
@@ -546,6 +564,39 @@ def arduino_payment_page():
             print(f"Failed to initialize Arduino: {e}")
             return "Error: Could not connect to Arduino."  # Consistent error response
     return render_template('payment.html')
+
+def calculate_canvas_size(page_size, orientation):
+    sizes = {'A4': (2480, 3508), 'Short': (2480, 3200), 'Long': (2480, 4200)}
+    w, h = sizes.get(page_size, (2480, 3508))
+    return (max(w, h), min(w, h)) if orientation == 'landscape' else (min(w, h), max(w, h))
+
+def fit_image_to_canvas(image, canvas_size):
+    canvas_w, canvas_h = canvas_size
+    img_h, img_w = image.shape[:2]
+    scale = min(canvas_w / img_w, canvas_h / img_h)
+    new_w, new_h = int(img_w * scale), int(img_h * scale)
+    resized_image = cv2.resize(image, (new_w, new_h))
+
+    # Create white canvas and center the image
+    canvas = np.ones((canvas_h, canvas_w, 3), dtype=np.uint8) * 255
+    x_offset = (canvas_w - new_w) // 2
+    y_offset = (canvas_h - new_h) // 2
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_image
+    return canvas
+
+            
+def determine_orientation(image, user_orientation):
+    if user_orientation.lower() != 'auto':
+        return user_orientation.lower()
+    h, w = image.shape[:2]
+    return 'landscape' if w > h else 'portrait'
+
+def fit_image_to_paper(image, target_size):
+    h, w = image.shape[:2]
+    target_w, target_h = target_size
+    scale = min(target_w / w, target_h / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+    return cv2.resize(image, (new_w, new_h))
 
 
 
@@ -613,54 +664,52 @@ def gcash_payment():
 # START OF PRINT DOCUMENT
 @app.route('/print_document', methods=['POST'])
 def print_document():
-    """
-    Handles printing a document based on user-specifiedparameters.  Generates a PDF
-    from the selected images and sends it to the default printer.
-    """
     global images
     if not images:
         return jsonify({"error": "No file uploaded or processed yet."}), 400
 
     try:
         data = request.json
+        if not data:
+            return jsonify({"error": "Invalid JSON payload."}), 400
+
         selection = data.get("pageSelection", "")
         num_copies = int(data.get("numCopies", 1))
         page_size = data.get("pageSize", "A4")
-        color_option = data.get("colorOption", "Color")
+        color_option = data.get("colorOption", "Color").lower()
 
         selected_indexes = parse_page_selection(selection, len(images))
         if not selected_indexes:
             return jsonify({"error": "Invalid page selection."}), 400
 
-        temp_previews = []  # Store paths to temporary preview images
+        temp_previews = []
 
         for idx in selected_indexes:
-            img = images[idx].copy()  # Create a copy to avoid modifying the original
+            img = images[idx].copy()
 
-            # Resize the image based on the selected page size
-            if page_size == 'Short':
-                img = cv2.resize(img, (800, 1000))
-            elif page_size == 'Long':
-                img = cv2.resize(img, (800, 1200))
-            elif page_size == 'A4':
-                img = cv2.resize(img, (800, 1100))
+            # Ignore orientation for pricing; only used for preview fitting
+            orientation = data.get("orientationOption") or "auto"
+            orientation = determine_orientation(img, orientation)  # Correct variable
 
-            # Convert to grayscale if specified
-            if color_option == 'Grayscale':
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)  # Convert back to BGR for saving
 
-            # Generate a preview image for each copy
+
+            canvas_size = calculate_canvas_size(page_size, orientation)
+            processed_img = fit_image_to_canvas(processed_img, canvas_size)
+
+
+            if color_option == 'grayscale':
+                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
+                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
+
             for copy_idx in range(num_copies):
-                filename = f"print_preview_{idx + 1}_{page_size}_{color_option}_{copy_idx}.jpg"
+                filename = f"print_preview_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
                 path = os.path.join(app.config['STATIC_FOLDER'], filename)
-                cv2.imwrite(path, img)  # Save the preview image
-                temp_previews.append(path)  # Store the path for PDF generation
+                cv2.imwrite(path, processed_img)
+                temp_previews.append(path)
 
-        # Create a PDF from the generated preview images
         pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], "printable_preview.pdf")
         pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)  # Enable auto page breaks
+        pdf.set_auto_page_break(auto=True, margin=15)
 
         for preview_path in temp_previews:
             if not os.path.exists(preview_path):
@@ -673,22 +722,17 @@ def print_document():
             pdf.add_page()
             pdf.image(preview_path, x=10, y=10, w=page_width, h=page_height)
 
-        pdf.output(pdf_path)  # Save the generated PDF
+        pdf.output(pdf_path)
 
-        # Print the PDF using the appropriate OS command
-        if os.name == 'nt':  # Windows
+        if os.name == 'nt':
             import win32print
             import win32api
+            printer_name = win32print.GetDefaultPrinter()
+            win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
+        else:
+            os.system(f'lp "{pdf_path}"')
 
-            printer_name = win32print.GetDefaultPrinter()  # Get the default printer name
-            win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)  # Print the PDF
-        else:  # Assume Unix-like (Linux, macOS)
-            os.system(f'lp "{pdf_path}"')  # Use the lp command to print
-
-        return (
-            jsonify({"success": True, "message": "Document sent to the printer successfully!"}),
-            200,
-        )
+        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
 
     except Exception as e:
         print(f"Error printing document: {e}")
@@ -696,12 +740,14 @@ def print_document():
 
 
 
+
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])
 def result():
-    """Displays the result page, showing previews."""
-    global selected_previews
-    return render_template('result.html', previews=selected_previews, price_info=None)  # Pass data to template
+    global images, selected_previews
+    if not selected_previews or not images:
+        return redirect('/file-upload')
+    return render_template('result.html', previews=selected_previews)
 
 
 
