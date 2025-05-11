@@ -23,12 +23,16 @@ from flask_socketio import SocketIO, emit
 
 import win32print
 import pywintypes
+import wmi
 import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-
+printer_name = None  # Initialize printer_name here
+activity_log = []
+logged_errors = set()  # Set to track logged errors
+last_status = None  # Track last printer status
 
 # Store uploaded file info for admin view
 uploaded_files_info = []
@@ -293,50 +297,70 @@ def process_image(image, page_size="A4", color_option="Color"):
     return image, round(min(final_price, max_cap), 2)
 
 # Printer real-time status
-def get_printer_status():
-    try:
-        printer_handle = win32print.OpenPrinter(printer_name)
-        printer_info = win32print.GetPrinter(printer_handle, 2)
-        win32print.ClosePrinter(printer_handle)
-
-        status_code = printer_info['Status']
-        status_messages = []
-
-        # Simulated logic based on printer status codes
-        if status_code & 0x00000002:
-            status_messages.append("Printer Paused")
-        if status_code & 0x00000004:
-            status_messages.append("Error")
-        if status_code & 0x00000008:
-            status_messages.append("Pending Deletion")
-        if status_code & 0x00000010:
-            status_messages.append("Paper Jam")
-        if status_code & 0x00000020:
-            status_messages.append("Out of Paper")
-        if status_code & 0x00000040:
-            status_messages.append("Manual Feed")
-        if status_code & 0x00000080:
-            status_messages.append("Paper Problem")
-        if status_code & 0x00000100:
-            status_messages.append("Offline")
-        if status_code == 0:
-            status_messages.append("Ready")
-
-    except pywintypes.error as e:
-        status_messages = [f"Error accessing printer: {e}"]
-
-    now = datetime.now()
+def get_printer_status_wmi():
+    global printer_name, activity_log, logged_errors
+    c = wmi.WMI()
     logs = []
-    for message in status_messages:
-        log = {
-            "date": now.strftime("%m/%d/%Y"),
-            "time": now.strftime("%I:%M %p"),
-            "event": message
-        }
-        if log not in activity_log:  # Avoid duplicates
+    now = datetime.now()
+
+    status_map = {
+        1: "Other",
+        2: "Unknown",
+        3: "Idle",
+        4: "Printing",
+        5: "Warming Up",
+        6: "Stopped Printing",
+        7: "Offline"
+    }
+
+    error_state_map = {
+        0: "Unknown",
+        1: "Other",
+        2: "No Paper",
+        3: "No Toner",
+        4: "Door Open",
+        5: "Jammed",
+        6: "Service Requested",
+        7: "Output Bin Full"
+    }
+
+    try:
+        for printer in c.Win32_Printer(Name=printer_name):
+            status_msg = status_map.get(printer.PrinterStatus, "Unknown")
+            error_msg = error_state_map.get(printer.DetectedErrorState, None)
+
+            messages = []
+
+            if error_msg and error_msg != "Unknown":
+                messages.append(error_msg)
+            elif status_msg and status_msg not in ["Idle", "Unknown"]:
+                messages.append(status_msg)
+
+            for msg in messages:
+                if msg not in logged_errors:
+                    log = {
+                        "date": now.strftime("%m/%d/%Y"),
+                        "time": now.strftime("%I:%M %p"),
+                        "event": msg
+                    }
+                    activity_log.append(log)
+                    logs.append(log)
+                    logged_errors.add(msg)
+
+    except Exception as e:
+        error_msg = f"WMI error: {e}"
+        if error_msg not in logged_errors:
+            log = {
+                "date": now.strftime("%m/%d/%Y"),
+                "time": now.strftime("%I:%M %p"),
+                "event": error_msg
+            }
             activity_log.append(log)
-        logs.append(log)
+            logs.append(log)
+            logged_errors.add(error_msg)
+
     return logs
+
 
 
 # Route for the main page
@@ -372,7 +396,10 @@ def admin_activity_log():
 
 @app.route('/api/printer-status')
 def printer_status_api():
-    return jsonify(get_printer_status())
+    global printer_name  # Declare printer_name as global here
+    if printer_name is None:  # Initialize printer_name if not already initialized
+        printer_name = win32print.GetDefaultPrinter()
+    return jsonify(get_printer_status_wmi())
 
 # Route for the admin balance
 @app.route('/admin-balance')
