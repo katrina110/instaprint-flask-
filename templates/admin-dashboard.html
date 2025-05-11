@@ -31,7 +31,7 @@
  
          <content class="contents">
             <div class="stats">
-                <div class="card">
+                <div class="card" onclick="openModal()" style="cursor: pointer;">
                     <div class="card-content">
                         <span class="currency">₱</span><span class="amount">{{ data.total_sales }}</span>
                     </div>
@@ -64,6 +64,7 @@
                  <div class="chart-box">
                      <h3>Transaction History</h3>
                      {% for transaction in data.sales_history %}
+                        <canvas id="transactionPieChart"></canvas>
                      <div class="transaction">
                          <span>{{ transaction.method }}</span>
                          <span>₱{{ transaction.amount }}</span>
@@ -77,12 +78,77 @@
                      <canvas id="salesChart"></canvas>
                  </div>
              </div>
+
+             <!-- Transaction Details Modal -->
+              <div id="transactionModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeModal()">&times;</span>
+                    <h2>Transaction Details</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Method</th>
+                                <th>Amount</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in data.sales_history %}
+                            <tr>
+                                <td>{{ transaction.method }}</td>
+                                <td>₱{{ transaction.amount }}</td>
+                                <td>{{ transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
          </content>
  
-     <script>
-         var salesData = {{ data.sales_chart | tojson }};
-     </script>
- 
-     <script src="./../static/js/main.js" rel="stylesheet"></script>
- </body>
- </html>
+    <script>
+        var salesData = {{ data.sales_chart | tojson }};
+
+        function openModal() {
+            document.getElementById("transactionModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("transactionModal").style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            var modal = document.getElementById("transactionModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        var ctx = document.getElementById('transactionPieChart').getContext('2d');
+        var transactionPieChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: {{ data.sales_chart.labels | tojson }},
+                datasets: [{
+                    data: {{ data.sales_chart.data | tojson }},
+                    backgroundColor: ['#36A2EB', '#FFCE56']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Sales by Payment Method'
+                    }
+                }
+            }
+        });
+    </script>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

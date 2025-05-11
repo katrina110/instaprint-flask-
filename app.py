@@ -17,11 +17,13 @@ from win32com import client
 from fpdf import FPDF
 import serial
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from PyPDF2 import PdfReader
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
+from flask_sqlalchemy import SQLAlchemy
+
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 import pywintypes
 import wmi
@@ -29,6 +31,36 @@ import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///transactions.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)  # ✅ Bind db to app directly
+
+# Model
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(50), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False)
+
+# Uncomment this the first time to create the database
+    with app.app_context():
+        db.create_all()
+
+# Example for recording a GCash transaction
+if __name__ == '__main__':
+    with app.app_context():
+        amount_paid = 50.00
+        new_transaction = Transaction(
+            method='GCash',
+            amount=amount_paid,
+            timestamp=datetime.now(timezone.utc)
+        )
+        db.session.add(new_transaction)
+        db.session.commit()
+        print("✅ Test GCash transaction added")
+
+    app.run(debug=True)
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -331,16 +363,26 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).all()
+    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0
+    printed_pages_today = 0  # Replace with actual logic
+    files_uploaded_today = 0  # Replace with actual logic
+    current_balance = 0  # Replace with actual logic
+
+    # Calculate totals for each payment method
+    gcash_total = db.session.query(func.sum(Transaction.amount)).filter_by(method='GCash').scalar() or 0
+    coin_total = db.session.query(func.sum(Transaction.amount)).filter_by(method='Coin').scalar() or 0
+
     data = {
-        "total_sales": 5000,
+        "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "current_balance": 3000,
-        "sales_history": [
-            {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
-            {"method": "PayMaya", "amount": 250, "date": "2024-03-29", "time": "11:30"},
-        ],
-        "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
+        "current_balance": current_balance,
+        "sales_history": transactions,
+        "sales_chart": {
+            "labels": ["GCash", "Coin"],
+            "data": [gcash_total, coin_total],
+        }
     }
     return render_template("admin-dashboard.html", data=data)
 
