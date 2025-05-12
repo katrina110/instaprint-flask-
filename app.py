@@ -29,11 +29,36 @@ import pywintypes
 import wmi
 import multiprocessing
 
+
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-db = SQLAlchemy()
-socketio = SocketIO(app)
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
+    amount = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # For total sales tracking
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    # Emit the new transaction to update the dashboard in real-time
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    }, broadcast=True)
+
+with app.app_context():
+    db.create_all()  # ensures tables are created before first use
+
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -76,24 +101,6 @@ BAUD_RATE = 9600
 # Global variables to hold serial port objects
 coin_slot_serial = None
 gsm_serial = None
-
-# For total sales tracking
-class Transaction(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
-    amount = db.Column(db.Float, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-def record_transaction(method, amount):
-    transaction = Transaction(method=method, amount=amount)
-    db.session.add(transaction)
-    db.session.commit()
-    # Emit the new transaction to update the dashboard in real-time
-    socketio.emit('new_transaction', {
-        'method': method,
-        'amount': amount,
-        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-    }, broadcast=True)
 
 # WebSocket Connection
 @socketio.on("connect")
