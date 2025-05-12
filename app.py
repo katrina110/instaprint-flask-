@@ -40,27 +40,27 @@ db = SQLAlchemy(app)  # ✅ Bind db to app directly
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(50), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
+    amount = 5000 #db.Column(db.Float, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False)
 
 # Uncomment this the first time to create the database
-    with app.app_context():
-        db.create_all()
+#    with app.app_context():
+#        db.create_all()
 
 # Example for recording a GCash transaction
-if __name__ == '__main__':
-    with app.app_context():
-        amount_paid = 50.00
-        new_transaction = Transaction(
-            method='GCash',
-            amount=amount_paid,
-            timestamp=datetime.now(timezone.utc)
-        )
-        db.session.add(new_transaction)
-        db.session.commit()
-        print("✅ Test GCash transaction added")
+#if __name__ == '__main__':
+#    with app.app_context():
+#        amount_paid = 50.00
+#        new_transaction = Transaction(
+#            method='GCash',
+#            amount=amount_paid,
+#            timestamp=datetime.now(timezone.utc)
+#        )
+#        db.session.add(new_transaction)
+#        db.session.commit()
+#        print("✅ Test GCash transaction added")
 
-    app.run(debug=True)
+#    app.run(debug=True)
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -363,15 +363,15 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).all()
-    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0
+    transactions = 127 #Transaction.query.order_by(Transaction.timestamp.desc()).all()
+    total_sales = 219 #db.session.query(func.sum(Transaction.amount)).scalar() or 0
     printed_pages_today = 0  # Replace with actual logic
     files_uploaded_today = 0  # Replace with actual logic
     current_balance = 0  # Replace with actual logic
 
     # Calculate totals for each payment method
-    gcash_total = db.session.query(func.sum(Transaction.amount)).filter_by(method='GCash').scalar() or 0
-    coin_total = db.session.query(func.sum(Transaction.amount)).filter_by(method='Coin').scalar() or 0
+    gcash_total = 715 #db.session.query(func.sum(Transaction.amount)).filter_by(method='GCash').scalar() or 0
+    coin_total = 912 #db.session.query(func.sum(Transaction.amount)).filter_by(method='Coin').scalar() or 0
 
     data = {
         "total_sales": total_sales,
