@@ -22,6 +22,8 @@ from PyPDF2 import PdfReader
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
+from flask_sqlalchemy import SQLAlchemy
+
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 import pywintypes
 import wmi
@@ -29,6 +31,9 @@ import multiprocessing
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+db = SQLAlchemy()
+socketio = SocketIO(app)
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -72,6 +77,23 @@ BAUD_RATE = 9600
 coin_slot_serial = None
 gsm_serial = None
 
+# For total sales tracking
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
+    amount = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    # Emit the new transaction to update the dashboard in real-time
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    }, broadcast=True)
 
 # WebSocket Connection
 @socketio.on("connect")
