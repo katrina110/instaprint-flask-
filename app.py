@@ -766,12 +766,8 @@ def print_document():
             # Ignore orientation for pricing; only used for preview fitting
             orientation = data.get("orientationOption") or "auto"
             orientation = determine_orientation(img, orientation)  # Correct variable
-
-
-
             canvas_size = calculate_canvas_size(page_size, orientation)
-            processed_img = fit_image_to_canvas(processed_img, canvas_size)
-
+            processed_img = fit_image_to_canvas(img, canvas_size)
 
             if color_option == 'grayscale':
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
