@@ -363,14 +363,20 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
+    total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
     data = {
-        "total_sales": 5000,
+        "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
         "current_balance": 3000,
         "sales_history": [
-            {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
-            {"method": "PayMaya", "amount": 250, "date": "2024-03-29", "time": "11:30"},
+            {
+                "method": t.method,
+                "amount": t.amount,
+                "date": t.timestamp.strftime('%Y-%m-%d'),
+                "time": t.timestamp.strftime('%H:%M:%S')
+            } for t in transactions
         ],
         "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
     }
