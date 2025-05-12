@@ -54,7 +54,7 @@ def record_transaction(method, amount):
         'method': method,
         'amount': amount,
         'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-    }, broadcast=True)
+    })
 
 with app.app_context():
     db.create_all()  # ensures tables are created before first use
@@ -389,6 +389,16 @@ def admin_dashboard():
     }
     return render_template("admin-dashboard.html", data=data)
 
+# For testing purposes
+#@app.route('/test-transaction/<method>/<amount>')
+#def test_transaction(method, amount):
+#    try:
+#        record_transaction(method, float(amount))
+#        return f"Test transaction recorded: {method} - {amount}"
+#    except Exception as e:
+#        return f"Error: {str(e)}"
+    
+# End of testing
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
