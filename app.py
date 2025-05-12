@@ -427,24 +427,20 @@ def online_upload():
 
 @app.route("/payment")
 def payment_page():
+    """Renders the payment page and activates coin detection."""
     global coin_detection_active
     coin_detection_active = True
-    # Start the coin slot thread if it's not running.
-    global coin_slot_thread
-    if 'coin_slot_thread' not in globals() or not coin_slot_thread.is_alive():
-        coin_slot_thread = threading.Thread(target=read_coin_slot_data, daemon=True)
-        coin_slot_thread.start()
-        print("Arduino coin detection thread started.")
-    else:
-        print("Arduino coin detection thread is already running.")
+    print("Coin detection activated for payment.")
+    # The background task for coin detection is started in __main__ and will now become active
     return render_template("payment.html")
 
 
 @app.route("/stop_coin_detection", methods=["POST"])
 def stop_coin_detection():
+    """Deactivates coin detection."""
     global coin_detection_active
     coin_detection_active = False
-    print("Coin detection stopped.")
+    print("Coin detection deactivated.")
     return jsonify({"success": True, "message": "Coin detection stopped."})
 
 # File Upload and Processing
@@ -675,25 +671,35 @@ def read_coin_slot_data():
     """
     Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
+    Only active when coin_detection_active flag is True.
     """
-    global coin_value_sum, coin_slot_serial
-    # Ensure the serial port is open only once for this thread
-    if coin_slot_serial is None or not coin_slot_serial.is_open:
-        try:
-            coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-            print(f"Successfully opened serial port {COIN_SLOT_PORT} for Arduino coin detection.")
-            time.sleep(2) # Wait for the Arduino to reset
-        except serial.SerialException as e:
-            print(f"Error opening serial port {COIN_SLOT_PORT} for Arduino: {e}")
-            coin_slot_serial = None # Set to None to attempt reconnect later
-            time.sleep(5) # Wait before retrying
-            return # Exit the current function call, the background task will restart it
-
+    global coin_value_sum, coin_detection_active, coin_slot_serial
 
     while True:
         if not coin_detection_active:
-            time.sleep(0.5) # Avoid busy waiting when detection is inactive
+            # If coin detection is not active, close the serial port if open and sleep
+            if coin_slot_serial and coin_slot_serial.is_open:
+                try:
+                    coin_slot_serial.close()
+                    print(f"Closed serial port {COIN_SLOT_PORT} for coin slot.")
+                except Exception as e:
+                    print(f"Error closing serial port {COIN_SLOT_PORT}: {e}")
+                coin_slot_serial = None # Ensure the variable is set to None
+            time.sleep(1) # Sleep longer when inactive
             continue
+
+        # If coin detection is active, ensure the serial port is open
+        if coin_slot_serial is None or not coin_slot_serial.is_open:
+            try:
+                coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+                print(f"Successfully opened serial port {COIN_SLOT_PORT} for coin slot.")
+                time.sleep(2) # Wait for the Arduino to reset
+            except serial.SerialException as e:
+                print(f"Error opening serial port {COIN_SLOT_PORT} for coin slot: {e}")
+                coin_slot_serial = None # Set to None to attempt reconnect later
+                time.sleep(5) # Wait before retrying
+                continue # Continue the outer while loop to check coin_detection_active again
+
 
         if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting > 0:
             try:
@@ -727,6 +733,7 @@ def read_coin_slot_data():
                  print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
                  coin_slot_serial = None
                  time.sleep(5) # Wait before next retry
+
 
         time.sleep(0.1) # Short sleep to prevent excessive CPU usage
 
@@ -796,10 +803,10 @@ def read_gsm_data():
         time.sleep(0.1) # Short sleep to prevent excessive CPU usage when active
 
 
-@app.route('/detect_coins')
-def start_coin_detection_route():
-    # This route is no longer needed as the coin detection runs in a background thread.
-    return "Coin detection service is running in the background."
+# This route is no longer needed as the coin detection is controlled by the /payment route and stop_coin_detection
+# @app.route('/detect_coins')
+# def start_coin_detection_route():
+#     return "Coin detection service is running in the background."
 
 
 @app.route('/coin_count')
@@ -948,7 +955,7 @@ def monitor_printer_status(printer_name, upload_folder):
     when the printer becomes Printing, and deletes files from the upload folder
     when the printer becomes idle after printing. Runs as a background thread.
     """
-    global coin_value_sum
+    global coin_value_sum, coin_detection_active # Added coin_detection_active here
     last_status = "Idle"
 
     while True:
@@ -961,6 +968,9 @@ def monitor_printer_status(printer_name, upload_folder):
             print(f"Coin count reset to: {coin_value_sum}")
             # Emit update to all connected clients
             socketio.emit('update_coin_count', {'count': coin_value_sum})
+            # Stop coin detection when printing starts
+            coin_detection_active = False
+            print("Coin detection deactivated due to printer status: Printing.")
 
 
         elif current_status == "Idle" and last_status == "Printing":
@@ -981,20 +991,22 @@ def monitor_printer_status(printer_name, upload_folder):
 @app.route('/payment-success')
 def payment_success():
     """Renders the payment success page."""
-    # Consider stopping GSM detection here as well if the user goes directly from gcash-payment to payment-success
-    global gsm_active
+    # Consider stopping both detections here if the user goes directly to payment-success
+    global gsm_active, coin_detection_active
     gsm_active = False
-    print("GSM detection deactivated on payment success.")
+    coin_detection_active = False
+    print("GSM and Coin detection deactivated on payment success.")
     return render_template('payment-success.html')
 
 
 @app.route('/payment-type')
 def payment_type():
     """Renders the payment type selection page."""
-    # Consider stopping GSM detection here as well if the user navigates back
-    global gsm_active
+    # Consider stopping both detections here if the user navigates back
+    global gsm_active, coin_detection_active
     gsm_active = False
-    print("GSM detection deactivated on payment type selection.")
+    coin_detection_active = False
+    print("GSM and Coin detection deactivated on payment type selection.")
     return render_template('payment-type.html')
 
 
@@ -1019,4 +1031,3 @@ if __name__ == "__main__":
 
     # Start the Flask app
     socketio.run(app, debug=False)
-
