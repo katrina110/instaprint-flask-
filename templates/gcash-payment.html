@@ -106,10 +106,9 @@
         }
     </style>
 
-<!-- Modal CSS -->
-    <style>
+<style>
         /* Existing styles... */
-    
+
         /* The Modal (hidden by default) */
         .modal {
             display: none; /* Hidden by default */
@@ -121,12 +120,12 @@
             height: 100%;
             overflow: hidden;
             background-color: rgba(0,0,0,0.4);
-            
+
             /* Centering will be handled when displayed */
             align-items: center;
             justify-content: center;
         }
-    
+
         .modal-content {
             background-color: #fefefe;
             margin: auto; /* Center horizontally and vertically with flex */
@@ -145,36 +144,36 @@
             font-size: 28px;
             font-weight: bold;
         }
-    
+
         .close:hover,
         .close:focus {
             color: black;
             text-decoration: none;
             cursor: pointer;
         }
-    
+
         .star-rating {
             direction: rtl;
             display: inline-flex;
             margin-bottom: 15px;
         }
-    
+
         .star-rating input {
             display: none;
         }
-    
+
         .star-rating label {
             font-size: 2rem;
             color: #ddd;
             cursor: pointer;
         }
-    
+
         .star-rating input:checked ~ label,
         .star-rating label:hover,
         .star-rating label:hover ~ label {
             color: gold;
         }
-    
+
         .btn-feedback {
             border-radius: 10px;
             border: none;
@@ -248,13 +247,13 @@
             const modal = document.getElementById("myModal");
             const closeBtn = document.getElementsByClassName("close")[0];
             const printOptions = JSON.parse(sessionStorage.getItem("printOptions")); // Get print options
-    
+
             if (!printOptions) {
                 alert("Print options not found! Please start the process again.");
                 window.location.href = "/manual-display-upload";
                 return;
             }
-    
+
             if (totalPrice) {
                 paymentAmountElement.textContent = `₱${parseFloat(totalPrice).toFixed(2)}`;
             } else {
@@ -263,38 +262,38 @@
                 // Optionally, redirect back
                 // window.location.href = "/result";
             }
-    
+
             console.log("JavaScript file loaded!");
             console.log("DOMContentLoaded event fired!");
-    
+
             const socket = io.connect();
-    
+
             socket.on('connect', function() {
                 console.log('SocketIO connected to the server!');
             });
-    
+
             socket.on('disconnect', function() {
                 console.log('SocketIO disconnected from the server!');
             });
-    
+
             socket.on('connect_error', function(error) {
                 console.error('SocketIO connection error:', error);
             });
-    
+
             socket.on('connect_timeout', function(timeout) {
                 console.error('SocketIO connection timeout:', timeout);
             });
-    
+
             socket.on('payment_received', function(data) {
                 console.log("Received data:", data);
                 const receivedAmount = parseFloat(data.amount);
                 const expectedAmountStr = paymentAmountElement.textContent.replace('₱', '');
                 const expectedAmount = parseFloat(expectedAmountStr);
-    
+
                 console.log("paymentAmountElement.textContent:", paymentAmountElement.textContent);
                 console.log("Received Amount:", receivedAmount, typeof receivedAmount);
                 console.log("Expected Amount:", expectedAmount, typeof expectedAmount);
-    
+
                 if (receivedAmount === expectedAmount) {
                     console.log("Payment confirmed. Triggering print...");
                     fetch("/print_document", {
@@ -324,22 +323,60 @@
                     // (e.g., in a dedicated div)
                 }
             });
-    
+
+            // Function to stop GSM detection
+            function stopGsmDetection() {
+                fetch('/stop_gsm_detection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({}) // Send an empty body
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.error('Failed to stop GSM detection');
+                    } else {
+                        console.log('GSM detection stopped successfully.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error calling stop_gsm_detection:', error);
+                });
+            }
+
+            // Call stopGsmDetection when the page is about to be unloaded
+            window.addEventListener('beforeunload', stopGsmDetection);
+
+            // Also call stopGsmDetection when the cancel button is clicked
+            document.getElementById('cancelPayment').addEventListener('click', stopGsmDetection);
+
+
             // Close the modal when the close button is clicked
             closeBtn.onclick = function() {
                 modal.style.display = "none";
                 document.body.style.overflow = ""; // Enable scroll
                 window.location.href = "/index"; // Example: Redirect to the main page
+                stopGsmDetection(); // Stop GSM detection when modal is closed and redirecting
             }
-    
+
             // Close the modal if the user clicks outside of it
             window.onclick = function(event) {
                 if (event.target == modal) {
                     modal.style.display = "none";
                     document.body.style.overflow = ""; // Enable scroll
                     window.location.href = "/index"; // Example: Redirect to the main page
+                    stopGsmDetection(); // Stop GSM detection when modal is closed and redirecting
                 }
             }
+
+            // Add event listener to the "Back to Home Page" button in the modal
+            document.querySelector('.btn-homepage').addEventListener('click', function() {
+                modal.style.display = "none";
+                document.body.style.overflow = ""; // Enable scroll
+                window.location.href = "/index"; // Redirect to the main page
+                stopGsmDetection(); // Stop GSM detection when going back to homepage from modal
+            });
         });
     </script>
 </body>

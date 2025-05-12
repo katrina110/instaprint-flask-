@@ -57,10 +57,20 @@ last_updated_date = datetime.now().date()
 images = []  # Store images globally (consider refactoring)
 total_pages = 0  # Keep track of total pages.  May not be needed globally.
 selected_previews = []  # Store paths to selected preview images.  May not be needed globally.
-arduino = None
+arduino = None # This might still be used in the arduino_payment_page route, will keep for now.
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
-coin_detection_active = False # Flag to control coin detection
+coin_detection_active = False # Flag to control coin detection for COM6
+gsm_active = False # Flag to control GSM detection for COM15
+
+# Define COM ports and baud rate for both Arduinos
+COIN_SLOT_PORT = 'COM6'
+GSM_PORT = 'COM15'
+BAUD_RATE = 9600
+
+# Global variables to hold serial port objects
+coin_slot_serial = None
+gsm_serial = None
 
 
 # WebSocket Connection
@@ -159,7 +169,7 @@ def parse_page_selection(selection, total_pages):
 def highlight_bright_pixels(image, dark_threshold=50):
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
+
     # Create a mask for dark pixels (below threshold)
     dark_mask = gray < dark_threshold
 
@@ -419,11 +429,11 @@ def online_upload():
 def payment_page():
     global coin_detection_active
     coin_detection_active = True
-    # Start the arduino thread if it's not running.
-    global arduino_thread
-    if 'arduino_thread' not in globals() or not arduino_thread.is_alive():
-        arduino_thread = threading.Thread(target=read_serial_data_arduino, daemon=True)
-        arduino_thread.start()
+    # Start the coin slot thread if it's not running.
+    global coin_slot_thread
+    if 'coin_slot_thread' not in globals() or not coin_slot_thread.is_alive():
+        coin_slot_thread = threading.Thread(target=read_coin_slot_data, daemon=True)
+        coin_slot_thread.start()
         print("Arduino coin detection thread started.")
     else:
         print("Arduino coin detection thread is already running.")
@@ -542,7 +552,7 @@ def generate_preview():
     except Exception as e:
         print(f"Error generating preview: {e}")
         return jsonify({"error": f"Failed to generate preview: {str(e)}"}), 500
-    
+
 @app.route("/check_images", methods=["GET"])
 def check_images():
     global images
@@ -627,19 +637,6 @@ def preview_with_price():
 
 
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
-@app.route('/arduino-payment')
-def arduino_payment_page():
-    """Renders the payment page and initializes the Arduino connection."""
-    global arduino
-    if not arduino:
-        try:
-            arduino = serial.Serial('COM6', 9600, timeout=1)  # Use a constant for COM port
-            time.sleep(2)
-            print("Arduino successfully initialized.")
-        except Exception as e:
-            print(f"Failed to initialize Arduino: {e}")
-            return "Error: Could not connect to Arduino."  # Consistent error response
-    return render_template('payment.html')
 
 def calculate_canvas_size(page_size, orientation):
     sizes = {'A4': (2480, 3508), 'Short': (2480, 3200), 'Long': (2480, 4200)}
@@ -660,7 +657,6 @@ def fit_image_to_canvas(image, canvas_size):
     canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_image
     return canvas
 
-            
 def determine_orientation(image, user_orientation):
     if user_orientation.lower() != 'auto':
         return user_orientation.lower()
@@ -675,52 +671,133 @@ def fit_image_to_paper(image, target_size):
     return cv2.resize(image, (new_w, new_h))
 
 
-
-def read_serial_data_arduino():
+def read_coin_slot_data():
     """
-    Continuously reads data from the Arduino serial port, parses coin values,
-    and updates the total coin count.  Handles errors robustly.
+    Continuously reads data from the Arduino serial port (COM6) for coin detection,
+    parses coin values, and updates the total coin count. Handles errors robustly.
     """
-    global arduino, coin_value_sum
-    serial_port = 'COM6'  # Consider making this a constant
-    baud_rate = 9600
-    local_arduino = None #create a local arduino variable
+    global coin_value_sum, coin_slot_serial
+    # Ensure the serial port is open only once for this thread
+    if coin_slot_serial is None or not coin_slot_serial.is_open:
+        try:
+            coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+            print(f"Successfully opened serial port {COIN_SLOT_PORT} for Arduino coin detection.")
+            time.sleep(2) # Wait for the Arduino to reset
+        except serial.SerialException as e:
+            print(f"Error opening serial port {COIN_SLOT_PORT} for Arduino: {e}")
+            coin_slot_serial = None # Set to None to attempt reconnect later
+            time.sleep(5) # Wait before retrying
+            return # Exit the current function call, the background task will restart it
 
-    try:
-        local_arduino = serial.Serial(serial_port, baud_rate, timeout=1)
-        print(f"Successfully opened serial port {serial_port} for Arduino coin detection.")
-        while True:
-            if not coin_detection_active:
-                time.sleep(0.5) # Avoid busy waiting
-                continue
-            if local_arduino.in_waiting > 0:
+
+    while True:
+        if not coin_detection_active:
+            time.sleep(0.5) # Avoid busy waiting when detection is inactive
+            continue
+
+        if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting > 0:
+            try:
+                message = coin_slot_serial.readline().decode('utf-8').strip()
+                print(f"Received from Arduino (COM6): {message}")
+                if message.startswith("Detected coin worth ₱"):
+                    try:
+                        value = int(message.split("₱")[1])
+                        coin_value_sum += value
+                        print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
+                        socketio.emit('update_coin_count', {'count': coin_value_sum})
+                    except ValueError:
+                        print("Error: Could not parse coin value from COM6.")
+                elif message.startswith("Unknown coin"):
+                    print(f"Warning from COM6: {message}")
+            except UnicodeDecodeError:
+                print("Error decoding serial data from COM6.")
+            except serial.SerialException as e:
+                print(f"Serial error on {COIN_SLOT_PORT}: {e}")
+                if coin_slot_serial and coin_slot_serial.is_open:
+                    coin_slot_serial.close()
+                coin_slot_serial = None # Indicate need to reconnect
+                time.sleep(5) # Wait before attempting reconnect
+        elif coin_slot_serial is None or not coin_slot_serial.is_open:
+             # Attempt to reconnect if the port was closed
+             try:
+                 coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+                 print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
+                 time.sleep(2) # Wait for Arduino
+             except serial.SerialException as e:
+                 print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
+                 coin_slot_serial = None
+                 time.sleep(5) # Wait before next retry
+
+        time.sleep(0.1) # Short sleep to prevent excessive CPU usage
+
+
+def read_gsm_data():
+    """
+    Continuously reads data from the GSM module serial port (COM15)
+    and processes incoming SMS for payment detection. Handles errors robustly.
+    Only active when gsm_active flag is True.
+    """
+    global gsm_active, gsm_serial
+
+    while True:
+        if not gsm_active:
+            # If GSM is not active, close the serial port if open and sleep
+            if gsm_serial and gsm_serial.is_open:
                 try:
-                    message = local_arduino.readline().decode('utf-8').strip()
-                    print(f"Received from Arduino: {message}")
-                    if message.startswith("Detected coin worth ₱"):
-                        try:
-                            value = int(message.split("₱")[1])
-                            coin_value_sum += value
-                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
-                            socketio.emit('update_coin_count', {'count': coin_value_sum})
-                        except ValueError:
-                            print("Error: Could not parse coin value.")
-                    elif message.startswith("Unknown coin"):
-                        print(f"Warning: {message}")
-                except UnicodeDecodeError:
-                    print("Error decoding serial data from Arduino.")
-            time.sleep(0.1)
-    except serial.SerialException as e:
-        print(f"Error opening serial port {serial_port} for Arduino: {e}")
-    finally:
-        if local_arduino and local_arduino.is_open:
-            local_arduino.close()
-            print(f"Closed serial port {serial_port} for Arduino.")
+                    gsm_serial.close()
+                    print(f"Closed serial port {GSM_PORT} for GSM module.")
+                except Exception as e:
+                    print(f"Error closing serial port {GSM_PORT}: {e}")
+                gsm_serial = None # Ensure the variable is set to None
+            time.sleep(1) # Sleep longer when inactive
+            continue
 
+        # If GSM is active, ensure the serial port is open
+        if gsm_serial is None or not gsm_serial.is_open:
+            try:
+                gsm_serial = serial.Serial(GSM_PORT, BAUD_RATE, timeout=1)
+                print(f"Successfully opened serial port {GSM_PORT} for GSM module.")
+                time.sleep(2) # Wait for the module to initialize
+            except serial.SerialException as e:
+                print(f"Error opening serial port {GSM_PORT} for GSM module: {e}")
+                gsm_serial = None # Set to None to attempt reconnect later
+                time.sleep(5) # Wait before retrying
+                continue # Continue the outer while loop to check gsm_active again
+
+        # Read data if the port is open and active
+        if gsm_serial and gsm_serial.is_open and gsm_serial.in_waiting > 0:
+            try:
+                message = gsm_serial.readline().decode("utf-8").strip()
+                if message:
+                    print(f"Received from GSM (COM15): {message}")
+                    # --- Extract Payment Amount from the specific SMS format ---
+                    if "You have received PHP" in message and "via QRPH" in message:
+                        try:
+                            start_index = message.find("PHP") + 4
+                            end_index = message.find(" via QRPH")
+                            if start_index != -1 and end_index != -1 and end_index > start_index:
+                                amount_str = message[start_index:end_index].strip()
+                                extracted_amount = float(amount_str)
+                                print(f"Extracted amount from GSM: {extracted_amount}")
+                                socketio.emit("payment_received", {"amount": extracted_amount})
+                            else:
+                                print("Could not find amount delimiters in SMS from COM15.")
+                        except ValueError:
+                            print("Could not convert extracted amount to float from COM15.")
+            except UnicodeDecodeError:
+                print("Error decoding serial data from COM15.")
+            except serial.SerialException as e:
+                print(f"Serial error on {GSM_PORT}: {e}")
+                if gsm_serial and gsm_serial.is_open:
+                    gsm_serial.close()
+                gsm_serial = None # Indicate need to reconnect
+                time.sleep(5) # Wait before attempting reconnect
+
+        time.sleep(0.1) # Short sleep to prevent excessive CPU usage when active
 
 
 @app.route('/detect_coins')
-def start_coin_detection():
+def start_coin_detection_route():
     # This route is no longer needed as the coin detection runs in a background thread.
     return "Coin detection service is running in the background."
 
@@ -735,7 +812,21 @@ def get_coin_count():
 # GCASH PAYMENT
 @app.route('/gcash-payment')
 def gcash_payment():
+    """Renders the GCash payment page and activates GSM detection."""
+    global gsm_active
+    gsm_active = True
+    print("GSM detection activated for GCash payment.")
+    # The background task for GSM is started in __main__ and will now become active
     return render_template('gcash-payment.html')
+
+@app.route('/stop_gsm_detection', methods=['POST'])
+def stop_gsm_detection():
+    """Deactivates GSM detection."""
+    global gsm_active
+    gsm_active = False
+    print("GSM detection deactivated.")
+    return jsonify({"success": True, "message": "GSM detection stopped."})
+
 
 # START OF PRINT DOCUMENT
 @app.route('/print_document', methods=['POST'])
@@ -887,87 +978,23 @@ def monitor_printer_status(printer_name, upload_folder):
         time.sleep(1) # Check status every second
 
 
-def read_serial_data():
-    """
-    Continuously reads data from the serial port, extracts payment amounts from
-    received messages, and emits the amounts via a SocketIO event.
-    """
-    serial_port = 'COM6'  # Replace with your Arduino's serial port.  Use a constant.
-    baud_rate = 9600  # Define baud rate as a constant
-    ser = None
-
-    try:
-        ser = serial.Serial(
-            serial_port, baud_rate, timeout=1
-        )  # Open the serial port.
-        print(f"Successfully opened serial port {serial_port}")
-        while True:
-            if (
-                ser.in_waiting > 0
-            ):  # Check if there is data waiting to be read.  Non-blocking.
-                try:
-                    message = (
-                        ser.readline().decode("utf-8").strip()
-                    )  # Read and decode the data
-                    if message:
-                        print(f"Received from Arduino: {message}")
-                        # --- Extract Payment Amount from the specific SMS format ---
-                        if (
-                            "You have received PHP" in message
-                            and "via QRPH" in message
-                        ):
-                            try:
-                                start_index = (
-                                    message.find("PHP") + 4
-                                )  # Find the start of the amount
-                                end_index = message.find(
-                                    " via QRPH"
-                                )  # Find the end of the amount
-                                if (
-                                    start_index != -1
-                                    and end_index != -1
-                                    and end_index > start_index
-                                ):
-                                    amount_str = message[
-                                        start_index:end_index
-                                    ].strip()  # Extract the amount string
-                                    extracted_amount = float(
-                                        amount_str
-                                    )  # Convert to float
-                                    print(f"Extracted amount: {extracted_amount}")
-                                    socketio.emit(
-                                        "payment_received",
-                                        {"amount": extracted_amount},
-                                    )  # Emit the amount
-                                else:
-                                    print("Could not find amount delimiters in SMS.")
-                            except ValueError:
-                                print("Could not convert extracted amount to float.")
-                except UnicodeDecodeError:
-                    print("Error decoding serial data.")
-            time.sleep(
-                0.1
-            )  # Short sleep to prevent excessive CPU usage.  Adjust as needed.
-    except serial.SerialException as e:
-        print(f"Error opening serial port {serial_port}: {e}")
-    finally:
-        if (
-            ser and ser.is_open
-        ):  # Check if the serial port is open before closing.  Important.
-            ser.close()  # Close the serial port to release the resource.
-            print(f"Closed serial port {serial_port}")
-
-
-
 @app.route('/payment-success')
 def payment_success():
     """Renders the payment success page."""
+    # Consider stopping GSM detection here as well if the user goes directly from gcash-payment to payment-success
+    global gsm_active
+    gsm_active = False
+    print("GSM detection deactivated on payment success.")
     return render_template('payment-success.html')
 
 
 @app.route('/payment-type')
 def payment_type():
     """Renders the payment type selection page."""
+    # Consider stopping GSM detection here as well if the user navigates back
+    global gsm_active
+    gsm_active = False
+    print("GSM detection deactivated on payment type selection.")
     return render_template('payment-type.html')
 
 
@@ -979,11 +1006,17 @@ if __name__ == "__main__":
     # Path to the uploads folder (replace with your actual path)
     upload_folder = "uploads"
 
-    # Start the Arduino coin detection thread
-    socketio.start_background_task(read_serial_data_arduino)
+    # Start the Arduino coin detection thread (COM6)
+    # This thread runs continuously but only processes data when coin_detection_active is True
+    socketio.start_background_task(read_coin_slot_data)
+
+    # Start the GSM module thread (COM15)
+    # This thread runs continuously but only processes data when gsm_active is True
+    socketio.start_background_task(read_gsm_data)
 
     # Start the printer status monitoring thread in the same process
     socketio.start_background_task(monitor_printer_status, printer_name, upload_folder)
 
     # Start the Flask app
     socketio.run(app, debug=False)
+
