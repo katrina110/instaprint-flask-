@@ -95,6 +95,26 @@
  
      <script>
          var salesData = {{ data.sales_chart | tojson }};
+         const socket = io();
+
+        socket.on('new_transaction', function(data) {
+            // Update total sales
+            const totalSalesElement = document.querySelector('.card .amount');
+            let currentTotal = parseFloat(totalSalesElement.textContent.replace('₱', '')) || 0;
+            currentTotal += parseFloat(data.amount);
+            totalSalesElement.textContent = '₱' + currentTotal.toFixed(2);
+
+            // Add new transaction to the list
+            const transactionList = document.getElementById('transaction-list');
+            const newItem = document.createElement('li');
+            newItem.innerHTML = `<strong>${data.method}</strong> - ₱${data.amount}<br><small>${data.timestamp}</small>`;
+            transactionList.prepend(newItem);
+
+            // Limit to last 10 transactions
+            if (transactionList.children.length > 10) {
+                transactionList.removeChild(transactionList.lastChild);
+            }
+        });
      </script>
  
      <script src="./../static/js/main.js" rel="stylesheet"></script>
