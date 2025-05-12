@@ -27,7 +27,7 @@
       margin: 10px 0;
     }
     .modal {
-      display: none; /* Hidden by default */
+      display: none;
       position: fixed;
       z-index: 1000;
       left: 0;
@@ -66,6 +66,11 @@
       height: 40px;
       font-size: 16px;
       cursor: pointer;
+    }
+    .btn-cancel:disabled {
+      background-color: gray;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
     .star-rating {
       direction: rtl;
@@ -150,7 +155,7 @@
       const coinCountH3 = document.getElementById("coin-count");
       const coinCountSpan = coinCountH3.querySelector("span");
       const modal = document.getElementById("myModal");
-      const returnHomeBtn = document.getElementById("returnHomeBtn");
+      const cancelBtn = document.getElementById("cancelPayment");
       const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
       // Load total price from sessionStorage
@@ -167,40 +172,40 @@
         const value = parseInt(data.count) || 0;
         if (coinCountSpan) coinCountSpan.textContent = value;
 
-        // Removed the automatic print trigger
-         if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
-           fetch("/print_document", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify(printOptions),
-           })
-           .then((res) => res.json())
-           .then((data) => {
-             if (data.success) {
-               modal.style.display = "block";  // Display the first modal while printing
-               // socket.emit("reset_coin_count"); // Removed: Backend handles reset on printer idle
-             }
-             setTimeout(() => {
-               window.location.href = "/";  // Redirect to home page after 30 seconds
-             }, 30000); // 30 seconds
-           })
-           .catch((err) => console.error("Print error:", err));
-         }
+        // Disable Cancel button when coin is inserted
+        if (cancelBtn) {
+          cancelBtn.disabled = value > 0;
+        }
+
+        if (value >= parseFloat(priceValueElement.textContent) && printOptions) {
+          fetch("/print_document", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(printOptions),
+          })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.success) {
+              modal.style.display = "block";
+            }
+            setTimeout(() => {
+              window.location.href = "/";
+            }, 30000);
+          })
+          .catch((err) => console.error("Print error:", err));
+        }
       });
 
-      // WebSocket: Reset coin count display (Kept for robustness, but backend update_coin_count is primary)
       socket.on("coin_count_reset", () => {
         if (coinCountSpan) coinCountSpan.textContent = "0";
+        if (cancelBtn) cancelBtn.disabled = false;
       });
 
-      // Modal close handler for both modals
-      const closeModal = (modalElement) => {
-        modalElement.style.display = "none";
-        window.location.href = "/";
-      };
-
       document.querySelectorAll(".close").forEach((closeButton) => {
-        closeButton.onclick = () => closeModal(modal);
+        closeButton.onclick = () => {
+          modal.style.display = "none";
+          window.location.href = "/";
+        };
       });
     });
   </script>
