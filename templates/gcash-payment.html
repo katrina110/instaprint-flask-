@@ -10,10 +10,10 @@
 
     <style>
         body, html {
-        height: 100%;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
         }
         header.header {
             /* Existing header styles */
@@ -104,24 +104,21 @@
             margin-top: 15px; /* Add some space above the button */
             cursor: pointer;
         }
-    </style>
 
-<style>
-        /* Existing styles... */
-
-        /* The Modal (hidden by default) */
+        /* Modal styles from payment.html */
         .modal {
             display: none; /* Hidden by default */
             position: fixed;
-            z-index: 100;
+            z-index: 1000; /* Ensure it's on top */
             left: 0;
             top: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            overflow: auto;
             background-color: rgba(0,0,0,0.4);
+            /* Removed padding-top: 60px; to allow vertical centering */
 
-            /* Centering will be handled when displayed */
+            /* Added flex properties for centering */
             align-items: center;
             justify-content: center;
         }
@@ -131,59 +128,16 @@
             margin: auto; /* Center horizontally and vertically with flex */
             padding: 20px;
             border: 1px solid #888;
-            width: 80%;
-            max-width: 600px;
-            border-radius: 10px;
-            text-align: center;
+            width: 80%; /* Adjusted width for better responsiveness */
+            max-width: 600px; /* Max width for larger screens */
+            border-radius: 15px;
+            text-align: center; /* Center content inside modal */
         }
 
-        /* The Close Button */
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
+        /* Close button style is already defined above */
 
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
+        /* Star rating style is already defined above */
 
-        .star-rating {
-            direction: rtl;
-            display: inline-flex;
-            margin-bottom: 15px;
-        }
-
-        .star-rating input {
-            display: none;
-        }
-
-        .star-rating label {
-            font-size: 2rem;
-            color: #ddd;
-            cursor: pointer;
-        }
-
-        .star-rating input:checked ~ label,
-        .star-rating label:hover,
-        .star-rating label:hover ~ label {
-            color: gold;
-        }
-
-        .btn-feedback {
-            border-radius: 10px;
-            border: none;
-            background-color: #700000;
-            color: white;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 20px;
-        }
         .btn-homepage {
             border-radius: 1.50rem;
             border: none;
@@ -196,6 +150,14 @@
             font-weight: bold;
             font-size: 15px;
             filter: none; /* Default: no filter */
+        }
+
+         .amount {
+            font-size: 15px;
+            margin-top: 15px;
+            color: gray;
+            text-align: center;
+            opacity: 0.75;
         }
     </style>
 
@@ -212,7 +174,7 @@
             <h1>Waiting for Payment</h1>
             <p>The page will redirect whenever the payment is received.</p>
             <p><strong>NOTE:</strong> only send the exact amount to avoid inconveniences.</p>
-            <button class="btn-cancel" id="cancelPayment" onclick="window.history.back()"><strong>Cancel Payment</strong></button>
+            <button class="btn-cancel" id="cancelPayment"><strong>Cancel Payment</strong></button>
         </div>
         <div class="right-section">
             <img src="./../static/images/gcash-qr.png" alt="GCash QR Code" style="max-width: 400px; height: auto;">
@@ -220,35 +182,49 @@
     </main>
 
     <div id="myModal" class="modal">
-        <div class="modal-content">
-            <h1>Payment Received!</h1>
-            <br>
-            <h2>Thank you for using InstaPrint!</h2>
-            <br>
-            <p>Your document has been is now printing.<br>We appreciate your patronage and hope to see you again soon.</p>
-            <br>
-            <h3>Rate Your Experience:</h3>
-            <div class="star-rating">
-                <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
-                <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
-                <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
-                <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
-                <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
-            </div>
-            <br>
-            <button class="btn-homepage">Back to Home Page</button>
+      <div class="modal-content">
+        <h1>Payment Received!</h1>
+        <br>
+        <h2>Thank You for Using InstaPrint!</h2>
+        <br>
+        <p>Your document is now being processed and will start to print soon.</p>
+        <br>
+        <h3>Rate Your Experience:</h3>
+        <div class="star-rating">
+          <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
+          <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
+          <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
+          <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
+          <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+        </div>
+        <br>
+        <h4>Give Us Your Feedback</h4>
+        <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" alt="Feedback QR Code"/>
+        <p class="amount"><i>Redirecting to home page after 30 seconds.</i></p>
         </div>
     </div>
+
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const paymentAmountElement = document.getElementById("paymentAmount");
             const totalPrice = sessionStorage.getItem("totalPrice");
             const modal = document.getElementById("myModal");
-            const closeBtn = document.getElementsByClassName("close")[0];
+            // Using querySelector for the close button as there might be multiple elements with class 'close'
+            const closeBtn = modal.querySelector(".close");
             const printOptions = JSON.parse(sessionStorage.getItem("printOptions")); // Get print options
 
+            console.log("DOMContentLoaded fired.");
+            console.log("Total Price from sessionStorage:", totalPrice);
+            console.log("Print Options from sessionStorage:", printOptions);
+
+            // Ensure modal is hidden on page load
+            modal.style.display = "none";
+            console.log("Modal display set to none on load.");
+
+
             if (!printOptions) {
+                console.error("Print options not found in sessionStorage!");
                 alert("Print options not found! Please start the process again.");
                 window.location.href = "/manual-display-upload";
                 return;
@@ -256,10 +232,11 @@
 
             if (totalPrice) {
                 paymentAmountElement.textContent = `₱${parseFloat(totalPrice).toFixed(2)}`;
+                console.log("Displayed expected payment amount:", paymentAmountElement.textContent);
             } else {
                 paymentAmountElement.textContent = "₱0.00 (Price not found)";
                 console.error("Total price not found in sessionStorage.");
-                // Optionally, redirect back
+                // Optionally, redirect back or show a specific error state
                 // window.location.href = "/result";
             }
 
@@ -270,6 +247,17 @@
 
             socket.on('connect', function() {
                 console.log('SocketIO connected to the server!');
+                // Send payment details to backend upon connection
+                if (totalPrice && printOptions) {
+                     socket.emit('confirm_gcash_payment', {
+                         totalPrice: parseFloat(totalPrice),
+                         printOptions: printOptions
+                     });
+                     console.log("Emitted 'confirm_gcash_payment' event to backend.");
+                } else {
+                     console.error("Could not retrieve total price or print options for GCash payment. Cannot emit 'confirm_gcash_payment'.");
+                     // Handle this error, maybe display a message to the user
+                }
             });
 
             socket.on('disconnect', function() {
@@ -284,99 +272,108 @@
                 console.error('SocketIO connection timeout:', timeout);
             });
 
-            socket.on('payment_received', function(data) {
-                console.log("Received data:", data);
-                const receivedAmount = parseFloat(data.amount);
-                const expectedAmountStr = paymentAmountElement.textContent.replace('₱', '');
-                const expectedAmount = parseFloat(expectedAmountStr);
+             socket.on('gcash_payment_initiated', function(data) {
+                 console.log('GCash Payment Initiated Event:', data);
+                 if (!data.success) {
+                      console.error("Backend reported error initiating payment:", data.message);
+                      alert("Error initiating payment: " + data.message);
+                      // Decide on next steps, e.g., redirecting or showing an error state
+                 }
+             });
 
-                console.log("paymentAmountElement.textContent:", paymentAmountElement.textContent);
-                console.log("Received Amount:", receivedAmount, typeof receivedAmount);
-                console.log("Expected Amount:", expectedAmount, typeof expectedAmount);
 
-                if (receivedAmount === expectedAmount) {
-                    console.log("Payment confirmed. Triggering print...");
-                    fetch("/print_document", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(printOptions), // Send the print options
-                    })
-                    .then((response) => response.json())
-                    .then((responseData) => {
-                        if (responseData.success) {
-                            console.log("Print triggered successfully. Showing modal.");
-                            modal.style.display = "flex";
-                            document.body.style.overflow = "hidden"; // Disable scroll
-                            // Optionally, you might want to emit an event to the server
-                            // to acknowledge the successful print after GCash payment.
-                            // socket.emit('print_acknowledged');
-                        } else {
-                            console.error(`Error triggering print: ${responseData.error}`);
-                            // Optionally, display an error message to the user
-                            alert(`Error: ${responseData.error}`);
-                        }
-                    })
-                    .catch((error) => console.error("Error triggering print:", error));
+            // Listen for payment confirmation from the backend
+            socket.on('gcash_payment_success', function(data) {
+                console.log('GCash Payment Success Event:', data);
+                // Check if the payment was successful based on backend logic
+                if (data.success) {
+                    console.log("Payment confirmed and printing initiated by backend. Showing modal.");
+                    modal.style.display = "flex"; // Show the success modal
+                    document.body.style.overflow = "hidden"; // Disable scroll
+
+                    // Redirect to admin-user.html after 30 seconds
+                    setTimeout(() => {
+                         console.log("Redirecting to home page (/admin-user) after 30 seconds.");
+                         // Assuming the home page is the admin-user page rendered by the '/' route
+                         window.location.href = "/";
+                    }, 30000); // 30 seconds delay
                 } else {
-                    console.log("Payment amount mismatch.");
-                    // Optionally, display an error message to the user
-                    // (e.g., in a dedicated div)
+                    // Handle payment failure reported by the backend
+                    console.error(`GCash Payment Failed: ${data.message}`);
+                    alert(`Payment failed: ${data.message}`); // Show error message to user
+                    // Stay on the page or redirect to an error page
                 }
             });
 
+            socket.on('gcash_payment_failed', function(data) {
+                 console.error('GCash Payment Failed Event:', data);
+                 alert(data.message); // Show error message to user
+                 // Stay on the page or provide options
+            });
+
+
             // Function to stop GSM detection
             function stopGsmDetection() {
+                console.log("Attempting to stop GSM detection via fetch.");
                 fetch('/stop_gsm_detection', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({}) // Send an empty body
                 })
                 .then(response => {
                     if (!response.ok) {
-                        console.error('Failed to stop GSM detection');
+                        console.error('Failed to stop GSM detection. Status:', response.status);
                     } else {
-                        console.log('GSM detection stopped successfully.');
+                         response.json().then(data => {
+                            console.log('GSM detection stopped successfully:', data.message);
+                         }).catch(e => console.error("Error parsing stop_gsm_detection response:", e));
                     }
                 })
                 .catch(error => {
-                    console.error('Error calling stop_gsm_detection:', error);
+                    console.error('Error calling stop_gsm_detection fetch:', error);
                 });
             }
 
-            // Call stopGsmDetection when the page is about to be unloaded
-            window.addEventListener('beforeunload', stopGsmDetection);
-
             // Also call stopGsmDetection when the cancel button is clicked
-            document.getElementById('cancelPayment').addEventListener('click', stopGsmDetection);
+            document.getElementById('cancelPayment').addEventListener('click', function() {
+                console.log("Cancel Payment button clicked.");
+                stopGsmDetection(); // Stop GSM detection
+                // Then navigate back
+                window.history.back(); // Or window.location.href = '/payment-type';
+            });
 
 
             // Close the modal when the close button is clicked
-            closeBtn.onclick = function() {
-                modal.style.display = "none";
-                document.body.style.overflow = ""; // Enable scroll
-                window.location.href = "/index"; // Example: Redirect to the main page
-                stopGsmDetection(); // Stop GSM detection when modal is closed and redirecting
-            }
-
-            // Close the modal if the user clicks outside of it
-            window.onclick = function(event) {
-                if (event.target == modal) {
+            // Ensure closeBtn is found before adding event listener
+            if (closeBtn) {
+                closeBtn.onclick = function() {
+                    console.log("Modal close button clicked.");
                     modal.style.display = "none";
                     document.body.style.overflow = ""; // Enable scroll
-                    window.location.href = "/index"; // Example: Redirect to the main page
-                    stopGsmDetection(); // Stop GSM detection when modal is closed and redirecting
+                    // Redirect to the home page (admin-user.html)
+                    window.location.href = "/";
+                    // No need to call stopGsmDetection here, as it's handled by backend on success
                 }
             }
 
-            // Add event listener to the "Back to Home Page" button in the modal
-            document.querySelector('.btn-homepage').addEventListener('click', function() {
-                modal.style.display = "none";
-                document.body.style.overflow = ""; // Enable scroll
-                window.location.href = "/index"; // Redirect to the main page
-                stopGsmDetection(); // Stop GSM detection when going back to homepage from modal
+
+            // Important: Stop GSM detection when leaving the page for any reason other than successful payment
+            // This handles cases like closing the tab, navigating away, etc.
+            window.addEventListener('beforeunload', function(event) {
+                 console.log("Window beforeunload event fired.");
+                 // Check if payment was successful before stopping detection on unload
+                 // A more robust check might be needed depending on your application state management
+                 const paymentSuccessful = modal.style.display === "flex"; // Assuming modal is shown on success
+                 if (!paymentSuccessful) {
+                      console.log("Payment not marked as successful. Stopping GSM detection on unload.");
+                      stopGsmDetection();
+                 } else {
+                      console.log("Payment marked as successful. Not stopping GSM detection on unload.");
+                 }
+                 // Note: event.preventDefault() is often used with beforeunload to show a confirmation dialog.
+                 // We don't need that here, just ensure the fetch request is sent.
             });
+
         });
     </script>
 </body>

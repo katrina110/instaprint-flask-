@@ -26,6 +26,8 @@ import win32print
 import pywintypes
 import wmi
 import multiprocessing
+import json # Import json for parsing printOptions
+import re # Import regex for more robust parsing
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -72,6 +74,10 @@ BAUD_RATE = 9600
 coin_slot_serial = None
 gsm_serial = None
 
+# Global variables to store GCash payment details temporarily
+expected_gcash_amount = 0.0
+gcash_print_options = None
+
 
 # WebSocket Connection
 @socketio.on("connect")
@@ -83,10 +89,26 @@ def send_initial_coin_count():
     )  # Keep the log
     emit("update_coin_count", {"count": coin_value_sum})
 
-
 def update_coin_count(count):
     """Emits the updated coin count to all connected WebSocket clients."""
     socketio.emit("update_coin_count", {"count": count})
+
+# New SocketIO handler to receive GCash payment details from frontend
+@socketio.on("confirm_gcash_payment")
+def handle_confirm_gcash_payment(data):
+    """
+    Receives expected amount and print options for GCash payment.
+    GSM activation is now handled when the /gcash-payment route is accessed.
+    """
+    global expected_gcash_amount, gcash_print_options
+    try:
+        expected_gcash_amount = float(data.get('totalPrice', 0.0))
+        gcash_print_options = data.get('printOptions', None)
+        print(f"GCash payment details received via SocketIO. Expected amount: ₱{expected_gcash_amount}. Print options received: {'Yes' if gcash_print_options else 'No'}")
+        emit("gcash_payment_initiated", {"success": True, "message": "Waiting for payment confirmation via SMS."})
+    except Exception as e:
+        print(f"Error receiving GCash payment details via SocketIO: {e}")
+        emit("gcash_payment_initiated", {"success": False, "message": f"Error receiving payment details: {e}"})
 
 
 # Helper Functions
@@ -557,7 +579,6 @@ def check_images():
 
 
 
-
 @app.route('/preview_with_price', methods=['POST'])
 def preview_with_price():
     global images
@@ -723,6 +744,7 @@ def read_coin_slot_data():
                     coin_slot_serial.close()
                 coin_slot_serial = None # Indicate need to reconnect
                 time.sleep(5) # Wait before attempting reconnect
+
         elif coin_slot_serial is None or not coin_slot_serial.is_open:
              # Attempt to reconnect if the port was closed
              try:
@@ -743,8 +765,9 @@ def read_gsm_data():
     Continuously reads data from the GSM module serial port (COM15)
     and processes incoming SMS for payment detection. Handles errors robustly.
     Only active when gsm_active flag is True.
+    Triggers printing and deactivates GSM if the received amount matches the expected amount.
     """
-    global gsm_active, gsm_serial
+    global gsm_active, gsm_serial, expected_gcash_amount, gcash_print_options, images
 
     while True:
         if not gsm_active:
@@ -778,27 +801,60 @@ def read_gsm_data():
                 if message:
                     print(f"Received from GSM (COM15): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
-                    if "You have received PHP" in message and "via QRPH" in message:
+                    # Updated regex to match the new format "You received PHP X.XX via QRPH"
+                    match = re.search(r"You received PHP (\d+\.\d{2}) via QRPH", message)
+                    if match:
                         try:
-                            start_index = message.find("PHP") + 4
-                            end_index = message.find(" via QRPH")
-                            if start_index != -1 and end_index != -1 and end_index > start_index:
-                                amount_str = message[start_index:end_index].strip()
-                                extracted_amount = float(amount_str)
-                                print(f"Extracted amount from GSM: {extracted_amount}")
-                                socketio.emit("payment_received", {"amount": extracted_amount})
+                            extracted_amount = float(match.group(1))
+                            print(f"Successfully extracted amount from SMS: ₱{extracted_amount}")
+
+                            # Check if the extracted amount matches the expected amount
+                            if extracted_amount >= expected_gcash_amount and gcash_print_options:
+                                print("GCash payment amount matched. Triggering print.")
+                                # Trigger the printing process
+                                success = print_document_logic(gcash_print_options)
+
+                                if success:
+                                    print("Printing initiated successfully for GCash payment.")
+                                    # Emit success event to frontend
+                                    socketio.emit("gcash_payment_success", {"success": True, "message": "Payment confirmed and printing started."})
+                                else:
+                                     print("Failed to initiate printing for GCash payment.")
+                                     # Emit failure event to frontend
+                                     socketio.emit("gcash_payment_success", {"success": False, "message": "Payment confirmed, but printing failed."})
+
+
+                                # Deactivate GSM after successful payment and printing attempt
+                                gsm_active = False
+                                print("GSM detection deactivated after GCash payment.")
+                                # Reset stored GCash details
+                                expected_gcash_amount = 0.0
+                                gcash_print_options = None
+
                             else:
-                                print("Could not find amount delimiters in SMS from COM15.")
+                                print(f"Received amount ₱{extracted_amount} does not match expected amount ₱{expected_gcash_amount}.")
+                                # Optionally emit an event for incorrect amount received
+                                socketio.emit("gcash_payment_failed", {"success": False, "message": f"Received incorrect payment amount: ₱{extracted_amount}. Expected: ₱{expected_gcash_amount}"})
+
+
                         except ValueError:
-                            print("Could not convert extracted amount to float from COM15.")
+                            print("Error: Could not convert extracted amount to float from COM15.")
+                            socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
+                    else:
+                         print("Received SMS does not match expected payment format.")
+                         # Optionally emit an event for unexpected SMS format
+                         # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
+
             except UnicodeDecodeError:
                 print("Error decoding serial data from COM15.")
+                socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS."})
             except serial.SerialException as e:
                 print(f"Serial error on {GSM_PORT}: {e}")
                 if gsm_serial and gsm_serial.is_open:
                     gsm_serial.close()
                 gsm_serial = None # Indicate need to reconnect
                 time.sleep(5) # Wait before attempting reconnect
+                socketio.emit("gcash_payment_failed", {"success": False, "message": f"Serial communication error: {e}"})
 
         time.sleep(0.1) # Short sleep to prevent excessive CPU usage when active
 
@@ -819,11 +875,16 @@ def get_coin_count():
 # GCASH PAYMENT
 @app.route('/gcash-payment')
 def gcash_payment():
-    """Renders the GCash payment page and activates GSM detection."""
+    """
+    Renders the GCash payment page and activates GSM detection.
+    """
     global gsm_active
-    gsm_active = True
-    print("GSM detection activated for GCash payment.")
-    # The background task for GSM is started in __main__ and will now become active
+    gsm_active = True # Activate GSM detection when the page is accessed
+    print("GSM detection activated for GCash payment page.")
+    # Reset stored GCash details when accessing the page
+    global expected_gcash_amount, gcash_print_options
+    expected_gcash_amount = 0.0
+    gcash_print_options = None
     return render_template('gcash-payment.html')
 
 @app.route('/stop_gsm_detection', methods=['POST'])
@@ -831,39 +892,47 @@ def stop_gsm_detection():
     """Deactivates GSM detection."""
     global gsm_active
     gsm_active = False
-    print("GSM detection deactivated.")
+    print("GSM detection deactivated via /stop_gsm_detection route.")
+    # Reset stored GCash details on manual stop
+    global expected_gcash_amount, gcash_print_options
+    expected_gcash_amount = 0.0
+    gcash_print_options = None
     return jsonify({"success": True, "message": "GSM detection stopped."})
 
 
-# START OF PRINT DOCUMENT
-@app.route('/print_document', methods=['POST'])
-def print_document():
+# START OF PRINT DOCUMENT LOGIC (extracted from route)
+def print_document_logic(print_options):
+    """
+    Contains the core logic for generating a printable PDF and sending it to the printer.
+    This function can be called internally or via a route.
+    Returns True if printing is initiated, False otherwise.
+    """
     global images
     if not images:
-        return jsonify({"error": "No file uploaded or processed yet."}), 400
+        print("Error: No images available for printing.")
+        return False
 
     try:
-        data = request.json
-        if not data:
-            return jsonify({"error": "Invalid JSON payload."}), 400
+        # print_options is already a dictionary from the SocketIO event
+        # data = print_options # Use print_options directly
 
-        selection = data.get("pageSelection", "")
-        num_copies = int(data.get("numCopies", 1))
-        page_size = data.get("pageSize", "A4")
-        color_option = data.get("colorOption", "Color").lower()
+        selection = print_options.get("pageSelection", "")
+        num_copies = int(print_options.get("numCopies", 1))
+        page_size = print_options.get("pageSize", "A4")
+        color_option = print_options.get("colorOption", "Color").lower()
 
         selected_indexes = parse_page_selection(selection, len(images))
         if not selected_indexes:
-            return jsonify({"error": "Invalid page selection."}), 400
+            print("Error: Invalid page selection for printing.")
+            return False
 
         temp_previews = []
 
         for idx in selected_indexes:
             img = images[idx].copy()
 
-            # Ignore orientation for pricing; only used for preview fitting
-            orientation = data.get("orientationOption") or "auto"
-            orientation = determine_orientation(img, orientation)  # Correct variable
+            orientation = print_options.get("orientationOption") or "auto"
+            orientation = determine_orientation(img, orientation)
             canvas_size = calculate_canvas_size(page_size, orientation)
             processed_img = fit_image_to_canvas(img, canvas_size)
 
@@ -871,44 +940,103 @@ def print_document():
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
 
+            # Generate temporary images for the PDF creation
             for copy_idx in range(num_copies):
-                filename = f"print_preview_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
-                path = os.path.join(app.config['STATIC_FOLDER'], filename)
+                filename = f"printable_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
+                path = os.path.join(app.config['STATIC_FOLDER'], filename) # Use STATIC_FOLDER for temporary files
                 cv2.imwrite(path, processed_img)
                 temp_previews.append(path)
 
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], "printable_preview.pdf")
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], "printable_document.pdf") # Save PDF in UPLOAD_FOLDER
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
 
         for preview_path in temp_previews:
             if not os.path.exists(preview_path):
                 continue
-            img = cv2.imread(preview_path)
-            height, width, _ = img.shape
-            aspect_ratio = width / height
-            page_width = 210
-            page_height = page_width / aspect_ratio
-            pdf.add_page()
-            pdf.image(preview_path, x=10, y=10, w=page_width, h=page_height)
+            try:
+                # Get image dimensions to determine PDF page size
+                img_temp = cv2.imread(preview_path)
+                if img_temp is None:
+                    print(f"Error: Could not read temporary image file {preview_path}")
+                    continue
+
+                height, width, _ = img_temp.shape
+                aspect_ratio = width / height
+
+                # FPDF default unit is millimeters. A4 is 210x297 mm.
+                # We can set custom page size based on image aspect ratio and selected paper size
+                # For simplicity, let's assume we fit the image to the width of a standard PDF page size
+                # and adjust height accordingly. Using A4 dimensions as a base.
+                pdf_width = 210 # mm
+                pdf_height = pdf_width / aspect_ratio
+
+                # If the calculated height is too large for a standard page, adjust
+                max_pdf_height = 297 # A4 height in mm
+                if pdf_height > max_pdf_height:
+                    pdf_height = max_pdf_height
+                    pdf_width = pdf_height * aspect_ratio # Adjust width to maintain aspect ratio
+
+                pdf.add_page()
+                # Add image to PDF, positioned at top-left with calculated dimensions
+                pdf.image(preview_path, x=0, y=0, w=pdf_width, h=pdf_height)
+            except Exception as img_e:
+                 print(f"Error adding image {preview_path} to PDF: {img_e}")
+                 continue # Continue with the next image
 
         pdf.output(pdf_path)
+
+        # Clean up temporary image files
+        for preview_path in temp_previews:
+            if os.path.exists(preview_path):
+                try:
+                    os.remove(preview_path)
+                except Exception as clean_e:
+                    print(f"Error cleaning up temporary file {preview_path}: {clean_e}")
+
 
         if os.name == 'nt':
             import win32print
             import win32api
             printer_name = win32print.GetDefaultPrinter()
+            # Use ShellExecute with "print" verb to print the PDF
+            # The last parameter (0) means show the window minimized, but for print it often means no window
+            print(f"Attempting to print PDF: {pdf_path} to printer: {printer_name}")
             win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
+            print("ShellExecute called.")
         else:
+            # For Linux/macOS using lp command
+            print(f"Attempting to print PDF: {pdf_path} using lp command.")
             os.system(f'lp "{pdf_path}"')
+            print("lp command executed.")
 
-        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
+
+        print(f"Print process initiated for PDF: {pdf_path}")
+        return True # Indicate printing was initiated
 
     except Exception as e:
-        print(f"Error printing document: {e}")
-        return jsonify({"error": f"Failed to print document: {e}"}), 500
+        print(f"Error in print_document_logic: {e}")
+        return False # Indicate printing failed
 
 
+# END OF PRINT DOCUMENT LOGIC
+
+
+# The print_document route now calls the print_document_logic function
+@app.route('/print_document', methods=['POST'])
+def print_document_route():
+    """Handles print requests received via HTTP POST."""
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON payload."}), 400
+
+    print("Received print request via /print_document route.")
+    success = print_document_logic(data)
+
+    if success:
+        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
+    else:
+        return jsonify({"error": "Failed to print document."}), 500
 
 
 # Update result route to display both previews and segmentation
@@ -996,6 +1124,10 @@ def payment_success():
     gsm_active = False
     coin_detection_active = False
     print("GSM and Coin detection deactivated on payment success.")
+    # Reset stored GCash details on payment success
+    global expected_gcash_amount, gcash_print_options
+    expected_gcash_amount = 0.0
+    gcash_print_options = None
     return render_template('payment-success.html')
 
 
@@ -1007,6 +1139,10 @@ def payment_type():
     gsm_active = False
     coin_detection_active = False
     print("GSM and Coin detection deactivated on payment type selection.")
+    # Reset stored GCash details on navigating back
+    global expected_gcash_amount, gcash_print_options
+    expected_gcash_amount = 0.0
+    gcash_print_options = None
     return render_template('payment-type.html')
 
 
@@ -1031,3 +1167,4 @@ if __name__ == "__main__":
 
     # Start the Flask app
     socketio.run(app, debug=False)
+
