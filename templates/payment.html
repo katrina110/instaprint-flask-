@@ -127,7 +127,7 @@
     <h3>Total Price: ₱<span id="priceValue">0.00</span></h3>
     <h3>Coins Inserted:</h3>
     <h3 id="coin-count" style="font-size: 80px;">₱<span style="font-size: 80px;">0</span></h3>
-    <button class="btn-cancel" id="cancelPayment" onclick="window.history.back()">Cancel Payment</button>
+    <button class="btn-cancel" id="cancelPayment">Cancel Payment</button>
 
     <div id="myModal" class="modal">
       <div class="modal-content">
@@ -155,7 +155,7 @@
       const coinCountH3 = document.getElementById("coin-count");
       const coinCountSpan = coinCountH3.querySelector("span");
       const modal = document.getElementById("myModal");
-      const cancelBtn = document.getElementById("cancelPayment");
+      const cancelBtn = document.getElementById("cancelPayment"); // Get the cancel button element
       const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
       // Load total price from sessionStorage
@@ -207,6 +207,30 @@
           window.location.href = "/";
         };
       });
+
+      // Add event listener to the Cancel Payment button
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+            // Send a POST request to the stop_coin_detection route
+            fetch('/stop_coin_detection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Coin detection stopped:', data.message);
+                // After successfully stopping detection, navigate back or to another page
+                window.history.back(); // Or window.location.href = '/some_other_page';
+            })
+            .catch(error => {
+                console.error('Error stopping coin detection:', error);
+                // Still navigate back even if there's an error, to avoid getting stuck
+                window.history.back(); // Or window.location.href = '/some_other_page';
+            });
+        });
+      }
     });
   </script>
 </body>
