@@ -372,6 +372,11 @@ def admin_user():
 def admin_dashboard():
     transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
     total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    
+    # Count by method
+    gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
+    coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+
     data = {
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
@@ -386,6 +391,10 @@ def admin_dashboard():
             } for t in transactions
         ],
         "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
+        "transaction_method_summary": {
+            "gcash": round(gcash_total, 2),
+            "coinslot": round(coinslot_total, 2)
+        }
     }
     return render_template("admin-dashboard.html", data=data)
 
