@@ -148,6 +148,10 @@
     flex: 1;
 }
 
+.chart-box:hover {
+    background-color: #e9ecef;
+}
+
 /* Files Upload */
 
 h1 {
@@ -199,20 +203,6 @@ h1 {
   width: 12%;
   font-weight: 500;
   text-align: center;
-}
-
-.floating-window {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 300px;
-    max-height: 400px;
-    overflow-y: auto;
-    background-color: #fff;
-    border: 1px solid #ccc;
-    padding: 15px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    z-index: 1000;
 }
 
 
