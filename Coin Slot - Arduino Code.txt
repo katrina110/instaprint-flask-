@@ -96,3 +96,155 @@ int getCoinValue(int pulseCount) {
     default: return 0;
   }
 }
+
+
+
+coinhopper/coinSlotPinconst int coinSlotPin = 2;
+const int hopperSensorPin = 3;
+const int ssrPin = 8;
+
+volatile int pulseCount = 0;
+unsigned long lastPulseTime = 0;
+const unsigned long pulseTimeout = 800; // Time to end a burst
+const unsigned long pulseBufferTime = 500; // Buffer time to wait for consecutive pulses to finish
+const unsigned long debounceDelay = 100; // Debounce delay for pulse handling
+bool coinReady = false;
+
+int payment = 0;
+int price = 0;
+
+String inputString = "";
+bool inputComplete = false;
+
+enum State { WAITING_FOR_PRICE, ACCEPTING_PAYMENT };
+volatile State currentState = WAITING_FOR_PRICE;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(coinSlotPin, INPUT_PULLUP);
+  pinMode(hopperSensorPin, INPUT_PULLUP);
+  pinMode(ssrPin, OUTPUT);
+  digitalWrite(ssrPin, HIGH);
+
+  attachInterrupt(digitalPinToInterrupt(coinSlotPin), pulseISR, FALLING);
+  Serial.println("Enter price (in pesos):");
+}
+
+void loop() {
+  readSerialInput();
+
+  // Wait for a burst of pulses to finish
+  if (pulseCount > 0 && millis() - lastPulseTime > pulseTimeout && currentState == ACCEPTING_PAYMENT) {
+    unsigned long pulseEndTime = millis();
+
+    // We wait for the buffer time to ensure we are capturing all pulses from the coin
+    if (pulseEndTime - lastPulseTime >= pulseBufferTime) {
+      int coinValue = getCoinValue(pulseCount);
+      if (coinValue > 0) {
+        payment += coinValue;
+        Serial.print("Detected coin worth ₱");
+        Serial.print(coinValue);
+        Serial.print(". Total payment: ₱");
+        Serial.println(payment);
+      } else {
+        Serial.print("Unknown coin (");
+        Serial.print(pulseCount);
+        Serial.println(" pulses). Ignored.");
+      }
+      pulseCount = 0;
+
+      // Check if enough payment received
+      if (payment >= price) {
+        int change = payment - price;
+        Serial.print("Payment complete. Change to dispense: ₱");
+        Serial.println(change);
+
+        if (change > 0) dispenseChange(change);
+        else Serial.println("Exact payment.");
+
+        payment = 0;
+        currentState = WAITING_FOR_PRICE;
+        Serial.println("Enter price (in pesos):");
+      }
+    }
+  }
+}
+
+// ISR: count pulses with debounce
+void pulseISR() {
+  static unsigned long lastInterruptTime = 0; // Time of last pulse interrupt
+
+  unsigned long currentTime = millis();
+  if (currentTime - lastInterruptTime > debounceDelay) { // Debounce to avoid multiple counts for a single pulse
+    lastInterruptTime = currentTime;
+    if (currentState == ACCEPTING_PAYMENT) {
+      pulseCount++; // Increment the pulse count
+      lastPulseTime = currentTime; // Record the time when pulse was detected
+    }
+  }
+}
+
+// Serial input handler
+void readSerialInput() {
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    if (inChar == '\n' || inChar == '\r') inputComplete = true;
+    else inputString += inChar;
+  }
+
+  if (inputComplete) {
+    int value = inputString.toInt();
+    if (value > 0) {
+      price = value;
+      payment = 0;
+      pulseCount = 0;
+      currentState = ACCEPTING_PAYMENT;
+      Serial.print("Price set: ₱");
+      Serial.println(price);
+      Serial.println("Insert coin(s)...");
+
+    } else {
+      Serial.println("Invalid price. Try again:");
+    }
+
+    inputString = "";
+    inputComplete = false;
+  }
+}
+
+// Hopper change dispensing logic
+void dispenseChange(int amount) {
+  int coinsDispensed = 0;
+  bool lastState = digitalRead(hopperSensorPin);
+  digitalWrite(ssrPin, LOW);
+  Serial.println("Dispensing change...");
+
+  unsigned long startTime = millis();
+
+  while (coinsDispensed < amount && millis() - startTime < amount * 3000) {
+    bool state = digitalRead(hopperSensorPin);
+    if (state != lastState) {
+      lastState = state;
+      if (state == LOW) {
+        coinsDispensed++;
+        Serial.print("Dispensed ₱1 - total: ");
+        Serial.println(coinsDispensed);
+      }
+      delay(50); // debounce
+    }
+  }
+
+  digitalWrite(ssrPin, HIGH);
+  Serial.println("Change dispensing done.");
+}
+
+// Map pulse count to coin value
+int getCoinValue(int pulseCount) {
+  switch (pulseCount) {
+    case 20: return 20;  // Example: 20 peso coin sends 5 pulses
+    case 1: return 1;
+    case 5: return 5;
+    case 10: return 10;
+    default: return 0;  // Unknown coin
+  }
+}
