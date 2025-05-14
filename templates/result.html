@@ -72,6 +72,50 @@
         border-color: #007bff;
         background-color: rgba(0, 123, 255, 0.1);
       }
+      #printDetails {
+            max-width: 100%;
+            margin: 0 auto;
+            box-sizing: border-box;  /* Ensures padding and border don't affect the size */
+            word-wrap: break-word;   /* Prevents text from overflowing */
+            overflow-wrap: break-word;  /* Ensures long words wrap properly */
+        }
+        h3 {
+            text-align: center;
+            color: #333;
+            font-size: 1.5rem;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #555;
+            word-wrap: break-word;  /* Prevents long text from overflowing */
+        }
+        li strong {
+            font-weight: bold;
+        }
+
+        /* Responsive design */
+        @media (max-width: 600px) {
+            li {
+                font-size: 0.9rem; /* Smaller text on small screens */
+            }
+            h3 {
+                font-size: 1.2rem;
+            }
+        }
+        
+        @media (max-width: 400px) {
+            li {
+                font-size: 0.8rem; /* Even smaller text on very small screens */
+            }
+            h3 {
+                font-size: 1rem;
+            }
+        }
     </style>
   </head>
   <body>
