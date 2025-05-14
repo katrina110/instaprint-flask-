@@ -8,6 +8,9 @@
   .container {
     display: flex;
     min-height: 100vh;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
     
   .menu {
