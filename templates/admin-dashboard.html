@@ -64,8 +64,15 @@
             </div>
  
              <div class="charts">
-                <div class="chart-box" style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#transactionModal">
+                <div class="chart-box position-relative" style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#transactionModal">
                     <h3>Transaction History</h3>
+
+                    <!-- Top-right circular icon button -->
+                    <button type="button" class="btn btn-light rounded-circle position-absolute top-0 end-0 m-2"
+                            data-bs-toggle="modal" data-bs-target="#transactionModal" title="View All">
+                        <i class="fas fa-arrow-up-right-from-square"></i>
+                    </button>
+
                     {% for transaction in data.sales_history %}
                     <div class="transaction">
                         <span>{{ transaction.method }}</span>
@@ -73,7 +80,6 @@
                         <small>{{ transaction.date }} - {{ transaction.time }}</small>
                     </div>
                     {% endfor %}
-                    <p class="text-muted"><small>Click to view all</small></p>
                 </div>
  
                  <div class="chart-box">

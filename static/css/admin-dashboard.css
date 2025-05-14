@@ -148,8 +148,13 @@
     flex: 1;
 }
 
-.chart-box:hover {
-    background-color: #e9ecef;
+.chart-box .btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
 }
 
 /* Files Upload */
