@@ -28,6 +28,7 @@ import wmi
 import multiprocessing
 import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
+import math
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -577,9 +578,7 @@ def check_images():
     # If images are available but previews aren't generated yet, allow to proceed
     return jsonify({"imagesAvailable": bool(images)})
 
-
-
-@app.route('/preview_with_price', methods=['POST'])
+@app.route("/preview_with_price", methods=["POST"])
 def preview_with_price():
     global images
     if not images:
@@ -642,16 +641,15 @@ def preview_with_price():
             "highlighted": f"/uploads/{highlighted_filename}"  # 👈 ADD THIS!
         })
 
+    # Round the total price up to the nearest whole number
+    total_price = math.ceil(total_price)
 
     return jsonify({
-    "totalPrice": round(total_price, 2),
-    "pagePrices": page_prices,
-    "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices],
-    "totalPages": len(images)    # <<< add this
+        "totalPrice": total_price,
+        "pagePrices": page_prices,
+        "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices],
+        "totalPages": len(images)    # <<< add this
     })
-
-
-
 
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
 
