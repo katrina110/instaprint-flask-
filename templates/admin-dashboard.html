@@ -65,7 +65,7 @@
  
              <div class="charts">
                 <div class="chart-box position-relative" style="cursor:pointer;" data-bs-toggle="modal" data-bs-target="#transactionModal">
-                    <h3>Transaction History</h3>
+                    <div class="card-label">Transaction History</div>
 
                     <!-- Top-right circular icon button -->
                     <button type="button" class="btn btn-light rounded-circle position-absolute top-0 end-0 m-2"
@@ -73,11 +73,11 @@
                         <i class="fas fa-arrow-up-right-from-square"></i>
                     </button>
 
-                    <canvas id="transactionMethodChart" height="150"></canvas>
+                    <canvas id="transactionMethodChart"></canvas>
                 </div>
  
-                 <div class="chart-box">
-                     <h3>Sales in Year</h3>
+                 <div class="sales-box">
+                     <div class="card-label">Sales in Year</div>
                      <canvas id="salesChart"></canvas>
                  </div>
              </div>
@@ -114,26 +114,60 @@
          const transactionMethodData = {{ data.transaction_method_summary | tojson }};
          
          const ctx = document.getElementById('transactionMethodChart').getContext('2d');
+         
          const transactionMethodChart = new Chart(ctx, {
             type: 'pie',
             data: {
                 labels: ['GCash', 'Coinslot'],
                 datasets: [{
-                    label: 'Transactions by Method',
+                    label: 'Transaction Method',
                     data: [transactionMethodData.gcash, transactionMethodData.coinslot],
-                    backgroundColor: ['#36A2EB', '#FFCD56'],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.7)',   // GCash: Blue
+                        'rgba(255, 205, 86, 0.7)'    // Coinslot: Yellow
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 205, 86, 1)'
+                        ],
+                        borderWidth: 1,
+                    }]
+                },
+                
+                options: {
+                    responsive: true,
+                    layout: {
+                        padding: {
+                            top: 10,
+                            bottom: 10
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 20,
+                                padding: 15,
+                                font: {
+                                    size: 14,
+                                    family: 'Arial'
+                                },
+                                color: '#333',
+                                padding: 20 // Space between chart and legend
+                            }
+                        },
+                        
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed;
+                                    return `${context.label}: ₱${value.toFixed(2)}`;
+                                }
+                            }
+                        },
                     }
                 }
-            }
-        });
+            });
 
         socket.on('new_transaction', function(data) {
             // Update total sales

@@ -148,7 +148,9 @@
     color: black;
     padding: 20px;
     border-radius: 8px;
-    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .chart-box .btn {
@@ -158,6 +160,24 @@
     align-items: center;
     justify-content: center;
     font-size: 14px;
+}
+
+.chart-box .card-label {
+  margin-bottom: 10px; /* Adjust this value to control spacing under the title */
+}
+
+.sales-box {
+    background: white;
+    color: black;
+    padding: 20px;
+    border-radius: 8px;
+    flex: 1.3; /* Make it take up more space than the sales chart */
+}
+
+#transactionMethodChart {
+    width: 250px !important;
+    height: 250px !important;
+      margin-bottom: 10px; /* Space between pie chart and legend */
 }
 
 /* Files Upload */
