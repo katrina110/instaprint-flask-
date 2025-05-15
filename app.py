@@ -22,6 +22,8 @@ from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
+from flask_sqlalchemy import SQLAlchemy
+
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 import pywintypes
 import wmi
@@ -30,8 +32,36 @@ import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
 import math
 
+
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
+    amount = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # For total sales tracking
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    # Emit the new transaction to update the dashboard in real-time
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+with app.app_context():
+    db.create_all()  # ensures tables are created before first use
+
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -565,20 +595,44 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    # Example data, replace with actual data retrieval logic
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
+    total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    
+    # Count by method
+    gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
+    coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+
     data = {
-        "total_sales": 5000, # Example total sales
-        "printed_pages": printed_pages_today, # Global counter for pages printed today
-        "files_uploaded": files_uploaded_today, # Global counter for files uploaded today
-        "current_balance": 3000, # Example current balance
-        "sales_history": [ # Example sales history data
-            {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
-            {"method": "PayMaya", "amount": 250, "date": "2024-03-29", "time": "11:30"},
+        "total_sales": total_sales,
+        "printed_pages": printed_pages_today,
+        "files_uploaded": files_uploaded_today,
+        "current_balance": 3000,
+        "sales_history": [
+            {
+                "method": t.method,
+                "amount": t.amount,
+                "date": t.timestamp.strftime('%Y-%m-%d'),
+                "time": t.timestamp.strftime('%H:%M:%S')
+            } for t in transactions
         ],
         "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
+        "transaction_method_summary": {
+            "gcash": round(gcash_total, 2),
+            "coinslot": round(coinslot_total, 2)
+        }
     }
     return render_template("admin-dashboard.html", data=data)
 
+# For testing purposes
+#@app.route('/test-transaction/<method>/<amount>')
+#def test_transaction(method, amount):
+#    try:
+#        record_transaction(method, float(amount))
+#        return f"Test transaction recorded: {method} - {amount}"
+#    except Exception as e:
+#        return f"Error: {str(e)}"
+    
+# End of testing
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
