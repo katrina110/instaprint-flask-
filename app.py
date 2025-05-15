@@ -1151,6 +1151,30 @@ def monitor_printer_status(printer_name, upload_folder):
 
         last_status = current_status
         time.sleep(1) # Check status every second
+        
+def serial_listener():
+    global coin_slot_serial
+    while True:
+        if coin_slot_serial and coin_slot_serial.in_waiting:
+            line = coin_slot_serial.readline().decode().strip()
+            # Arduino sends: COIN:<n>, PRINTING, CHANGE:<n>
+            if line.startswith("COIN:"):
+                total = int(line.split(":",1)[1])
+                # **LOG IT** to your Flask terminal:
+                print(f"[Arduino] Coin update → total inserted: ₱{total}")
+                # then emit to browser
+                socketio.emit("coin_update", {"total": total})
+
+            elif line == "PRINTING":
+                print("[Arduino] Printing triggered")
+                socketio.emit("printer_status", {"status": "Printing"})
+
+            elif line.startswith("CHANGE:"):
+                amt = int(line.split(":",1)[1])
+                print(f"[Arduino] Dispensed change: ₱{amt}")
+                socketio.emit("change_dispensed", {"amount": amt})
+
+        time.sleep(0.05)
 
 
 @app.route('/payment-success')

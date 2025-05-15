@@ -10,31 +10,37 @@
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const socket = io();
-      const priceEl    = document.getElementById("priceValue");
-      const coinEl     = document.getElementById("coinCount");
-      const statusEl   = document.getElementById("printerStatus");
-      const totalPrice = parseInt(sessionStorage.getItem("totalPrice"), 10);
 
+      const priceEl      = document.getElementById("priceValue");
+      const coinCountEl  = document.querySelector("#coin-count span");
+      const statusEl     = document.getElementById("printerStatus");
+
+      // Load the total from sessionStorage (or however you set it)
+      const rawPrice = sessionStorage.getItem("totalPrice");
+      const totalPrice = rawPrice ? parseInt(rawPrice, 10) : 0;
       priceEl.textContent = totalPrice.toFixed(2);
 
-      // 1) Tell Flask/Arduino the price
+      // Send price to Flask → Arduino
       fetch("/set_price", {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({price: totalPrice})
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price: totalPrice })
       });
 
-      // 2) Listen for coin updates & printer events
+      // **Real-time coin updates** from your Flask server
       socket.on("coin_update", data => {
-        coinEl.textContent = data.total;
+        // data.total is a number, e.g. 5, 10, etc.
+        coinCountEl.textContent = data.total.toFixed(2);
       });
 
+      // Printer status updates
       socket.on("printer_status", data => {
         statusEl.textContent = data.status;
       });
 
+      // Change-dispensed updates
       socket.on("change_dispensed", data => {
-        statusEl.textContent = `Printing… returning ₱${data.amount} change`;
+        statusEl.textContent = `Printing… returning ₱${data.amount}`;
       });
     });
   </script>
