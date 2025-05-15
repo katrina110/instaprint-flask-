@@ -1198,140 +1198,48 @@ def stop_gsm_detection():
     return jsonify({"success": True, "message": "GSM detection stopped."})
 
 
+
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
 def print_document_logic(print_options):
     """
-    Contains the core logic for generating a printable PDF and sending it to the printer.
-    This function can be called internally or via a route.
-    Returns True if printing is initiated, False otherwise.
+    Print the original uploaded file directly without creating a PDF from images.
+    Returns True if printing initiated, False otherwise.
     """
-    global images
-    if not images:
-        print("Error: No images available for printing.")
-        return False
-
     try:
-        # print_options is already a dictionary from the SocketIO event or POST request
-        selection = print_options.get("pageSelection", "")
-        num_copies = int(print_options.get("numCopies", 1))
-        page_size = print_options.get("pageSize", "A4")
-        color_option = print_options.get("colorOption", "Color").lower()
-        orientation_option = print_options.get("orientationOption", "auto") # Get orientation option
-
-        selected_indexes = parse_page_selection(selection, len(images))
-        if not selected_indexes:
-            print("Error: Invalid page selection for printing.")
+        # The original filename must be passed in print_options under "fileName"
+        filename = print_options.get("fileName")
+        if not filename:
+            print("Error: No filename provided in print options.")
             return False
 
-        pdf = FPDF()
-        # Disable automatic page break to manually control page additions and image placement
-        pdf.set_auto_page_break(auto=False, margin=0) # Set margin to 0 for full page image
+        # Construct full path to the uploaded file
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(file_path):
+            print(f"Error: File not found: {file_path}")
+            return False
 
-        for idx in selected_indexes:
-            if idx < 0 or idx >= len(images):
-                 print(f"Warning: Skipping invalid page index {idx} for printing.")
-                 continue # Skip invalid index
-
-            img = images[idx].copy() # Work on a copy
-
-            # Determine orientation for this specific page
-            current_orientation = determine_orientation(img, orientation_option)
-
-            # Calculate the target size for the image on the PDF page in millimeters
-            # FPDF uses millimeters as the default unit.
-            # Standard PDF sizes in mm (approx): A4 (210x297), Short (215.9x279.4), Long (215.9x355.6)
-            # Let's use these standard sizes for the PDF pages.
-            pdf_page_sizes_mm = {
-                'A4': (210, 297),
-                'Short': (215.9, 279.4),
-                'Long': (215.9, 355.6)
-            }
-            # Get the base dimensions for the selected paper size in mm
-            base_w_mm, base_h_mm = pdf_page_sizes_mm.get(page_size, pdf_page_sizes_mm['A4']) # Default to A4
-
-            # Determine the PDF page dimensions based on the determined image orientation
-            pdf_w_mm, pdf_h_mm = (max(base_w_mm, base_h_mm), min(base_w_mm, base_h_mm)) if current_orientation == 'landscape' else (min(base_w_mm, base_h_mm), max(base_w_mm, base_h_mm))
-
-            # Add a new page to the PDF with the calculated dimensions and orientation
-            pdf.add_page(orientation='L' if current_orientation == 'landscape' else 'P', format=(pdf_w_mm, pdf_h_mm))
-
-            # Apply grayscale conversion if selected
-            if color_option == 'grayscale':
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) # Convert back to BGR for encoding
-
-            # Convert the OpenCV image (numpy array) to a format FPDF can use (e.g., JPEG in memory)
-            is_success, buffer = cv2.imencode(".jpg", img)
-            if not is_success:
-                print(f"Error encoding image for page {idx+1} to JPEG.")
-                continue # Skip this page if encoding fails
-
-            # Use BytesIO to handle the image in memory
-            img_io = BytesIO(buffer)
-
-            # Add the image to the PDF page, fitting it to the page dimensions
-            # x=0, y=0 places the image at the top-left corner
-            # w=pdf_w_mm, h=pdf_h_mm makes the image fill the entire page
-            pdf.image(img_io, x=0, y=0, w=pdf_w_mm, h=pdf_h_mm, type='JPEG')
-
-            # Close the BytesIO object
-            img_io.close()
-
-
-        # Create a unique filename for the printable PDF
-        pdf_filename = f"printable_document_{int(time.time())}.pdf"
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename) # Save PDF in UPLOAD_FOLDER
-
-        # Output the PDF to the specified path
-        pdf.output(pdf_path)
-
-        # Note: Temporary image files are no longer created and deleted,
-        # as images are processed and added to the PDF directly from memory.
-
-
-        # --- Send PDF to Printer ---
-        if os.name == 'nt':
-            # Windows printing using ShellExecute
+        if os.name == 'nt':  # Windows
             import win32print
             import win32api
-            try:
-                printer_name = win32print.GetDefaultPrinter()
-                print(f"Attempting to print PDF: {pdf_path} to printer: {printer_name}")
-                # Use ShellExecute with "print" verb. The last parameter (0) hides the window.
-                # The function returns an instance handle, which is > 32 on success.
-                h_instance = win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
-                if h_instance <= 32:
-                    print(f"ShellExecute failed with error code: {h_instance}")
-                    # Depending on the error code, you might provide more specific feedback
-                    return False # Indicate printing failed
-                print("ShellExecute called successfully.")
-            except Exception as print_e:
-                print(f"Error during Windows printing: {print_e}")
-                return False # Indicate printing failed
+            printer_name = win32print.GetDefaultPrinter()
+            print(f"Sending original file to printer: {file_path} on printer: {printer_name}")
+            win32api.ShellExecute(0, "print", file_path, None, ".", 0)
+            print("Print command sent via ShellExecute.")
         else:
-            # For Linux/macOS using lp command
-            try:
-                print(f"Attempting to print PDF: {pdf_path} using lp command.")
-                # Execute the lp command. os.system returns 0 on success.
-                return_code = os.system(f'lp "{pdf_path}"')
-                if return_code != 0:
-                    print(f"lp command failed with return code: {return_code}")
-                    return False # Indicate printing failed
-                print("lp command executed successfully.")
-            except Exception as print_e:
-                print(f"Error during lp command execution: {print_e}")
-                return False # Indicate printing failed
+            # For Linux/macOS: use lp command
+            print(f"Sending original file to printer using lp: {file_path}")
+            os.system(f'lp "{file_path}"')
+            print("lp command executed.")
 
-
-        print(f"Print process initiated for PDF: {pdf_path}")
-        return True # Indicate printing was initiated successfully
+        print(f"Print process initiated for original file: {file_path}")
+        return True
 
     except Exception as e:
-        print(f"An error occurred in print_document_logic: {e}")
-        return False # Indicate printing failed
-
+        print(f"Error in print_document_logic: {e}")
+        return False
 
 # END OF PRINT DOCUMENT LOGIC
+
 
 
 # The print_document route now calls the print_document_logic function
