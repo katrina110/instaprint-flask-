@@ -7,6 +7,37 @@
   <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon" />
   <link href="./../static/css/header.css" rel="stylesheet" />
   <script src="https://cdn.socket.io/3.1.3/socket.io.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const socket = io();
+      const priceEl    = document.getElementById("priceValue");
+      const coinEl     = document.getElementById("coinCount");
+      const statusEl   = document.getElementById("printerStatus");
+      const totalPrice = parseInt(sessionStorage.getItem("totalPrice"), 10);
+
+      priceEl.textContent = totalPrice.toFixed(2);
+
+      // 1) Tell Flask/Arduino the price
+      fetch("/set_price", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({price: totalPrice})
+      });
+
+      // 2) Listen for coin updates & printer events
+      socket.on("coin_update", data => {
+        coinEl.textContent = data.total;
+      });
+
+      socket.on("printer_status", data => {
+        statusEl.textContent = data.status;
+      });
+
+      socket.on("change_dispensed", data => {
+        statusEl.textContent = `Printing… returning ₱${data.amount} change`;
+      });
+    });
+  </script>
 
   <style>
     body, html {
