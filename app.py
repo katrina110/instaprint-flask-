@@ -11,14 +11,14 @@ from flask import (
 import cv2
 import numpy as np
 import fitz  # PyMuPDF
-from io import BytesIO
+from io import BytesIO # Import BytesIO for in-memory image handling
 import pythoncom
 from win32com import client
 from fpdf import FPDF
 import serial
 import time
 from datetime import datetime
-from PyPDF2 import PdfReader
+from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
@@ -57,12 +57,13 @@ uploaded_files_info = []  # For admin view
 printed_pages_today = 0
 files_uploaded_today = 0
 last_updated_date = datetime.now().date()
-images = []  # Store images globally (consider refactoring)
+images = []  # Store images globally (consider refactoring for very large files)
 total_pages = 0  # Keep track of total pages.  May not be needed globally.
-selected_previews = []  # Store paths to selected preview images.  May not be needed globally.
+# selected_previews = []  # Store paths to selected preview images. Removed global variable, generate previews on demand.
 arduino = None # This might still be used in the arduino_payment_page route, will keep for now.
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
+coin_detection_active = False # Flag to control coin detection for
 coin_detection_active = False # Flag to control coin detection for COM3
 gsm_active = False # Flag to control GSM detection for COM15
 
@@ -110,7 +111,7 @@ def handle_confirm_gcash_payment(data):
     except Exception as e:
         print(f"Error receiving GCash payment details via SocketIO: {e}")
         emit("gcash_payment_initiated", {"success": False, "message": f"Error receiving payment details: {e}"})
-        
+
 @app.route("/set_price", methods=["POST"])
 def set_price():
     global coin_slot_serial
@@ -118,9 +119,13 @@ def set_price():
     price = int(data.get("price", 0))
 
     if not coin_slot_serial or not coin_slot_serial.is_open:
-        coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-        # give Arduino a moment to reset
-        time.sleep(2)
+        try:
+            coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+            # give Arduino a moment to reset
+            time.sleep(2)
+        except serial.SerialException as e:
+             return jsonify(success=False, message=f"Failed to open serial port {COIN_SLOT_PORT}: {str(e)}"), 500
+
 
     try:
         coin_slot_serial.write(f"{price}\n".encode())
@@ -131,24 +136,53 @@ def set_price():
 def serial_listener():
     global coin_slot_serial
     while True:
-        if coin_slot_serial and coin_slot_serial.in_waiting:
-            line = coin_slot_serial.readline().decode().strip()
-            # Arduino will send lines like:
-            #   COIN:<total>
-            #   PRINTING
-            #   CHANGE:<n>
-            if line.startswith("COIN:"):
-                total = int(line.split(":")[1])
-                socketio.emit("coin_update", {"total": total})
-            elif line == "PRINTING":
-                socketio.emit("printer_status", {"status": "Printing"})
-            elif line.startswith("CHANGE:"):
-                amt = int(line.split(":")[1])
-                socketio.emit("change_dispensed", {"amount": amt})
-        time.sleep(0.05)
+        # Check if serial port is open before trying to read
+        if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting:
+            try:
+                line = coin_slot_serial.readline().decode().strip()
+                # Arduino will send lines like:
+                #   COIN:<total>
+                #   PRINTING
+                #   CHANGE:<n>
+                if line.startswith("COIN:"):
+                    try:
+                        total = int(line.split(":")[1])
+                        socketio.emit("coin_update", {"total": total})
+                    except ValueError:
+                        print(f"Could not parse coin total from serial: {line}")
+                elif line == "PRINTING":
+                    socketio.emit("printer_status", {"status": "Printing"})
+                elif line.startswith("CHANGE:"):
+                    try:
+                        amt = int(line.split(":")[1])
+                        socketio.emit("change_dispensed", {"amount": amt})
+                    except ValueError:
+                         print(f"Could not parse change amount from serial: {line}")
+            except serial.SerialException as e:
+                print(f"Serial error during read on {COIN_SLOT_PORT}: {e}")
+                # Attempt to close and reopen the port on error
+                if coin_slot_serial and coin_slot_serial.is_open:
+                    try:
+                        coin_slot_serial.close()
+                        print(f"Closed serial port {COIN_SLOT_PORT} due to error.")
+                    except Exception as close_e:
+                         print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
+                coin_slot_serial = None # Set to None to trigger reconnect logic
 
-threading.Thread(target=serial_listener, daemon=True).start()
+        # Reconnect logic if serial port is not open
+        elif coin_slot_serial is None or not coin_slot_serial.is_open:
+             try:
+                 # Attempt to open the serial port
+                 coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+                 print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
+                 time.sleep(2) # Wait for Arduino
+             except serial.SerialException as e:
+                 # If opening fails, print error and wait before retrying
+                 print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
+                 coin_slot_serial = None # Ensure it's None if opening failed
+                 time.sleep(5) # Wait longer before next retry
 
+        time.sleep(0.05) # Short sleep to prevent excessive CPU usage
 
 
 # Helper Functions
@@ -162,16 +196,28 @@ def allowed_file(filename):
 
 def pdf_to_images(pdf_path):
     """Converts a PDF file to a list of OpenCV images."""
+    # Optimization Note: For very large PDFs, converting all pages to images upfront
+    # might be memory intensive. Consider processing pages on demand if this becomes a bottleneck.
+    document = None # Initialize document to None
     try:
         document = fitz.open(pdf_path)
         pdf_images = []
         for page_num in range(len(document)):
             page = document.load_page(page_num)
+            # Use get_pixmap with higher dpi for better quality previews if needed,
+            # but be mindful of memory usage. Default dpi is usually sufficient.
             pix = page.get_pixmap(alpha=False)
+            # Convert pixmap to numpy array directly
             image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
-                (pix.height, pix.width, 3)
+                (pix.height, pix.width, pix.n) # Use pix.n for number of channels
             )
-            pdf_images.append(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+            # Ensure image is BGR for OpenCV compatibility if it's RGB
+            if pix.n == 3:
+                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            elif pix.n == 4: # Handle RGBA if necessary by converting to BGR and dropping alpha
+                 image = cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
+
+            pdf_images.append(image)
         return pdf_images
     except Exception as e:
         print(f"Error processing PDF: {e}")
@@ -183,15 +229,19 @@ def pdf_to_images(pdf_path):
 
 def docx_to_images(file_path):
     """Converts a Word document (doc or docx) to a list of OpenCV images."""
+    # Optimization Note: Using win32com is platform-dependent and requires Microsoft Word.
+    # For a production system, consider a cross-platform library that doesn't rely on COM.
     if not file_path.lower().endswith((".doc", ".docx")):
         raise ValueError("Unsupported file type for Word documents.")
 
+    pdf_path = None # Initialize pdf_path to None
     try:
         pythoncom.CoInitialize()
         word = client.Dispatch("Word.Application")
         word.visible = False
         doc = word.Documents.Open(file_path)
-        pdf_path = file_path.replace(".docx", ".pdf").replace(".doc", ".pdf")
+        # Create a temporary PDF path in the UPLOAD_FOLDER
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(file_path).replace(".docx", ".pdf").replace(".doc", ".pdf"))
         doc.SaveAs(pdf_path, FileFormat=17)  # 17 is PDF
         doc.Close()
         word.Quit()
@@ -202,8 +252,12 @@ def docx_to_images(file_path):
         return []
     finally:
         pythoncom.CoUninitialize()  # Ensure COM is uninitialized
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)  # Clean up temp PDF
+        # Clean up temp PDF if it was created
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+            except Exception as cleanup_e:
+                print(f"Error cleaning up temporary PDF {pdf_path}: {cleanup_e}")
 
 
 def parse_page_selection(selection, total_pages):
@@ -220,15 +274,32 @@ def parse_page_selection(selection, total_pages):
     parts = re.split(r",\s*", selection)
     for part in parts:
         if "-" in part:
-            start, end = map(int, part.split("-"))
-            pages.update(range(start - 1, end))  # 0-based indexing
+            try:
+                start, end = map(int, part.split("-"))
+                # Ensure start and end are within valid page range (1-based)
+                start = max(1, start)
+                end = min(total_pages, end)
+                pages.update(range(start - 1, end))  # 0-based indexing
+            except ValueError:
+                 print(f"Warning: Invalid range format in page selection: {part}")
+                 continue # Skip this part and continue parsing
         elif part.isdigit():
             page_num = int(part)
             if 1 <= page_num <= total_pages:
                 pages.add(page_num - 1)  # 0-based indexing
-    return sorted(p for p in pages if 0 <= p < total_pages)
+            else:
+                 print(f"Warning: Page number out of range in selection: {page_num}")
+        else:
+            print(f"Warning: Invalid format in page selection: {part}")
+
+    return sorted(p for p in pages if 0 <= p < total_pages) # Final check to ensure indices are valid
+
 
 def highlight_bright_pixels(image, dark_threshold=50):
+    # Ensure image is not None and is in BGR format
+    if image is None or len(image.shape) < 3 or image.shape[2] != 3:
+         print("Error: Invalid image format for highlighting.")
+         return None
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -258,76 +329,112 @@ def process_image(image, page_size="A4", color_option="Color"):
         tuple: (processed_image, price)
     """
     if image is None:
-        print("Error: Unable to load image.")
+        print("Error: Unable to load image for processing.")
         return None, 0.0
 
-    paper_costs = {"Short": 2.0, "A4": 3.0, "Long": 5.0}
-    paper_cost = paper_costs.get(page_size, 195 / 500)  # Default cost
+    # Define paper costs and max price caps based on page size
+    # Using more descriptive variable names
+    paper_cost_per_page = {
+        "Short": 2.0,
+        "A4": 3.0,
+        "Long": 5.0
+    }
+    # Default paper cost if page_size is not recognized
+    default_paper_cost = 195 / 500 # Example default, adjust as needed
+    paper_cost = paper_cost_per_page.get(page_size, default_paper_cost)
 
-    max_price_caps = {"Short": 15.0, "A4": 18.0, "Long": 20.0}
-    max_cap = max_price_caps.get(page_size, 18.0)  # Default max
+    max_price_cap_per_page = {
+        "Short": 15.0,
+        "A4": 18.0,
+        "Long": 20.0
+    }
+    # Default max price cap if page_size is not recognized
+    default_max_cap = 18.0 # Example default, adjust as needed
+    max_cap = max_price_cap_per_page.get(page_size, default_max_cap)
 
+
+    # Convert image to grayscale for analysis
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    total_pixels = gray.size
-    white_ratio = np.sum(gray > 220) / total_pixels
-    dark_text_ratio = np.sum((gray > 10) & (gray < 180)) / total_pixels
+    total_pixels = gray.size # Total number of pixels in the image
 
-    # Text-only document
+    # Calculate ratios of different pixel intensities
+    white_ratio = np.sum(gray > 220) / total_pixels
+    dark_text_ratio = np.sum((gray > 10) & (gray < 180)) / total_pixels # Pixels that are not very dark or very light
+
+    # Case 1: Text-only document (mostly white with some dark text)
     if white_ratio > 0.85 and dark_text_ratio < 0.15:
         text_only_prices = {"Short": 3.0, "A4": 3.0, "Long": 4.0}
+        # Return original image and text-only price
         return image, text_only_prices.get(page_size, 3.0)
 
-    # White page
-    if np.all(image == 255):
-        return image, 0.0
+    # Case 2: Mostly white page (very few non-white pixels)
+    # Check if the image is almost entirely white (allowing for some minor variations)
+    if np.mean(gray) > 240: # Average pixel intensity is close to white (255)
+         return image, 0.0 # Return original image and zero price
 
-    # Full black page
-    if np.all(image == 0):
-        base_rate = 0.000006
-        total_pixels = image.shape[0] * image.shape[1]
+    # Case 3: Full black page (or nearly full black)
+    if np.mean(gray) < 15: # Average pixel intensity is close to black (0)
+        base_rate = 0.000006 # Base cost per pixel for full coverage
+        # Calculate base cost based on total pixels and base rate, add paper cost
         base_cost = total_pixels * base_rate + paper_cost
+        # Apply a multiplier for full black pages and cap the price
         return image, round(min(base_cost * 1.5, max_cap), 2)
 
-    if color_option == "Grayscale":
+    # Grayscale processing logic
+    if color_option.lower() == "grayscale":
+        # Detect edges to estimate complexity
         edges = cv2.Canny(gray, 50, 150)
-        edge_density = np.sum(edges > 0) / total_pixels
+        edge_density = np.sum(edges > 0) / total_pixels # Ratio of edge pixels
+
+        # Calculate dark pixel ratio (pixels darker than 100)
         dark_ratio = np.sum(gray < 100) / total_pixels
 
+        # Calculate image entropy to estimate information content/texture complexity
+        # Use a small epsilon to avoid log(0)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
-        hist_norm = hist.ravel() / hist.sum()
-        entropy = -np.sum(hist_norm * np.log2(hist_norm + 1e-7))
+        hist_norm = hist.ravel() / (hist.sum() + 1e-7) # Normalize histogram
+        entropy = -np.sum(hist_norm * np.log2(hist_norm + 1e-7)) # Calculate entropy
 
+        # Determine base price based on complexity metrics
         if white_ratio > 0.85 and dark_text_ratio < 0.15:
-            base_price = 1.0  # logo + text
+            base_price = 1.0  # Simple text with potential logo
         elif edge_density < 0.004 and entropy < 5.0:
-            base_price = 2.0
+            base_price = 2.0 # Low complexity, simple graphics
         elif edge_density < 0.01 and entropy < 5.5:
-            base_price = 3.0
+            base_price = 3.0 # Moderate complexity
         elif edge_density < 0.02 and entropy < 6.0:
-            base_price = 4.0
+            base_price = 4.0 # Higher complexity
         else:
-            base_price = 6.0 if dark_ratio > 0.2 else 5.0
+            # High complexity, potentially images or detailed graphics
+            base_price = 6.0 if dark_ratio > 0.2 else 5.0 # Higher price for darker images
 
+        # Calculate final price and cap it
         final_price = base_price + paper_cost
         return image, round(min(final_price, max_cap), 2)
 
-    # Color logic
+    # Color processing logic
+    # Convert image to HSV color space to analyze color saturation
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # Create a mask for pixels with significant color saturation (excluding near-grayscale)
+    # Saturation > 50 and Value > 50 to exclude very dark or very light colors
     color_mask = cv2.inRange(hsv, np.array([0, 50, 50]), np.array([180, 255, 255]))
-    color_pixel_count = cv2.countNonZero(color_mask)
-    color_coverage = color_pixel_count / total_pixels
+    color_pixel_count = cv2.countNonZero(color_mask) # Number of colored pixels
+    color_coverage = color_pixel_count / total_pixels # Ratio of colored pixels
 
+    # Determine base price based on color coverage
     if color_coverage == 0:
-        base_price = 1.0
+        base_price = 1.0 # No color detected (effectively grayscale)
     elif color_coverage < 0.015:
-        base_price = 2.0
+        base_price = 2.0 # Very low color coverage (e.g., a small logo)
     elif color_coverage < 0.25:
-        base_price = 3.0
+        base_price = 3.0 # Moderate color coverage
     else:
-        base_price = 4.0
+        base_price = 4.0 # High color coverage (e.g., photos, graphics)
 
-    final_price = (base_price + paper_cost) * 1.5
+    # Calculate final price for color prints (typically higher than grayscale) and cap it
+    final_price = (base_price + paper_cost) * 1.5 # Apply a multiplier for color
     return image, round(min(final_price, max_cap), 2)
+
 
 # Printer real-time status
 def get_printer_status_wmi():
@@ -358,17 +465,23 @@ def get_printer_status_wmi():
     }
 
     try:
+        # Iterate through printers with the specified name
         for printer in c.Win32_Printer(Name=printer_name):
+            # Get printer status message from the map, default to "Unknown" if not found
             status_msg = status_map.get(printer.PrinterStatus, "Unknown")
+            # Get error state message from the map, default to None if no specific error
             error_msg = error_state_map.get(printer.DetectedErrorState, None)
 
             messages = []
 
+            # Add error message if present and not "Unknown"
             if error_msg and error_msg != "Unknown":
                 messages.append(error_msg)
+            # Add status message if present and not "Idle" or "Unknown"
             elif status_msg and status_msg not in ["Idle", "Unknown"]:
                 messages.append(status_msg)
 
+            # Log new messages that haven't been logged before
             for msg in messages:
                 if msg not in logged_errors:
                     log = {
@@ -376,11 +489,12 @@ def get_printer_status_wmi():
                         "time": now.strftime("%I:%M %p"),
                         "event": msg
                     }
-                    activity_log.append(log)
-                    logs.append(log)
-                    logged_errors.add(msg)
+                    activity_log.append(log) # Add to global activity log
+                    logs.append(log) # Add to logs for this check
+                    logged_errors.add(msg) # Add to set of logged errors
 
     except Exception as e:
+        # Handle potential WMI query errors
         error_msg = f"WMI error: {e}"
         if error_msg not in logged_errors:
             log = {
@@ -392,7 +506,7 @@ def get_printer_status_wmi():
             logs.append(log)
             logged_errors.add(error_msg)
 
-    return logs
+    return logs # Return the list of new logs generated during this check
 
 
 # Routes - Admin
@@ -403,12 +517,13 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
+    # Example data, replace with actual data retrieval logic
     data = {
-        "total_sales": 5000,
-        "printed_pages": printed_pages_today,
-        "files_uploaded": files_uploaded_today,
-        "current_balance": 3000,
-        "sales_history": [
+        "total_sales": 5000, # Example total sales
+        "printed_pages": printed_pages_today, # Global counter for pages printed today
+        "files_uploaded": files_uploaded_today, # Global counter for files uploaded today
+        "current_balance": 3000, # Example current balance
+        "sales_history": [ # Example sales history data
             {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
             {"method": "PayMaya", "amount": 250, "date": "2024-03-29", "time": "11:30"},
         ],
@@ -419,28 +534,37 @@ def admin_dashboard():
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
+    # Pass the global list of uploaded files info to the template
     return render_template("admin-files-upload.html", uploaded=uploaded_files_info)
 
 
 @app.route("/admin-activity-log")
 def admin_activity_log():
+    # Pass the global activity log to the template
     return render_template('admin-activity-log.html', printed=activity_log)
 
 @app.route('/api/printer-status')
 def printer_status_api():
     global printer_name  # Declare printer_name as global here
     if printer_name is None:  # Initialize printer_name if not already initialized
-        printer_name = win32print.GetDefaultPrinter()
+        try:
+            printer_name = win32print.GetDefaultPrinter()
+        except Exception as e:
+            return jsonify({"error": f"Could not get default printer: {e}"}), 500
+
+    # Return the logs from the WMI status check
     return jsonify(get_printer_status_wmi())
 
 
 @app.route("/admin-balance")
 def admin_balance():
+    # This route seems to just render a static template
     return render_template("admin-balance.html")
 
 
 @app.route("/admin-feedbacks")
 def admin_feedbacks():
+    # Example feedback data, replace with actual data retrieval
     feedbacks = [
         {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM", "rating": 5},
         {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM", "rating": 3},
@@ -455,16 +579,19 @@ def admin_feedbacks():
 # Routes - User Interface
 @app.route("/file-upload")
 def file_upload():
+    # This route seems to just render a static template
     return render_template("file-upload.html")
 
 
 @app.route("/index")
 def index():
+    # This route seems to just render a static template
     return render_template("index.html")
 
 @app.route("/manual-upload")
 def manual_upload():
-    files = os.listdir(UPLOAD_FOLDER)  # List all files in the upload folder
+    # List files in the upload folder and pass to the template
+    files = os.listdir(UPLOAD_FOLDER)
     return render_template("manual-display-upload.html", files=files)
 
 
@@ -474,11 +601,13 @@ def online_upload():
         file = request.files.get("file")
         if file:
             filename = file.filename
+            # Save the uploaded file to the UPLOAD_FOLDER
             file.save(os.path.join(UPLOAD_FOLDER, filename))
             return f'File "{filename}" uploaded successfully!'
         else:
             return "No file selected!", 400
     else:
+        # List files in the upload folder and provide a Toffee Share link
         files = os.listdir(UPLOAD_FOLDER)
         toffee_share_link = "https://toffeeshare.com/nearby"
         return render_template(
@@ -491,7 +620,7 @@ def online_upload():
 def payment_page():
     """Renders the payment page and activates coin detection."""
     global coin_detection_active
-    coin_detection_active = True
+    coin_detection_active = True # Activate coin detection when the payment page is accessed
     print("Coin detection activated for payment.")
     # The background task for coin detection is started in __main__ and will now become active
     return render_template("payment.html")
@@ -501,7 +630,7 @@ def payment_page():
 def stop_coin_detection():
     """Deactivates coin detection."""
     global coin_detection_active
-    coin_detection_active = False
+    coin_detection_active = False # Deactivate coin detection
     print("Coin detection deactivated.")
     return jsonify({"success": True, "message": "Coin detection stopped."})
 
@@ -518,6 +647,7 @@ def upload_file():
         printed_pages_today = 0
         files_uploaded_today = 0
         last_updated_date = datetime.now().date()
+        uploaded_files_info = [] # Clear uploaded files info for the new day
 
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -529,16 +659,32 @@ def upload_file():
     if file and allowed_file(file.filename):
         filename = file.filename
         file_ext = filename.split(".")[-1].lower()
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        # Create a safe and unique filename to prevent overwriting
+        # Using a timestamp and original filename
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        safe_filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(UPLOAD_FOLDER, safe_filename)
         file.save(filepath)
+
+        # Clear previous images and total_pages before processing a new file
+        images = []
+        total_pages = 0
 
         if file_ext == "pdf":
             images = pdf_to_images(filepath)
             total_pages = len(images)
 
         elif file_ext in ("jpg", "jpeg", "png"):
-            images = [cv2.imread(filepath)]
-            total_pages = 1
+            # Read image directly using cv2
+            img = cv2.imread(filepath)
+            if img is not None:
+                images = [img]
+                total_pages = 1
+            else:
+                 print(f"Error reading image file: {filepath}")
+                 os.remove(filepath) # Clean up the uploaded file
+                 return jsonify({"error": "Failed to read image file"}), 500
+
 
         elif file_ext in ("docx", "doc"):
             images = docx_to_images(filepath)
@@ -548,7 +694,16 @@ def upload_file():
             os.remove(filepath)  # Clean up unsupported file
             return jsonify({"error": "Unsupported file format"}), 400
 
+        # Check if any images were generated
+        if not images:
+             os.remove(filepath) # Clean up the uploaded file if processing failed
+             return jsonify({"error": "Failed to process file into images"}), 500
+
+
         # Update daily stats
+        # Note: printed_pages_today is a bit misleading here, it counts total pages uploaded, not printed.
+        # Consider renaming this variable or tracking printed pages separately.
+        # For now, keeping the original logic.
         printed_pages_today += total_pages
         files_uploaded_today += 1
 
@@ -570,8 +725,14 @@ def upload_file():
 
 @app.route("/generate_preview", methods=["POST"])
 def generate_preview():
-    global images, selected_previews
+    global images
+    if not images:
+        return jsonify({"error": "No images available. Please upload a file first."}), 400
+
     data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON payload."}), 400
+
     page_selection = data.get('pageSelection', '')
     num_copies = int(data.get('numCopies', 1))
     page_size = data.get('pageSize', 'A4')
@@ -582,28 +743,52 @@ def generate_preview():
         selected_indexes = parse_page_selection(page_selection, len(images))
         previews = []
 
+        # Optimization: Generate previews on demand and save them to static folder
+        # instead of storing all in a global variable.
+        # This reduces memory usage if many previews are generated but not all are needed.
+        # However, the current approach of generating all selected previews at once
+        # and returning their paths is kept for now to align with the original flow.
+
         for idx in selected_indexes:
-            img = images[idx].copy()
-            orientation = data.get("orientationOption") or "auto"
-            orientation = determine_orientation(img, orientation)
-            canvas_size = calculate_canvas_size(page_size, orientation)
+            if idx < 0 or idx >= len(images):
+                 print(f"Warning: Skipping invalid page index {idx} in preview generation.")
+                 continue # Skip invalid index
+
+            img = images[idx].copy() # Work on a copy to avoid modifying the original image data
+
+            # Determine orientation based on user selection or automatically
+            current_orientation = data.get("orientationOption") or "auto"
+            current_orientation = determine_orientation(img, current_orientation)
+
+            # Calculate canvas size based on selected page size and determined orientation
+            canvas_size = calculate_canvas_size(page_size, current_orientation)
+
+            # Fit the image onto the calculated canvas size
             processed_img = fit_image_to_canvas(img, canvas_size)
 
+            # Apply grayscale conversion if selected
             if color_option.lower() == 'grayscale':
                 processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
-                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
+                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR) # Convert back to BGR for saving
 
+
+            # Generate and save preview images for each copy
             for copy_idx in range(num_copies):
-                filename = f"print_preview_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
+                # Create a unique filename for each preview image
+                filename = f"print_preview_{idx+1}_{page_size}_{color_option}_{current_orientation}_{copy_idx}_{int(time.time())}.jpg" # Added timestamp for uniqueness
                 path = os.path.join(app.config['STATIC_FOLDER'], filename)
-                cv2.imwrite(path, processed_img)
-                # Ensure correct URL path for frontend
+
+                # Save the processed image as a JPEG
+                # Adjust quality (0-100) for smaller file sizes if needed. Default is 95.
+                cv2.imwrite(path, processed_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+
+                # Append the URL path (relative to static folder) for frontend use
                 previews.append(f"/uploads/{filename}")
 
-        selected_previews = previews
+        # selected_previews = previews # Removed global variable usage
 
         if not previews:
-            return jsonify({"error": "No previews generated. Check your page selection."}), 400
+            return jsonify({"error": "No previews generated. Check your page selection or file."}), 400
 
         return jsonify({"previews": previews}), 200
 
@@ -614,7 +799,7 @@ def generate_preview():
 @app.route("/check_images", methods=["GET"])
 def check_images():
     global images
-    # If images are available but previews aren't generated yet, allow to proceed
+    # If images are available, allow to proceed to preview generation
     return jsonify({"imagesAvailable": bool(images)})
 
 @app.route("/preview_with_price", methods=["POST"])
@@ -639,92 +824,148 @@ def preview_with_price():
     page_prices = []
     total_price = 0
 
+    # Optimization: Generate and save preview images here for the result page
+    # This avoids regenerating them in the /result route or storing them globally.
+    generated_previews = []
+
     for idx in selected_indexes:
-        original_img = images[idx].copy()
+        if idx < 0 or idx >= len(images):
+             print(f"Warning: Skipping invalid page index {idx} in pricing.")
+             continue # Skip invalid index
+
+        original_img = images[idx].copy() # Work on a copy
+
+        # Determine orientation
         orientation = data.get("orientationOption") or "auto"
         orientation = determine_orientation(original_img, orientation)
-        canvas_size = calculate_canvas_size(page_size, orientation)
-        processed_img = fit_image_to_canvas(original_img, canvas_size)
 
-        processed_img, page_price = process_image(processed_img, page_size=page_size, color_option=color_option)
-        page_price *= num_copies
-        total_price += page_price
+        # Calculate canvas size and fit image for processing and pricing
+        canvas_size = calculate_canvas_size(page_size, orientation)
+        processed_img_for_pricing = fit_image_to_canvas(original_img, canvas_size)
+
+        # Process image and get price
+        # The returned processed_img from process_image is the original image or a modified version for grayscale
+        processed_img_result, page_price = process_image(processed_img_for_pricing, page_size=page_size, color_option=color_option)
+        page_price *= num_copies # Multiply price by the number of copies
+        total_price += page_price # Add to total price
+
+        # --- Generate and Save Preview Images for the Frontend ---
 
         # Save original preview
-        preview_filename = f"preview_{idx+1}.jpg"
+        preview_filename = f"preview_{idx+1}_{int(time.time())}.jpg" # Unique filename
         preview_path = os.path.join(app.config['STATIC_FOLDER'], preview_filename)
-        cv2.imwrite(preview_path, original_img)
+        cv2.imwrite(preview_path, original_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90]) # Save with quality setting
 
         # Generate and save highlighted bright pixels image
         highlighted_img = highlight_bright_pixels(original_img)
-        highlighted_filename = f"bright_pixels_{idx+1}.jpg"
+        highlighted_filename = f"bright_pixels_{idx+1}_{int(time.time())}.jpg" # Unique filename
         highlighted_path = os.path.join(app.config['STATIC_FOLDER'], highlighted_filename)
-        cv2.imwrite(highlighted_path, highlighted_img)
+        if highlighted_img is not None: # Ensure highlighting was successful
+             cv2.imwrite(highlighted_path, highlighted_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        else:
+             # If highlighting failed, maybe save the original or a placeholder
+             cv2.imwrite(highlighted_path, original_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90]) # Fallback to saving original
 
-        # Save processed image based on color option
+
+        # Save processed image based on color option for display
         if color_option == "grayscale":
-            processed_filename = f"grayscale_preview_{idx+1}.jpg"
+            processed_filename = f"grayscale_preview_{idx+1}_{int(time.time())}.jpg" # Unique filename
             gray_img = cv2.cvtColor(original_img, cv2.COLOR_BGR2GRAY)
             processed_path = os.path.join(app.config['STATIC_FOLDER'], processed_filename)
-            cv2.imwrite(processed_path, gray_img)
+            cv2.imwrite(processed_path, gray_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         else:
-            processed_filename = f"segmented_{idx+1}.jpg"
+            # For color, save the original image as the "processed" view
+            processed_filename = f"color_preview_{idx+1}_{int(time.time())}.jpg" # Unique filename
             processed_path = os.path.join(app.config['STATIC_FOLDER'], processed_filename)
-            cv2.imwrite(processed_path, processed_img)
+            cv2.imwrite(processed_path, original_img, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+
 
         page_prices.append({
             "page": idx + 1,
-            "price": page_price,
+            "price": round(page_price, 2), # Ensure price is rounded
             "original": f"/uploads/{preview_filename}",
             "processed": f"/uploads/{processed_filename}",
-            "highlighted": f"/uploads/{highlighted_filename}"  # 👈 ADD THIS!
+            "highlighted": f"/uploads/{highlighted_filename}"
         })
+
+        # Add the original preview path to the list for the frontend result page
+        generated_previews.append({"page": idx + 1, "path": f"/uploads/{preview_filename}"})
+
 
     # Round the total price up to the nearest whole number
     total_price = math.ceil(total_price)
 
+    # Pass the generated preview paths to the frontend
     return jsonify({
         "totalPrice": total_price,
         "pagePrices": page_prices,
-        "previews": [{"page": p["page"], "path": p["original"]} for p in page_prices],
-        "totalPages": len(images)    # <<< add this
+        "previews": generated_previews, # Use the list of generated preview paths
+        "totalPages": len(images)
     })
 
 # START OF ARDUINO AND COIN SLOT CONNECTION CODE
 
 def calculate_canvas_size(page_size, orientation):
-    sizes = {'A4': (2480, 3508), 'Short': (2480, 3200), 'Long': (2480, 4200)}
-    w, h = sizes.get(page_size, (2480, 3508))
+    # Define standard sizes in pixels (e.g., 300 DPI)
+    # A4: 210x297 mm -> 2480x3508 pixels (approx at 300 DPI)
+    # Short: 8.5x11 inches -> 2550x3300 pixels (approx at 300 DPI) - Using 2480 for width consistency
+    # Long: 8.5x13 inches -> 2550x3900 pixels (approx at 300 DPI) - Using 2480 for width consistency
+    sizes = {
+        'A4': (2480, 3508),
+        'Short': (2480, 3200), # Adjusted Short height slightly
+        'Long': (2480, 4200)  # Adjusted Long height slightly
+        }
+    w, h = sizes.get(page_size, sizes['A4']) # Default to A4 if page_size is unknown
+    # Return dimensions based on orientation
     return (max(w, h), min(w, h)) if orientation == 'landscape' else (min(w, h), max(w, h))
 
 def fit_image_to_canvas(image, canvas_size):
+    """
+    Resizes and centers an image onto a white canvas of the specified size.
+    """
+    if image is None:
+        print("Error: Cannot fit None image to canvas.")
+        return None
+
     canvas_w, canvas_h = canvas_size
     img_h, img_w = image.shape[:2]
-    scale = min(canvas_w / img_w, canvas_h / img_h)
-    new_w, new_h = int(img_w * scale), int(img_h * scale)
-    resized_image = cv2.resize(image, (new_w, new_h))
 
-    # Create white canvas and center the image
+    # Calculate scaling factor to fit image within canvas dimensions
+    scale = min(canvas_w / img_w, canvas_h / img_h)
+
+    # Calculate new dimensions after scaling
+    new_w, new_h = int(img_w * scale), int(img_h * scale)
+
+    # Resize the image using calculated new dimensions
+    resized_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA) # Use INTER_AREA for shrinking
+
+    # Create a white canvas of the target size
     canvas = np.ones((canvas_h, canvas_w, 3), dtype=np.uint8) * 255
+
+    # Calculate offsets to center the resized image on the canvas
     x_offset = (canvas_w - new_w) // 2
     y_offset = (canvas_h - new_h) // 2
+
+    # Place the resized image onto the center of the canvas
     canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_image
+
     return canvas
 
 def determine_orientation(image, user_orientation):
+    """
+    Determines image orientation based on user preference or automatically.
+    """
     if user_orientation.lower() != 'auto':
-        return user_orientation.lower()
+        return user_orientation.lower() # Use user specified orientation
+
+    # Automatically determine orientation based on image dimensions
     h, w = image.shape[:2]
     return 'landscape' if w > h else 'portrait'
 
-def fit_image_to_paper(image, target_size):
-    h, w = image.shape[:2]
-    target_w, target_h = target_size
-    scale = min(target_w / w, target_h / h)
-    new_w, new_h = int(w * scale), int(h * scale)
-    return cv2.resize(image, (new_w, new_h))
 
-
+# The read_coin_slot_data function remains largely the same, as its performance
+# is tied to the serial communication speed and the Arduino's output rate.
+# Error handling and reconnect logic are already present.
 def read_coin_slot_data():
     """
     Continuously reads data from the Arduino serial port (COM3) for coin detection,
@@ -762,41 +1003,56 @@ def read_coin_slot_data():
         if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting > 0:
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
-                print(f"Received from Arduino (COM3): {message}")
-                if message.startswith("Detected coin worth ₱"):
-                    try:
-                        value = int(message.split("₱")[1])
-                        coin_value_sum += value
-                        print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
-                        socketio.emit('update_coin_count', {'count': coin_value_sum})
-                    except ValueError:
-                        print("Error: Could not parse coin value from COM3.")
-                elif message.startswith("Unknown coin"):
-                    print(f"Warning from COM3: {message}")
+                if message: # Process message only if it's not empty
+                    print(f"Received from Arduino (COM3): {message}")
+                    if message.startswith("Detected coin worth ₱"):
+                        try:
+                            # Extract coin value using regex for better robustness
+                            match = re.search(r"Detected coin worth ₱(\d+)", message)
+                            if match:
+                                value = int(match.group(1))
+                                coin_value_sum += value
+                                print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
+                                # Emit update to all connected clients
+                                socketio.emit('update_coin_count', {'count': coin_value_sum})
+                            else:
+                                print(f"Could not parse coin value from serial message: {message}")
+
+                        except ValueError:
+                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
+                    elif message.startswith("Unknown coin"):
+                        print(f"Warning from COM3: {message}")
+                    # Add handling for other potential messages from Arduino if needed
+                    elif message == "PRINTING":
+                         socketio.emit("printer_status", {"status": "Printing"})
+                    elif message.startswith("CHANGE:"):
+                         try:
+                              amt = int(message.split(":")[1])
+                              socketio.emit("change_dispensed", {"amount": amt})
+                         except ValueError:
+                              print(f"Could not parse change amount from serial: {message}")
+
             except UnicodeDecodeError:
                 print("Error decoding serial data from COM3.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
+                # Attempt to close and reopen the port on error
                 if coin_slot_serial and coin_slot_serial.is_open:
-                    coin_slot_serial.close()
+                    try:
+                        coin_slot_serial.close()
+                        print(f"Closed serial port {COIN_SLOT_PORT} due to error.")
+                    except Exception as close_e:
+                         print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
                 coin_slot_serial = None # Indicate need to reconnect
                 time.sleep(5) # Wait before attempting reconnect
 
-        elif coin_slot_serial is None or not coin_slot_serial.is_open:
-             # Attempt to reconnect if the port was closed
-             try:
-                 coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-                 print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
-                 time.sleep(2) # Wait for Arduino
-             except serial.SerialException as e:
-                 print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
-                 coin_slot_serial = None
-                 time.sleep(5) # Wait before next retry
+        # If serial port is not open, the reconnect logic at the beginning of the loop will handle it.
+
+        time.sleep(0.05) # Short sleep to prevent excessive CPU usage
 
 
-        time.sleep(0.1) # Short sleep to prevent excessive CPU usage
-
-
+# The read_gsm_data function remains largely the same, its performance depends on the GSM module and network.
+# Error handling and reconnect logic are already present.
 def read_gsm_data():
     """
     Continuously reads data from the GSM module serial port (COM15)
@@ -834,7 +1090,7 @@ def read_gsm_data():
         # Read data if the port is open and active
         if gsm_serial and gsm_serial.is_open and gsm_serial.in_waiting > 0:
             try:
-                message = gsm_serial.readline().decode("utf-8").strip()
+                message = gsm_serial.readline().decode("utf-8", errors='ignore').strip() # Use errors='ignore' for robustness
                 if message:
                     print(f"Received from GSM (COM15): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
@@ -845,7 +1101,7 @@ def read_gsm_data():
                             extracted_amount = float(match.group(1))
                             print(f"Successfully extracted amount from SMS: ₱{extracted_amount}")
 
-                            # Check if the extracted amount matches the expected amount
+                            # Check if the extracted amount matches or exceeds the expected amount
                             if extracted_amount >= expected_gcash_amount and gcash_print_options:
                                 print("GCash payment amount matched. Triggering print.")
                                 # Trigger the printing process
@@ -878,6 +1134,7 @@ def read_gsm_data():
                             print("Error: Could not convert extracted amount to float from COM15.")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
                     else:
+                         # Handle other SMS messages if necessary, or ignore them
                          print("Received SMS does not match expected payment format.")
                          # Optionally emit an event for unexpected SMS format
                          # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
@@ -892,6 +1149,10 @@ def read_gsm_data():
                 gsm_serial = None # Indicate need to reconnect
                 time.sleep(5) # Wait before attempting reconnect
                 socketio.emit("gcash_payment_failed", {"success": False, "message": f"Serial communication error: {e}"})
+            except Exception as e:
+                 print(f"An unexpected error occurred in read_gsm_data: {e}")
+                 socketio.emit("gcash_payment_failed", {"success": False, "message": f"An internal error occurred: {e}"})
+
 
         time.sleep(0.1) # Short sleep to prevent excessive CPU usage when active
 
@@ -950,109 +1211,123 @@ def print_document_logic(print_options):
         return False
 
     try:
-        # print_options is already a dictionary from the SocketIO event
-        # data = print_options # Use print_options directly
-
+        # print_options is already a dictionary from the SocketIO event or POST request
         selection = print_options.get("pageSelection", "")
         num_copies = int(print_options.get("numCopies", 1))
         page_size = print_options.get("pageSize", "A4")
         color_option = print_options.get("colorOption", "Color").lower()
+        orientation_option = print_options.get("orientationOption", "auto") # Get orientation option
 
         selected_indexes = parse_page_selection(selection, len(images))
         if not selected_indexes:
             print("Error: Invalid page selection for printing.")
             return False
 
-        temp_previews = []
+        pdf = FPDF()
+        # Disable automatic page break to manually control page additions and image placement
+        pdf.set_auto_page_break(auto=False, margin=0) # Set margin to 0 for full page image
 
         for idx in selected_indexes:
-            img = images[idx].copy()
+            if idx < 0 or idx >= len(images):
+                 print(f"Warning: Skipping invalid page index {idx} for printing.")
+                 continue # Skip invalid index
 
-            orientation = print_options.get("orientationOption") or "auto"
-            orientation = determine_orientation(img, orientation)
-            canvas_size = calculate_canvas_size(page_size, orientation)
-            processed_img = fit_image_to_canvas(img, canvas_size)
+            img = images[idx].copy() # Work on a copy
 
+            # Determine orientation for this specific page
+            current_orientation = determine_orientation(img, orientation_option)
+
+            # Calculate the target size for the image on the PDF page in millimeters
+            # FPDF uses millimeters as the default unit.
+            # Standard PDF sizes in mm (approx): A4 (210x297), Short (215.9x279.4), Long (215.9x355.6)
+            # Let's use these standard sizes for the PDF pages.
+            pdf_page_sizes_mm = {
+                'A4': (210, 297),
+                'Short': (215.9, 279.4),
+                'Long': (215.9, 355.6)
+            }
+            # Get the base dimensions for the selected paper size in mm
+            base_w_mm, base_h_mm = pdf_page_sizes_mm.get(page_size, pdf_page_sizes_mm['A4']) # Default to A4
+
+            # Determine the PDF page dimensions based on the determined image orientation
+            pdf_w_mm, pdf_h_mm = (max(base_w_mm, base_h_mm), min(base_w_mm, base_h_mm)) if current_orientation == 'landscape' else (min(base_w_mm, base_h_mm), max(base_w_mm, base_h_mm))
+
+            # Add a new page to the PDF with the calculated dimensions and orientation
+            pdf.add_page(orientation='L' if current_orientation == 'landscape' else 'P', format=(pdf_w_mm, pdf_h_mm))
+
+            # Apply grayscale conversion if selected
             if color_option == 'grayscale':
-                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2GRAY)
-                processed_img = cv2.cvtColor(processed_img, cv2.COLOR_GRAY2BGR)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) # Convert back to BGR for encoding
 
-            # Generate temporary images for the PDF creation
-            for copy_idx in range(num_copies):
-                filename = f"printable_{idx+1}_{page_size}_{color_option}_{copy_idx}.jpg"
-                path = os.path.join(app.config['STATIC_FOLDER'], filename) # Use STATIC_FOLDER for temporary files
-                cv2.imwrite(path, processed_img)
-                temp_previews.append(path)
+            # Convert the OpenCV image (numpy array) to a format FPDF can use (e.g., JPEG in memory)
+            is_success, buffer = cv2.imencode(".jpg", img)
+            if not is_success:
+                print(f"Error encoding image for page {idx+1} to JPEG.")
+                continue # Skip this page if encoding fails
 
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], "printable_document.pdf") # Save PDF in UPLOAD_FOLDER
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
+            # Use BytesIO to handle the image in memory
+            img_io = BytesIO(buffer)
 
-        for preview_path in temp_previews:
-            if not os.path.exists(preview_path):
-                continue
-            try:
-                # Get image dimensions to determine PDF page size
-                img_temp = cv2.imread(preview_path)
-                if img_temp is None:
-                    print(f"Error: Could not read temporary image file {preview_path}")
-                    continue
+            # Add the image to the PDF page, fitting it to the page dimensions
+            # x=0, y=0 places the image at the top-left corner
+            # w=pdf_w_mm, h=pdf_h_mm makes the image fill the entire page
+            pdf.image(img_io, x=0, y=0, w=pdf_w_mm, h=pdf_h_mm, type='JPEG')
 
-                height, width, _ = img_temp.shape
-                aspect_ratio = width / height
+            # Close the BytesIO object
+            img_io.close()
 
-                # FPDF default unit is millimeters. A4 is 210x297 mm.
-                # We can set custom page size based on image aspect ratio and selected paper size
-                # For simplicity, let's assume we fit the image to the width of a standard PDF page size
-                # and adjust height accordingly. Using A4 dimensions as a base.
-                pdf_width = 210 # mm
-                pdf_height = pdf_width / aspect_ratio
 
-                # If the calculated height is too large for a standard page, adjust
-                max_pdf_height = 297 # A4 height in mm
-                if pdf_height > max_pdf_height:
-                    pdf_height = max_pdf_height
-                    pdf_width = pdf_height * aspect_ratio # Adjust width to maintain aspect ratio
+        # Create a unique filename for the printable PDF
+        pdf_filename = f"printable_document_{int(time.time())}.pdf"
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_filename) # Save PDF in UPLOAD_FOLDER
 
-                pdf.add_page()
-                # Add image to PDF, positioned at top-left with calculated dimensions
-                pdf.image(preview_path, x=0, y=0, w=pdf_width, h=pdf_height)
-            except Exception as img_e:
-                 print(f"Error adding image {preview_path} to PDF: {img_e}")
-                 continue # Continue with the next image
-
+        # Output the PDF to the specified path
         pdf.output(pdf_path)
 
-        # Clean up temporary image files
-        for preview_path in temp_previews:
-            if os.path.exists(preview_path):
-                try:
-                    os.remove(preview_path)
-                except Exception as clean_e:
-                    print(f"Error cleaning up temporary file {preview_path}: {clean_e}")
+        # Note: Temporary image files are no longer created and deleted,
+        # as images are processed and added to the PDF directly from memory.
 
 
+        # --- Send PDF to Printer ---
         if os.name == 'nt':
+            # Windows printing using ShellExecute
             import win32print
             import win32api
-            printer_name = win32print.GetDefaultPrinter()
-            # Use ShellExecute with "print" verb to print the PDF
-            # The last parameter (0) means show the window minimized, but for print it often means no window
-            print(f"Attempting to print PDF: {pdf_path} to printer: {printer_name}")
-            win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
-            print("ShellExecute called.")
+            try:
+                printer_name = win32print.GetDefaultPrinter()
+                print(f"Attempting to print PDF: {pdf_path} to printer: {printer_name}")
+                # Use ShellExecute with "print" verb. The last parameter (0) hides the window.
+                # The function returns an instance handle, which is > 32 on success.
+                h_instance = win32api.ShellExecute(0, "print", pdf_path, None, ".", 0)
+                if h_instance <= 32:
+                    print(f"ShellExecute failed with error code: {h_instance}")
+                    # Depending on the error code, you might provide more specific feedback
+                    return False # Indicate printing failed
+                print("ShellExecute called successfully.")
+            except Exception as print_e:
+                print(f"Error during Windows printing: {print_e}")
+                return False # Indicate printing failed
         else:
             # For Linux/macOS using lp command
-            print(f"Attempting to print PDF: {pdf_path} using lp command.")
-            os.system(f'lp "{pdf_path}"')
-            print("lp command executed.")
+            try:
+                print(f"Attempting to print PDF: {pdf_path} using lp command.")
+                # Execute the lp command. os.system returns 0 on success.
+                return_code = os.system(f'lp "{pdf_path}"')
+                if return_code != 0:
+                    print(f"lp command failed with return code: {return_code}")
+                    return False # Indicate printing failed
+                print("lp command executed successfully.")
+            except Exception as print_e:
+                print(f"Error during lp command execution: {print_e}")
+                return False # Indicate printing failed
 
 
         print(f"Print process initiated for PDF: {pdf_path}")
-        return True # Indicate printing was initiated
+        return True # Indicate printing was initiated successfully
 
     except Exception as e:
-        print(f"Error in print_document_logic: {e}")
+        print(f"An error occurred in print_document_logic: {e}")
         return False # Indicate printing failed
 
 
@@ -1068,7 +1343,7 @@ def print_document_route():
         return jsonify({"error": "Invalid JSON payload."}), 400
 
     print("Received print request via /print_document route.")
-    success = print_document_logic(data)
+    success = print_document_logic(data) # Call the core printing logic
 
     if success:
         return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
@@ -1079,39 +1354,103 @@ def print_document_route():
 # Update result route to display both previews and segmentation
 @app.route('/result', methods=['GET'])
 def result():
-    global images, selected_previews
-    if not selected_previews or not images:
-        return redirect('/file-upload')
-    return render_template('result.html', previews=selected_previews)
+    # The previews are now generated and saved in preview_with_price,
+    # so we don't need selected_previews global variable.
+    # The frontend should request the previews based on the data returned
+    # by preview_with_price.
+    # For now, this route might just render the template.
+    # If you need to pass preview data, you might need to store it temporarily
+    # in the session or pass it as query parameters (less ideal for many previews).
+    # Assuming the frontend will handle fetching previews based on filenames
+    # returned by preview_with_price.
+    return render_template('result.html')
 
 
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """Serves uploaded files from the static folder."""
-    return send_from_directory(app.config['STATIC_FOLDER'], filename)
-
+    # Ensure the file exists in the static folder before sending
+    file_path = os.path.join(app.config['STATIC_FOLDER'], filename)
+    if os.path.exists(file_path):
+        return send_from_directory(app.config['STATIC_FOLDER'], filename)
+    else:
+        # If file not found in static, check the UPLOAD_FOLDER (for printable PDFs)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(file_path):
+             return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        else:
+            return "File not found.", 404
 
 
 def check_printer_status(printer_name):
     """
-    Checks the status of the specified printer.
+    Checks the status of the specified printer using win32print.
+    Returns a status string ("Idle", "Printing", "Error: ...").
     """
     try:
-        hPrinter = win32print.OpenPrinter(printer_name)  # Open a handle to the printer
-        jobs = win32print.EnumJobs(hPrinter, 0, -1, 2)  # Get information about the print jobs
-        win32print.ClosePrinter(hPrinter)  # Close the printer handle
+        # Check if printer_name is valid
+        if not printer_name:
+             return "Error: Printer name not set."
 
-        if jobs:  # Printer is busy (printing)
-            return "Printing"
-        else:  # Printer is idle
-            socketio.emit("printer_status_idle")  # Emit idle status to the frontend
-            return "Idle"
+        # Attempt to open the printer handle
+        try:
+            hPrinter = win32print.OpenPrinter(printer_name)
+        except Exception as open_e:
+            return f"Error opening printer handle: {open_e}"
+
+        try:
+            # Get information about the print jobs (level 2 provides detailed info)
+            jobs = win32print.EnumJobs(hPrinter, 0, -1, 2)
+            # Check the printer status flags
+            printer_info = win32print.GetPrinter(hPrinter, 2)
+            printer_status = printer_info['Status']
+
+            # Define common printer status flags
+            PRINTER_STATUS_PRINTING = 0x00000002
+            PRINTER_STATUS_ERROR = 0x00000008
+            PRINTER_STATUS_OFFLINE = 0x00000080
+            PRINTER_STATUS_PAPER_JAM = 0x00000008 # Paper jam is often reported as an error
+            PRINTER_STATUS_NO_PAPER = 0x00000010
+            PRINTER_STATUS_TONER_LOW = 0x00000040
+            PRINTER_STATUS_OUT_OF_PAPER = 0x00000010 # Synonym for NO_PAPER
+
+            status_messages = []
+
+            if printer_status & PRINTER_STATUS_ERROR:
+                 status_messages.append("Error")
+            if printer_status & PRINTER_STATUS_OFFLINE:
+                 status_messages.append("Offline")
+            if printer_status & PRINTER_STATUS_PAPER_JAM:
+                 status_messages.append("Paper Jam")
+            if printer_status & PRINTER_STATUS_NO_PAPER or printer_status & PRINTER_STATUS_OUT_OF_PAPER:
+                 status_messages.append("No Paper")
+            if printer_status & PRINTER_STATUS_TONER_LOW:
+                 status_messages.append("Toner Low")
+
+
+            if jobs:
+                # If there are jobs and no critical errors, assume printing
+                if not status_messages:
+                    return "Printing"
+                else:
+                    # If there are jobs but also errors, report the errors
+                    return ", ".join(status_messages)
+            else:
+                # If no jobs, check for other status conditions
+                if status_messages:
+                    return ", ".join(status_messages)
+                else:
+                    # If no jobs and no other status conditions, printer is idle
+                    return "Idle"
+
+        finally:
+            # Ensure the printer handle is closed
+            win32print.ClosePrinter(hPrinter)
 
     except Exception as e:
-        return f"Error: {e}"
-
-
+        # Catch any other exceptions during the process
+        return f"Error checking printer status: {e}"
 
 
 def monitor_printer_status(printer_name, upload_folder):
@@ -1119,15 +1458,23 @@ def monitor_printer_status(printer_name, upload_folder):
     Continuously checks the printer status and resets the coin count
     when the printer becomes Printing, and deletes files from the upload folder
     when the printer becomes idle after printing. Runs as a background thread.
+    Also emits printer status updates via SocketIO.
     """
-    global coin_value_sum, coin_detection_active # Added coin_detection_active here
-    last_status = "Idle"
+    global coin_value_sum, coin_detection_active
+    last_status = "Unknown" # Initialize last_status to something other than Idle or Printing
 
     while True:
         current_status = check_printer_status(printer_name)
 
-        if current_status == "Printing" and last_status == "Idle":
-            print(f"Printer Status: {current_status}")
+        # Emit the current status to the frontend
+        if current_status != last_status:
+             print(f"Printer status changed to: {current_status}")
+             socketio.emit("printer_status_update", {"status": current_status})
+
+
+        # Logic for resetting coin count and stopping detection when printing starts
+        if current_status == "Printing" and last_status != "Printing":
+            print(f"Printer Status: {current_status}. Resetting coin count and stopping detection.")
             # Reset coin count when printing starts
             coin_value_sum = 0
             print(f"Coin count reset to: {coin_value_sum}")
@@ -1138,19 +1485,31 @@ def monitor_printer_status(printer_name, upload_folder):
             print("Coin detection deactivated due to printer status: Printing.")
 
 
+        # Logic for file deletion after printing is complete
+        # Check if the status transitioned from Printing to Idle
         elif current_status == "Idle" and last_status == "Printing":
-            print(f"Printer Status: {current_status}")
-            # File deletion after printing
+            print(f"Printer Status: {current_status}. Printing finished. Deleting files.")
+            # File deletion from the upload folder
+            # Be careful with file deletion; ensure only temporary or finished print files are removed.
+            # The current logic deletes ALL files in the UPLOAD_FOLDER.
+            # Consider a more selective approach if the UPLOAD_FOLDER contains files
+            # that should persist.
             for filename in os.listdir(upload_folder):
                 file_path = os.path.join(upload_folder, filename)
                 try:
-                    os.remove(file_path)
-                    print(f"Deleted file: {file_path}")
+                    # Add a check to ensure it's a file and not a directory
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        print(f"Deleted file: {file_path}")
                 except FileNotFoundError:
+                    # File might have been deleted by another process, ignore
                     pass
+                except Exception as e:
+                    # Log any other errors during file deletion
+                    print(f"Error deleting file {file_path}: {e}")
 
-        last_status = current_status
-        time.sleep(1) # Check status every second
+        last_status = current_status # Update last_status for the next iteration
+        time.sleep(2) # Check status less frequently (every 2 seconds) to reduce overhead
 
 
 @app.route('/payment-success')
@@ -1185,11 +1544,17 @@ def payment_type():
 
 if __name__ == "__main__":
     # Get the default printer name
-    printer_name = win32print.GetDefaultPrinter()
+    try:
+        printer_name = win32print.GetDefaultPrinter()
+        print(f"Default printer set to: {printer_name}")
+    except Exception as e:
+        print(f"Error getting default printer: {e}. Printer status monitoring may not work.")
+        printer_name = None # Ensure printer_name is None if getting it fails
+
     activity_log = []
 
-    # Path to the uploads folder (replace with your actual path)
-    upload_folder = "uploads"
+    # Path to the uploads folder
+    upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
     # Start the Arduino coin detection thread (COM3)
     # This thread runs continuously but only processes data when coin_detection_active is True
@@ -1200,8 +1565,14 @@ if __name__ == "__main__":
     socketio.start_background_task(read_gsm_data)
 
     # Start the printer status monitoring thread in the same process
-    socketio.start_background_task(monitor_printer_status, printer_name, upload_folder)
+    # Only start if a printer name was successfully obtained
+    if printer_name:
+        socketio.start_background_task(monitor_printer_status, printer_name, upload_folder)
+    else:
+        print("Printer name not available. Printer status monitoring disabled.")
 
-    # Start the Flask app
-    socketio.run(app, debug=False)
+
+    # Start the Flask app using socketio.run
+    # debug=False is recommended for production
+    socketio.run(app, debug=False, allow_unsafe_werkzeug=True) # allow_unsafe_werkzeug=True might be needed in some environments
 
