@@ -1598,4 +1598,3 @@ if __name__ == "__main__":
     # Start the Flask app using socketio.run
     # debug=False is recommended for production
     socketio.run(app, debug=False, allow_unsafe_werkzeug=True) # allow_unsafe_werkzeug=True might be needed in some environments
-
