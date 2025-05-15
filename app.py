@@ -193,6 +193,54 @@ def allowed_file(filename):
         and filename.rsplit(".", 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
     )
 
+def image_to_pdf_fit_page(image_path, output_pdf_path, page_size="A4"):
+    """
+    Converts an image to a PDF fitted to the specified page size.
+
+    page_size: "A4", "Short", or "Long"
+    """
+
+    # Define page sizes in mm (width, height)
+    page_sizes = {
+        "A4": (210, 297),
+        "Short": (216, 279),  # US Letter approx (8.5 x 11 in)
+        "Long": (216, 330),   # Custom longer paper, e.g., 8.5 x 13 in
+    }
+
+    if page_size not in page_sizes:
+        page_size = "A4"  # Default fallback
+
+    page_w_mm, page_h_mm = page_sizes[page_size]
+
+    # Load image to get size in pixels
+    img = cv2.imread(image_path)
+    if img is None:
+        raise ValueError(f"Failed to load image for PDF conversion: {image_path}")
+
+    img_h_px, img_w_px = img.shape[:2]
+
+    # Assume 96 DPI for pixel to mm conversion (adjust if you know real DPI)
+    dpi = 96
+    px_to_mm = 25.4 / dpi
+
+    img_w_mm = img_w_px * px_to_mm
+    img_h_mm = img_h_px * px_to_mm
+
+    # Calculate scale to fit image inside page, preserving aspect ratio
+    scale = min(page_w_mm / img_w_mm, page_h_mm / img_h_mm)
+
+    pdf_img_w = img_w_mm * scale
+    pdf_img_h = img_h_mm * scale
+
+    # Center image position on page
+    x_pos = (page_w_mm - pdf_img_w) / 2
+    y_pos = (page_h_mm - pdf_img_h) / 2
+
+    pdf = FPDF(unit="mm", format=(page_w_mm, page_h_mm))
+    pdf.add_page()
+    pdf.image(image_path, x=x_pos, y=y_pos, w=pdf_img_w, h=pdf_img_h)
+    pdf.output(output_pdf_path)
+
 
 def pdf_to_images(pdf_path):
     """Converts a PDF file to a list of OpenCV images."""
@@ -1201,70 +1249,102 @@ def stop_gsm_detection():
 
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
 def print_document_logic(print_options):
-    """
-    Print the original uploaded file directly without creating a PDF from images.
-    Returns True if printing initiated, False otherwise.
-    """
+    import pythoncom
+    from win32com import client
+    import win32api
+    import win32print
+
     try:
-        # The original filename must be passed in print_options under "fileName"
         filename = print_options.get("fileName")
         if not filename:
             print("Error: No filename provided in print options.")
             return False
 
-        # Construct full path to the uploaded file
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        page_size = print_options.get("pageSize", "A4")  # Get page size from options
 
-        # --- Add this logging ---
-        print(f"Attempting to print file: {file_path}")
-        if os.path.exists(file_path):
-            print(f"File found: {file_path}")
+        upload_dir = app.config['UPLOAD_FOLDER']
+        file_path = os.path.join(upload_dir, filename)
+        print(f"[print_document_logic] Looking for file at: {file_path}")
+
+        if not os.path.exists(file_path):
+            # try timestamped variants
+            candidates = [f for f in os.listdir(upload_dir) if f.endswith("_" + filename)]
+            if candidates:
+                file_path = os.path.join(upload_dir, candidates[0])
+                print(f"[print_document_logic] Found timestamped file: {candidates[0]}")
+            else:
+                print(f"Error: File not found: {file_path}")
+                return False
+
+        ext = filename.rsplit(".", 1)[1].lower()
+        default_printer = win32print.GetDefaultPrinter()
+        print(f"Sending {file_path} to printer {default_printer}...")
+
+        if os.name == 'nt':
+            # Windows
+            if ext in ('pdf',):
+                # Print PDF directly
+                win32api.ShellExecute(
+                    0,
+                    "print",
+                    file_path,
+                    None,
+                    os.path.dirname(file_path),
+                    0
+                )
+            elif ext in ('jpg', 'jpeg', 'png'):
+                # Convert image to PDF with selected page size and print PDF
+                temp_pdf_path = os.path.join(upload_dir, filename + "_converted.pdf")
+                try:
+                    image_to_pdf_fit_page(file_path, temp_pdf_path, page_size=page_size)
+                    win32api.ShellExecute(
+                        0,
+                        "print",
+                        temp_pdf_path,
+                        None,
+                        os.path.dirname(temp_pdf_path),
+                        0
+                    )
+                except Exception as e:
+                    print(f"Error converting image to PDF or printing: {e}")
+                    return False
+
+            elif ext in ('doc', 'docx'):
+                # Use Word COM to print silently
+                pythoncom.CoInitialize()
+                word = client.Dispatch("Word.Application")
+                word.Visible = False
+                doc = word.Documents.Open(file_path)
+                doc.PrintOut()
+                doc.Close(False)
+                word.Quit()
+                pythoncom.CoUninitialize()
+            else:
+                # Fallback for other files
+                win32api.ShellExecute(
+                    0,
+                    "print",
+                    file_path,
+                    None,
+                    os.path.dirname(file_path),
+                    0
+                )
+
+            print("Print command issued.")
+
         else:
-            print(f"Error: File not found at: {file_path}")
+            # macOS/Linux fallback - you can adapt similar logic using libreoffice for docx and convert images to PDF if needed
+            print("Non-Windows OS printing not implemented in this function.")
             return False
-        # --- End of logging ---
 
-        if os.name == 'nt':  # Windows
-            import win32print
-            import win32api
-            try:
-                printer_name = win32print.GetDefaultPrinter()
-                print(f"Sending original file to printer: {file_path} on printer: {printer_name}")
-                win32api.ShellExecute(0, "print", file_path, None, ".", 0)
-                print("Print command sent via ShellExecute.")
-            except Exception as e:
-                print(f"Error using ShellExecute to print: {e}")
-                # --- Add this logging for ShellExecute errors ---
-                import traceback
-                traceback.print_exc()
-                # --- End of logging ---
-                return False
-        else:
-            # For Linux/macOS: use lp command
-            try:
-                print(f"Sending original file to printer using lp: {file_path}")
-                os.system(f'lp "{file_path}"')
-                print("lp command executed.")
-            except Exception as e:
-                print(f"Error using lp to print: {e}")
-                 # --- Add this logging for lp command errors ---
-                import traceback
-                traceback.print_exc()
-                # --- End of logging ---
-                return False
-
-        print(f"Print process initiated for original file: {file_path}")
         return True
 
     except Exception as e:
-        print(f"An unexpected error occurred in print_document_logic: {e}")
-        # --- Add this logging for unexpected errors ---
-        import traceback
-        traceback.print_exc()
-        # --- End of logging ---
+        print(f"Error in print_document_logic: {e}")
         return False
 
 # END OF PRINT DOCUMENT LOGIC
+
 
 
 
