@@ -340,14 +340,8 @@ def docx_to_images(file_path):
             except Exception as cleanup_e:
                 print(f"Error cleaning up temporary PDF {pdf_path}: {cleanup_e}")
 
-
 def parse_page_selection(selection, total_pages):
-    """
-    Parses a page selection string like '1-3,5,7-9' into a sorted list
-    of unique page indices (0-based).
-    """
     import re
-
     pages = set()
     if not selection:
         return list(range(total_pages))  # Default: all pages
@@ -357,24 +351,18 @@ def parse_page_selection(selection, total_pages):
         if "-" in part:
             try:
                 start, end = map(int, part.split("-"))
-                # Ensure start and end are within valid page range (1-based)
                 start = max(1, start)
                 end = min(total_pages, end)
-                pages.update(range(start - 1, end))  # 0-based indexing
+                pages.update(range(start - 1, end))
             except ValueError:
-                 print(f"Warning: Invalid range format in page selection: {part}")
-                 continue # Skip this part and continue parsing
+                continue
         elif part.isdigit():
             page_num = int(part)
             if 1 <= page_num <= total_pages:
-                pages.add(page_num - 1)  # 0-based indexing
-            else:
-                 print(f"Warning: Page number out of range in selection: {page_num}")
+                pages.add(page_num - 1)
         else:
-            print(f"Warning: Invalid format in page selection: {part}")
-
-    return sorted(p for p in pages if 0 <= p < total_pages) # Final check to ensure indices are valid
-
+            continue
+    return sorted(p for p in pages if 0 <= p < total_pages)
 
 def highlight_bright_pixels(image, dark_threshold=50):
     # Ensure image is not None and is in BGR format
@@ -1316,99 +1304,98 @@ def stop_gsm_detection():
 
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
 def print_document_logic(print_options):
-    import pythoncom
-    from win32com import client
+    import fitz  # PyMuPDF
     import win32api
     import win32print
+    import os
 
     try:
         filename = print_options.get("fileName")
         if not filename:
-            print("Error: No filename provided in print options.")
+            print("Error: No filename provided.")
             return False
 
-        page_size = print_options.get("pageSize", "A4")  # Get page size from options
+        page_size = print_options.get("pageSize", "A4")
+        page_selection = print_options.get("pageSelection", "")  # e.g. "1-3,5"
+        num_copies = int(print_options.get("numCopies", 1))
+        orientation = print_options.get("orientationOption", "auto").lower()
+        color_option = print_options.get("colorOption", "Color").lower()
 
         upload_dir = app.config['UPLOAD_FOLDER']
         file_path = os.path.join(upload_dir, filename)
-        print(f"[print_document_logic] Looking for file at: {file_path}")
 
         if not os.path.exists(file_path):
-            # try timestamped variants
+            # Try timestamped variants (optional)
             candidates = [f for f in os.listdir(upload_dir) if f.endswith("_" + filename)]
             if candidates:
                 file_path = os.path.join(upload_dir, candidates[0])
-                print(f"[print_document_logic] Found timestamped file: {candidates[0]}")
             else:
                 print(f"Error: File not found: {file_path}")
                 return False
 
         ext = filename.rsplit(".", 1)[1].lower()
-        default_printer = win32print.GetDefaultPrinter()
-        print(f"Sending {file_path} to printer {default_printer}...")
 
-        if os.name == 'nt':
-            # Windows
-            if ext in ('pdf',):
-                # Print PDF directly
-                win32api.ShellExecute(
-                    0,
-                    "print",
-                    file_path,
-                    None,
-                    os.path.dirname(file_path),
-                    0
-                )
-            elif ext in ('jpg', 'jpeg', 'png'):
-                # Convert image to PDF with selected page size and print PDF
-                temp_pdf_path = os.path.join(upload_dir, filename + "_converted.pdf")
+        # Only handling PDF files here for page selection & orientation
+        if ext != "pdf":
+            print(f"File type '{ext}' is not fully supported for page selection and orientation.")
+            # For images, convert first to PDF with your existing function
+            if ext in ("jpg", "jpeg", "png"):
+                temp_pdf_path = os.path.join(upload_dir, f"{filename}_converted.pdf")
                 try:
                     image_to_pdf_fit_page(file_path, temp_pdf_path, page_size=page_size)
-                    win32api.ShellExecute(
-                        0,
-                        "print",
-                        temp_pdf_path,
-                        None,
-                        os.path.dirname(temp_pdf_path),
-                        0
-                    )
+                    file_path = temp_pdf_path
                 except Exception as e:
-                    print(f"Error converting image to PDF or printing: {e}")
+                    print(f"Error converting image to PDF: {e}")
                     return False
-
-            elif ext in ('doc', 'docx'):
-                # Use Word COM to print silently
-                pythoncom.CoInitialize()
-                word = client.Dispatch("Word.Application")
-                word.Visible = False
-                doc = word.Documents.Open(file_path)
-                doc.PrintOut()
-                doc.Close(False)
-                word.Quit()
-                pythoncom.CoUninitialize()
             else:
-                # Fallback for other files
-                win32api.ShellExecute(
-                    0,
-                    "print",
-                    file_path,
-                    None,
-                    os.path.dirname(file_path),
-                    0
-                )
+                # For other types (doc/docx), fallback to current behavior
+                print("Unsupported file for partial print options, sending directly to printer.")
+                file_path = os.path.join(upload_dir, filename)
 
-            print("Print command issued.")
+        doc = fitz.open(file_path)
+        total_pages = doc.page_count
 
-        else:
-            # macOS/Linux fallback - you can adapt similar logic using libreoffice for docx and convert images to PDF if needed
-            print("Non-Windows OS printing not implemented in this function.")
-            return False
+        # Parse page selection string into 0-based indexes
+        selected_pages = parse_page_selection(page_selection, total_pages)
 
+        # Create a new PDF with only selected pages and apply orientation
+        new_pdf = fitz.open()
+        for pno in selected_pages:
+            page = doc.load_page(pno)
+            if orientation == 'landscape' and page.rect.width < page.rect.height:
+                page.set_rotation(90)
+            new_pdf.insert_pdf(doc, from_page=pno, to_page=pno)
+
+        output_pdf_path = os.path.join(upload_dir, f"print_ready_{filename}")
+        new_pdf.save(output_pdf_path)
+        new_pdf.close()
+        doc.close()
+
+        printer_name = win32print.GetDefaultPrinter()
+        print(f"Sending {output_pdf_path} to printer {printer_name} with {num_copies} copies...")
+
+        # Printing copies - note: ShellExecute does not support copies,
+        # so send the print command in a loop for num_copies times.
+        for _ in range(num_copies):
+            win32api.ShellExecute(
+                0,
+                "print",
+                output_pdf_path,
+                None,
+                os.path.dirname(output_pdf_path),
+                0
+            )
+
+        # Optional: delete the temp print_ready file after printing
+        # os.remove(output_pdf_path)
+
+        print("Print command issued successfully.")
         return True
 
     except Exception as e:
         print(f"Error in print_document_logic: {e}")
         return False
+
 
 # END OF PRINT DOCUMENT LOGIC
 
