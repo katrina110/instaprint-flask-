@@ -1214,28 +1214,54 @@ def print_document_logic(print_options):
 
         # Construct full path to the uploaded file
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if not os.path.exists(file_path):
-            print(f"Error: File not found: {file_path}")
+
+        # --- Add this logging ---
+        print(f"Attempting to print file: {file_path}")
+        if os.path.exists(file_path):
+            print(f"File found: {file_path}")
+        else:
+            print(f"Error: File not found at: {file_path}")
             return False
+        # --- End of logging ---
 
         if os.name == 'nt':  # Windows
             import win32print
             import win32api
-            printer_name = win32print.GetDefaultPrinter()
-            print(f"Sending original file to printer: {file_path} on printer: {printer_name}")
-            win32api.ShellExecute(0, "print", file_path, None, ".", 0)
-            print("Print command sent via ShellExecute.")
+            try:
+                printer_name = win32print.GetDefaultPrinter()
+                print(f"Sending original file to printer: {file_path} on printer: {printer_name}")
+                win32api.ShellExecute(0, "print", file_path, None, ".", 0)
+                print("Print command sent via ShellExecute.")
+            except Exception as e:
+                print(f"Error using ShellExecute to print: {e}")
+                # --- Add this logging for ShellExecute errors ---
+                import traceback
+                traceback.print_exc()
+                # --- End of logging ---
+                return False
         else:
             # For Linux/macOS: use lp command
-            print(f"Sending original file to printer using lp: {file_path}")
-            os.system(f'lp "{file_path}"')
-            print("lp command executed.")
+            try:
+                print(f"Sending original file to printer using lp: {file_path}")
+                os.system(f'lp "{file_path}"')
+                print("lp command executed.")
+            except Exception as e:
+                print(f"Error using lp to print: {e}")
+                 # --- Add this logging for lp command errors ---
+                import traceback
+                traceback.print_exc()
+                # --- End of logging ---
+                return False
 
         print(f"Print process initiated for original file: {file_path}")
         return True
 
     except Exception as e:
-        print(f"Error in print_document_logic: {e}")
+        print(f"An unexpected error occurred in print_document_logic: {e}")
+        # --- Add this logging for unexpected errors ---
+        import traceback
+        traceback.print_exc()
+        # --- End of logging ---
         return False
 
 # END OF PRINT DOCUMENT LOGIC
@@ -1360,7 +1386,6 @@ def check_printer_status(printer_name):
         # Catch any other exceptions during the process
         return f"Error checking printer status: {e}"
 
-
 def monitor_printer_status(printer_name, upload_folder):
     """
     Continuously checks the printer status and resets the coin count
@@ -1370,6 +1395,8 @@ def monitor_printer_status(printer_name, upload_folder):
     """
     global coin_value_sum, coin_detection_active
     last_status = "Unknown" # Initialize last_status to something other than Idle or Printing
+    # Add a variable to track if printing was recently active
+    printing_was_active = False
 
     while True:
         current_status = check_printer_status(printer_name)
@@ -1391,17 +1418,21 @@ def monitor_printer_status(printer_name, upload_folder):
             # Stop coin detection when printing starts
             coin_detection_active = False
             print("Coin detection deactivated due to printer status: Printing.")
+            # Mark that printing was active
+            printing_was_active = True
 
 
         # Logic for file deletion after printing is complete
-        # Check if the status transitioned from Printing to Idle
-        elif current_status == "Idle" and last_status == "Printing":
-            print(f"Printer Status: {current_status}. Printing finished. Deleting files.")
+        # Check if the status transitioned from Printing to Idle AND printing was recently active
+        elif current_status == "Idle" and last_status != "Idle" and printing_was_active:
+            print(f"Printer Status: {current_status}. Printing finished. Waiting before deleting files.")
+            # --- Add a delay here before deleting files ---
+            time.sleep(10) # Wait for 10 seconds (adjust as needed)
+            print("Delay finished. Proceeding with file deletion.")
+            # --- End of delay ---
+
             # File deletion from the upload folder
-            # Be careful with file deletion; ensure only temporary or finished print files are removed.
-            # The current logic deletes ALL files in the UPLOAD_FOLDER.
-            # Consider a more selective approach if the UPLOAD_FOLDER contains files
-            # that should persist.
+            # Consider being more selective if needed. This currently deletes ALL files.
             for filename in os.listdir(upload_folder):
                 file_path = os.path.join(upload_folder, filename)
                 try:
@@ -1415,6 +1446,10 @@ def monitor_printer_status(printer_name, upload_folder):
                 except Exception as e:
                     # Log any other errors during file deletion
                     print(f"Error deleting file {file_path}: {e}")
+
+            # Reset the flag after attempting deletion
+            printing_was_active = False
+
 
         last_status = current_status # Update last_status for the next iteration
         time.sleep(2) # Check status less frequently (every 2 seconds) to reduce overhead
