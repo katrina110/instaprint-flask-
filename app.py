@@ -23,6 +23,9 @@ import threading
 from flask_socketio import SocketIO, emit
 import win32print
 from flask_sqlalchemy import SQLAlchemy
+import csv
+import requests
+from io import StringIO
 
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 import pywintypes
@@ -666,15 +669,25 @@ def admin_balance():
 
 @app.route("/admin-feedbacks")
 def admin_feedbacks():
-    # Example feedback data, replace with actual data retrieval
-    feedbacks = [
-        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM", "rating": 5},
-        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM", "rating": 3},
-        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM", "rating": 4},
-        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM", "rating": 4},
-        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM", "rating": 5},
-        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5},
-    ]
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQlpo4U0Z7HHUmeM3XIV9GW6xZ31WGILRjNm8hGCEuEahnxTzyFg5PLOXpFctb_69PZEDH8UAAoOEtk/pub?output=csv"
+    response = requests.get(url)
+    f = StringIO(response.text)
+    reader = csv.DictReader(f)
+
+    feedbacks = []
+    for row in reader:
+        rating_str = row.get("How would you rate your experience?", "0")
+        try:
+            rating = int(float(rating_str))
+        except (ValueError, TypeError):
+            rating = 0
+            
+        feedbacks.append({
+            "user": row.get("Nickname"),
+            "message": row.get("Comment"),
+            "time": row.get("Timestamp"),
+            "rating": rating  # use parsed value
+        })
     return render_template("admin-feedbacks.html", feedbacks=feedbacks)
 
 
