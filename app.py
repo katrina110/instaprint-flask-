@@ -728,11 +728,35 @@ def online_upload():
 
 @app.route("/payment")
 def payment_page():
-    """Renders the payment page and activates coin detection."""
-    global coin_detection_active
-    coin_detection_active = True # Activate coin detection when the payment page is accessed
-    print("Coin detection activated for payment.")
-    # The background task for coin detection is started in __main__ and will now become active
+    global coin_detection_active, coin_slot_serial # Make sure coin_slot_serial is globally accessible
+    
+    price_to_send_str = request.args.get('price') # Get price from URL query e.g. /payment?price=50
+    
+    # Activate coin detection; the background task will manage opening COM6
+    coin_detection_active = True 
+    print("Coin detection activated for payment. Background task will manage COM6.")
+
+    if price_to_send_str:
+        try:
+            price_to_send = int(price_to_send_str)
+            if price_to_send > 0:
+                # It's crucial that coin_slot_serial is open before writing.
+                # The background task read_coin_slot_data is responsible for opening it.
+                # A brief delay might allow the background task to establish the connection if it wasn't already open.
+                time.sleep(0.5) # Small delay, adjust as necessary or implement a more robust check
+
+                if coin_slot_serial and coin_slot_serial.is_open:
+                    coin_slot_serial.write(f"{price_to_send}\n".encode())
+                    print(f"Price {price_to_send} sent to Arduino from /payment route.")
+                else:
+                    print(f"Warning: COM6 not available or not open when trying to send price from /payment. Price {price_to_send} was not sent by this function.")
+                    # Consider error handling or attempting to open port like in /set_price,
+                    # but be cautious of conflicts with the background thread.
+        except ValueError:
+            print("Invalid price format received in URL query for /payment.")
+        except Exception as e:
+            print(f"Error attempting to send price from /payment route: {e}")
+            
     return render_template("payment.html")
 
 

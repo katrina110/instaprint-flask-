@@ -276,7 +276,9 @@ int getCoinValue(int pulseCount) {
 
 
 
-coinhopper/coinSlotPinconst int coinSlotPin = 2;
+coinhopper/coinSlotPin
+
+const int coinSlotPin = 2;
 const int hopperSensorPin = 3;
 const int ssrPin = 8;
 
