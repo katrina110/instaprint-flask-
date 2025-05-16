@@ -22,6 +22,11 @@ from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
+from flask_sqlalchemy import SQLAlchemy
+import csv
+import requests
+from io import StringIO
+
 # import multiprocessing # Removed multiprocessing as we'll use threading for printer status
 import pywintypes
 import wmi
@@ -30,8 +35,36 @@ import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
 import math
 
+
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
+    amount = db.Column(db.Float, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # For total sales tracking
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    # Emit the new transaction to update the dashboard in real-time
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+with app.app_context():
+    db.create_all()  # ensures tables are created before first use
+
 
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -314,14 +347,8 @@ def docx_to_images(file_path):
             except Exception as cleanup_e:
                 print(f"Error cleaning up temporary PDF {pdf_path}: {cleanup_e}")
 
-
 def parse_page_selection(selection, total_pages):
-    """
-    Parses a page selection string like '1-3,5,7-9' into a sorted list
-    of unique page indices (0-based).
-    """
     import re
-
     pages = set()
     if not selection:
         return list(range(total_pages))  # Default: all pages
@@ -331,24 +358,18 @@ def parse_page_selection(selection, total_pages):
         if "-" in part:
             try:
                 start, end = map(int, part.split("-"))
-                # Ensure start and end are within valid page range (1-based)
                 start = max(1, start)
                 end = min(total_pages, end)
-                pages.update(range(start - 1, end))  # 0-based indexing
+                pages.update(range(start - 1, end))
             except ValueError:
-                 print(f"Warning: Invalid range format in page selection: {part}")
-                 continue # Skip this part and continue parsing
+                continue
         elif part.isdigit():
             page_num = int(part)
             if 1 <= page_num <= total_pages:
-                pages.add(page_num - 1)  # 0-based indexing
-            else:
-                 print(f"Warning: Page number out of range in selection: {page_num}")
+                pages.add(page_num - 1)
         else:
-            print(f"Warning: Invalid format in page selection: {part}")
-
-    return sorted(p for p in pages if 0 <= p < total_pages) # Final check to ensure indices are valid
-
+            continue
+    return sorted(p for p in pages if 0 <= p < total_pages)
 
 def highlight_bright_pixels(image, dark_threshold=50):
     # Ensure image is not None and is in BGR format
@@ -572,20 +593,44 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    # Example data, replace with actual data retrieval logic
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
+    total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    
+    # Count by method
+    gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
+    coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+
     data = {
-        "total_sales": 5000, # Example total sales
-        "printed_pages": printed_pages_today, # Global counter for pages printed today
-        "files_uploaded": files_uploaded_today, # Global counter for files uploaded today
-        "current_balance": 3000, # Example current balance
-        "sales_history": [ # Example sales history data
-            {"method": "GCash", "amount": 500, "date": "2024-03-30", "time": "14:00"},
-            {"method": "PayMaya", "amount": 250, "date": "2024-03-29", "time": "11:30"},
+        "total_sales": total_sales,
+        "printed_pages": printed_pages_today,
+        "files_uploaded": files_uploaded_today,
+        "current_balance": 3000,
+        "sales_history": [
+            {
+                "method": t.method,
+                "amount": t.amount,
+                "date": t.timestamp.strftime('%Y-%m-%d'),
+                "time": t.timestamp.strftime('%H:%M:%S')
+            } for t in transactions
         ],
         "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
+        "transaction_method_summary": {
+            "gcash": round(gcash_total, 2),
+            "coinslot": round(coinslot_total, 2)
+        }
     }
     return render_template("admin-dashboard.html", data=data)
 
+# For testing purposes
+#@app.route('/test-transaction/<method>/<amount>')
+#def test_transaction(method, amount):
+#    try:
+#        record_transaction(method, float(amount))
+#        return f"Test transaction recorded: {method} - {amount}"
+#    except Exception as e:
+#        return f"Error: {str(e)}"
+    
+# End of testing
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
@@ -619,15 +664,25 @@ def admin_balance():
 
 @app.route("/admin-feedbacks")
 def admin_feedbacks():
-    # Example feedback data, replace with actual data retrieval
-    feedbacks = [
-        {"user": "Alice", "message": "Loved the service!", "time": "1:42 PM", "rating": 5},
-        {"user": "Bob", "message": "Could be faster.", "time": "2:55 PM", "rating": 3},
-        {"user": "Charlie", "message": "Great UI/UX.", "time": "4:10 PM", "rating": 4},
-        {"user": "Dana", "message": "Friendly support team.", "time": "5:20 PM", "rating": 4},
-        {"user": "Eli", "message": "Quick response time!", "time": "6:12 PM", "rating": 5},
-        {"user": "Faye", "message": "Highly recommended!", "time": "7:45 PM", "rating": 5},
-    ]
+    url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQlpo4U0Z7HHUmeM3XIV9GW6xZ31WGILRjNm8hGCEuEahnxTzyFg5PLOXpFctb_69PZEDH8UAAoOEtk/pub?output=csv"
+    response = requests.get(url)
+    f = StringIO(response.text)
+    reader = csv.DictReader(f)
+
+    feedbacks = []
+    for row in reader:
+        rating_str = row.get("How would you rate your experience?", "0")
+        try:
+            rating = int(float(rating_str))
+        except (ValueError, TypeError):
+            rating = 0
+            
+        feedbacks.append({
+            "user": row.get("Nickname"),
+            "message": row.get("Comment"),
+            "time": row.get("Timestamp"),
+            "rating": rating  # use parsed value
+        })
     return render_template("admin-feedbacks.html", feedbacks=feedbacks)
 
 
@@ -1256,99 +1311,98 @@ def stop_gsm_detection():
 
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
 def print_document_logic(print_options):
-    import pythoncom
-    from win32com import client
+    import fitz  # PyMuPDF
     import win32api
     import win32print
+    import os
 
     try:
         filename = print_options.get("fileName")
         if not filename:
-            print("Error: No filename provided in print options.")
+            print("Error: No filename provided.")
             return False
 
-        page_size = print_options.get("pageSize", "A4")  # Get page size from options
+        page_size = print_options.get("pageSize", "A4")
+        page_selection = print_options.get("pageSelection", "")  # e.g. "1-3,5"
+        num_copies = int(print_options.get("numCopies", 1))
+        orientation = print_options.get("orientationOption", "auto").lower()
+        color_option = print_options.get("colorOption", "Color").lower()
 
         upload_dir = app.config['UPLOAD_FOLDER']
         file_path = os.path.join(upload_dir, filename)
-        print(f"[print_document_logic] Looking for file at: {file_path}")
 
         if not os.path.exists(file_path):
-            # try timestamped variants
+            # Try timestamped variants (optional)
             candidates = [f for f in os.listdir(upload_dir) if f.endswith("_" + filename)]
             if candidates:
                 file_path = os.path.join(upload_dir, candidates[0])
-                print(f"[print_document_logic] Found timestamped file: {candidates[0]}")
             else:
                 print(f"Error: File not found: {file_path}")
                 return False
 
         ext = filename.rsplit(".", 1)[1].lower()
-        default_printer = win32print.GetDefaultPrinter()
-        print(f"Sending {file_path} to printer {default_printer}...")
 
-        if os.name == 'nt':
-            # Windows
-            if ext in ('pdf',):
-                # Print PDF directly
-                win32api.ShellExecute(
-                    0,
-                    "print",
-                    file_path,
-                    None,
-                    os.path.dirname(file_path),
-                    0
-                )
-            elif ext in ('jpg', 'jpeg', 'png'):
-                # Convert image to PDF with selected page size and print PDF
-                temp_pdf_path = os.path.join(upload_dir, filename + "_converted.pdf")
+        # Only handling PDF files here for page selection & orientation
+        if ext != "pdf":
+            print(f"File type '{ext}' is not fully supported for page selection and orientation.")
+            # For images, convert first to PDF with your existing function
+            if ext in ("jpg", "jpeg", "png"):
+                temp_pdf_path = os.path.join(upload_dir, f"{filename}_converted.pdf")
                 try:
                     image_to_pdf_fit_page(file_path, temp_pdf_path, page_size=page_size)
-                    win32api.ShellExecute(
-                        0,
-                        "print",
-                        temp_pdf_path,
-                        None,
-                        os.path.dirname(temp_pdf_path),
-                        0
-                    )
+                    file_path = temp_pdf_path
                 except Exception as e:
-                    print(f"Error converting image to PDF or printing: {e}")
+                    print(f"Error converting image to PDF: {e}")
                     return False
-
-            elif ext in ('doc', 'docx'):
-                # Use Word COM to print silently
-                pythoncom.CoInitialize()
-                word = client.Dispatch("Word.Application")
-                word.Visible = False
-                doc = word.Documents.Open(file_path)
-                doc.PrintOut()
-                doc.Close(False)
-                word.Quit()
-                pythoncom.CoUninitialize()
             else:
-                # Fallback for other files
-                win32api.ShellExecute(
-                    0,
-                    "print",
-                    file_path,
-                    None,
-                    os.path.dirname(file_path),
-                    0
-                )
+                # For other types (doc/docx), fallback to current behavior
+                print("Unsupported file for partial print options, sending directly to printer.")
+                file_path = os.path.join(upload_dir, filename)
 
-            print("Print command issued.")
+        doc = fitz.open(file_path)
+        total_pages = doc.page_count
 
-        else:
-            # macOS/Linux fallback - you can adapt similar logic using libreoffice for docx and convert images to PDF if needed
-            print("Non-Windows OS printing not implemented in this function.")
-            return False
+        # Parse page selection string into 0-based indexes
+        selected_pages = parse_page_selection(page_selection, total_pages)
 
+        # Create a new PDF with only selected pages and apply orientation
+        new_pdf = fitz.open()
+        for pno in selected_pages:
+            page = doc.load_page(pno)
+            if orientation == 'landscape' and page.rect.width < page.rect.height:
+                page.set_rotation(90)
+            new_pdf.insert_pdf(doc, from_page=pno, to_page=pno)
+
+        output_pdf_path = os.path.join(upload_dir, f"print_ready_{filename}")
+        new_pdf.save(output_pdf_path)
+        new_pdf.close()
+        doc.close()
+
+        printer_name = win32print.GetDefaultPrinter()
+        print(f"Sending {output_pdf_path} to printer {printer_name} with {num_copies} copies...")
+
+        # Printing copies - note: ShellExecute does not support copies,
+        # so send the print command in a loop for num_copies times.
+        for _ in range(num_copies):
+            win32api.ShellExecute(
+                0,
+                "print",
+                output_pdf_path,
+                None,
+                os.path.dirname(output_pdf_path),
+                0
+            )
+
+        # Optional: delete the temp print_ready file after printing
+        # os.remove(output_pdf_path)
+
+        print("Print command issued successfully.")
         return True
 
     except Exception as e:
         print(f"Error in print_document_logic: {e}")
         return False
+
 
 # END OF PRINT DOCUMENT LOGIC
 

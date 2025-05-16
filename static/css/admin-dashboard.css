@@ -8,6 +8,9 @@
   .container {
     display: flex;
     min-height: 100vh;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
     
   .menu {
@@ -145,7 +148,36 @@
     color: black;
     padding: 20px;
     border-radius: 8px;
-    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.chart-box .btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.chart-box .card-label {
+  margin-bottom: 10px; /* Adjust this value to control spacing under the title */
+}
+
+.sales-box {
+    background: white;
+    color: black;
+    padding: 20px;
+    border-radius: 8px;
+    flex: 1.3; /* Make it take up more space than the sales chart */
+}
+
+#transactionMethodChart {
+    width: 250px !important;
+    height: 250px !important;
+      margin-bottom: 10px; /* Space between pie chart and legend */
 }
 
 /* Files Upload */
@@ -200,6 +232,7 @@ h1 {
   font-weight: 500;
   text-align: center;
 }
+
 
 /* Activity Log */
 
