@@ -728,35 +728,43 @@ def online_upload():
 
 @app.route("/payment")
 def payment_page():
-    global coin_detection_active, coin_slot_serial # Make sure coin_slot_serial is globally accessible
-    
-    price_to_send_str = request.args.get('price') # Get price from URL query e.g. /payment?price=50
-    
-    # Activate coin detection; the background task will manage opening COM6
-    coin_detection_active = True 
-    print("Coin detection activated for payment. Background task will manage COM6.")
+    global coin_detection_active, coin_slot_serial, coin_value_sum
 
+    # 1) Reset coin counter for a fresh cycle
+    coin_value_sum = 0
+    socketio.emit('update_coin_count', {'count': coin_value_sum})
+
+    # 2) Activate detection
+    coin_detection_active = True
+    print("Coin detection activated for payment. Reset and fresh cycle.")
+
+    # 3) Force-close and re-open COM6 to ensure a clean serial state
+    try:
+        if coin_slot_serial and coin_slot_serial.is_open:
+            coin_slot_serial.close()
+            print("Closed stale coin-serial port for fresh open.")
+    except Exception as e:
+        print(f"Warning closing stale serial port: {e}")
+
+    try:
+        coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+        time.sleep(2)
+        print(f"Re-opened serial port {COIN_SLOT_PORT} for new cycle.")
+    except Exception as e:
+        print(f"Error reopening serial port {COIN_SLOT_PORT}: {e}")
+
+    # 4) Send the new price every time /payment is loaded
+    price_to_send_str = request.args.get('price')
     if price_to_send_str:
         try:
             price_to_send = int(price_to_send_str)
-            if price_to_send > 0:
-                # It's crucial that coin_slot_serial is open before writing.
-                # The background task read_coin_slot_data is responsible for opening it.
-                # A brief delay might allow the background task to establish the connection if it wasn't already open.
-                time.sleep(0.5) # Small delay, adjust as necessary or implement a more robust check
-
-                if coin_slot_serial and coin_slot_serial.is_open:
-                    coin_slot_serial.write(f"{price_to_send}\n".encode())
-                    print(f"Price {price_to_send} sent to Arduino from /payment route.")
-                else:
-                    print(f"Warning: COM6 not available or not open when trying to send price from /payment. Price {price_to_send} was not sent by this function.")
-                    # Consider error handling or attempting to open port like in /set_price,
-                    # but be cautious of conflicts with the background thread.
-        except ValueError:
-            print("Invalid price format received in URL query for /payment.")
+            coin_slot_serial.write(f"{price_to_send}\n".encode())
+            print(f"Price {price_to_send} sent to Arduino from /payment route (fresh cycle).")
         except Exception as e:
-            print(f"Error attempting to send price from /payment route: {e}")
-            
+            print(f"Error sending price in fresh cycle: {e}")
+    else:
+        print("No price parameter received in /payment URL.")
+
     return render_template("payment.html")
 
 
@@ -1552,72 +1560,42 @@ def check_printer_status(printer_name):
         return f"Error checking printer status: {e}"
 
 def monitor_printer_status(printer_name, upload_folder):
-    """
-    Continuously checks the printer status and resets the coin count
-    when the printer becomes Printing, and deletes files from the upload folder
-    when the printer becomes idle after printing. Runs as a background thread.
-    Also emits printer status updates via SocketIO.
-    """
     global coin_value_sum, coin_detection_active
-    last_status = "Unknown" # Initialize last_status to something other than Idle or Printing
-    # Add a variable to track if printing was recently active
+    last_status = None
     printing_was_active = False
 
     while True:
         current_status = check_printer_status(printer_name)
 
-        # Emit the current status to the frontend
+        # Emit status change
         if current_status != last_status:
-             print(f"Printer status changed to: {current_status}")
-             socketio.emit("printer_status_update", {"status": current_status})
+            print(f"Printer status changed to: {current_status}")
+            socketio.emit("printer_status_update", {"status": current_status})
 
-
-        # Logic for resetting coin count and stopping detection when printing starts
+        # When printing starts: reset and deactivate coin detection
         if current_status == "Printing" and last_status != "Printing":
-            print(f"Printer Status: {current_status}. Resetting coin count and stopping detection.")
-            # Reset coin count when printing starts
             coin_value_sum = 0
-            print(f"Coin count reset to: {coin_value_sum}")
-            # Emit update to all connected clients
             socketio.emit('update_coin_count', {'count': coin_value_sum})
-            # Stop coin detection when printing starts
             coin_detection_active = False
-            print("Coin detection deactivated due to printer status: Printing.")
-            # Mark that printing was active
             printing_was_active = True
+            print("Printing started: coin count reset and detection deactivated.")
 
-
-        # Logic for file deletion after printing is complete
-        # Check if the status transitioned from Printing to Idle AND printing was recently active
-        elif current_status == "Idle" and last_status != "Idle" and printing_was_active:
-            print(f"Printer Status: {current_status}. Printing finished. Waiting before deleting files.")
-            # --- Add a delay here before deleting files ---
-            time.sleep(10) # Wait for 10 seconds (adjust as needed)
-            print("Delay finished. Proceeding with file deletion.")
-            # --- End of delay ---
-
-            # File deletion from the upload folder
-            # Consider being more selective if needed. This currently deletes ALL files.
+        # After printing finishes: wait, delete files, and allow next cycle
+        elif current_status == "Idle" and last_status == "Printing" and printing_was_active:
+            time.sleep(10)  # allow any pending tasks to finish
             for filename in os.listdir(upload_folder):
-                file_path = os.path.join(upload_folder, filename)
-                try:
-                    # Add a check to ensure it's a file and not a directory
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
-                        print(f"Deleted file: {file_path}")
-                except FileNotFoundError:
-                    # File might have been deleted by another process, ignore
-                    pass
-                except Exception as e:
-                    # Log any other errors during file deletion
-                    print(f"Error deleting file {file_path}: {e}")
-
-            # Reset the flag after attempting deletion
+                path = os.path.join(upload_folder, filename)
+                if os.path.isfile(path):
+                    try:
+                        os.remove(path)
+                        print(f"Deleted file: {path}")
+                    except Exception as e:
+                        print(f"Error deleting {path}: {e}")
             printing_was_active = False
+            print("Cleanup after printing complete.")
 
-
-        last_status = current_status # Update last_status for the next iteration
-        time.sleep(2) # Check status less frequently (every 2 seconds) to reduce overhead
+        last_status = current_status
+        time.sleep(2)
 
 
 @app.route('/payment-success')
