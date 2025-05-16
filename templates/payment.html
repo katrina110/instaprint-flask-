@@ -203,62 +203,62 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      // Initialize Socket.IO connection
-      const socket = io();
+    // Initialize Socket.IO connection
+    const socket = io();
 
-      // Get necessary DOM elements
-      const priceValueElement = document.getElementById("priceValue");
-      const coinCountH3 = document.getElementById("coin-count");
-      const coinCountSpan = coinCountH3 ? coinCountH3.querySelector("span") : null; // Safely get the span
-      const modal = document.getElementById("myModal");
-      const cancelBtn = document.getElementById("cancelPayment");
+    // Get necessary DOM elements
+    const priceValueElement = document.getElementById("priceValue");
+    const coinCountH3 = document.getElementById("coin-count");
+    const coinCountSpan = coinCountH3 ? coinCountH3.querySelector("span") : null; // Safely get the span
+    const modal = document.getElementById("myModal");
+    const cancelBtn = document.getElementById("cancelPayment");
 
-      // Retrieve total price and print options from sessionStorage
-      const totalPrice = sessionStorage.getItem("totalPrice");
-      const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
+    // Retrieve total price and print options from sessionStorage
+    const totalPrice = sessionStorage.getItem("totalPrice");
+    const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
-      // Display total price or handle missing data
-      if (totalPrice && !isNaN(parseFloat(totalPrice))) {
-        priceValueElement.textContent = parseFloat(totalPrice).toFixed(2);
+    // Display total price or handle missing data
+    if (totalPrice && !isNaN(parseFloat(totalPrice))) {
+      priceValueElement.textContent = parseFloat(totalPrice).toFixed(2);
 
-        // 1) Send the total price to the backend to set the price on the Arduino
-        fetch("/set_price", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ price: parseFloat(totalPrice) }), // Ensure price is a number
-        })
-        .then(response => {
-            if (!response.ok) {
-                // Handle HTTP errors
-                console.error('Failed to set price:', response.status, response.statusText);
-                // Optionally inform the user
-                // alert("Failed to set price with the system. Please try again.");
-                // window.location.href = "/manual-display-upload"; // Redirect on failure
-            }
-            return response.json(); // Parse JSON response
-        })
-        .then(data => {
-            if (!data.success) {
-                 console.error('Backend reported failure setting price:', data.message);
-                 // Optionally inform the user
-                 // alert("Failed to set price with the system. Please try again.");
-                 // window.location.href = "/manual-display-upload"; // Redirect on failure
-            } else {
-                 console.log('Price set successfully:', data.message);
-            }
-        })
-        .catch((error) => {
-          console.error("Error sending price to backend:", error);
-          // Handle network errors or other exceptions
-          // alert("Could not communicate with the system to set price. Please check connection and try again.");
-          // window.location.href = "/manual-display-upload"; // Redirect on error
-        });
+      // 1) Send the total price to the backend to set the price on the Arduino
+      fetch("/set_price", { // <--- This fetch request
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price: parseFloat(totalPrice) }), // Ensure price is a number
+      })
+      .then(response => {
+          if (!response.ok) {
+              // Handle HTTP errors
+              console.error('Failed to set price:', response.status, response.statusText);
+              // Optionally inform the user
+              // alert("Failed to set price with the system. Please try again.");
+              // window.location.href = "/manual-display-upload"; // Redirect on failure
+          }
+          return response.json(); // Parse JSON response
+      })
+      .then(data => {
+          if (!data.success) {
+               console.error('Backend reported failure setting price:', data.message);
+               // Optionally inform the user
+               // alert("Failed to set price with the system. Please try again.");
+               // window.location.href = "/manual-display-upload"; // Redirect on failure
+          } else {
+               console.log('Price set successfully:', data.message);
+          }
+      })
+      .catch((error) => {
+        console.error("Error sending price to backend:", error);
+        // Handle network errors or other exceptions
+        // alert("Could not communicate with the system to set price. Please check connection and try again.");
+        // window.location.href = "/manual-display-upload"; // Redirect on error
+      });
 
-      } else {
-        // If total price is missing or invalid, alert user and redirect
-        alert("Total Price could not be loaded. Please go back and reselect your options.");
-        window.location.href = "/manual-display-upload";
-      }
+    } else {
+      // If total price is missing or invalid, alert user and redirect
+      alert("Total Price could not be loaded. Please go back and reselect your options.");
+      window.location.href = "/manual-display-upload";
+    }
 
       // WebSocket Listener: Update coin count display
       socket.on("update_coin_count", (data) => {

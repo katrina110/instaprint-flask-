@@ -64,11 +64,11 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM3
+coin_detection_active = False # Flag to control coin detection for COM6
 gsm_active = False # Flag to control GSM detection for COM15
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM3'
+COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM15'
 BAUD_RATE = 9600
 
@@ -118,19 +118,26 @@ def set_price():
     data = request.get_json() or {}
     price = int(data.get("price", 0))
 
+    # This block attempts to open the serial port if it's not open.
+    # Consider moving the serial port management to the background thread
+    # or implementing more robust retry logic here.
     if not coin_slot_serial or not coin_slot_serial.is_open:
         try:
             coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
             # give Arduino a moment to reset
-            time.sleep(2)
+            time.sleep(2) # <--- This sleep might not be enough
         except serial.SerialException as e:
              return jsonify(success=False, message=f"Failed to open serial port {COIN_SLOT_PORT}: {str(e)}"), 500
 
 
     try:
+        # This is where the price is sent to the Arduino.
+        # This write operation could fail if the Arduino isn't ready.
         coin_slot_serial.write(f"{price}\n".encode())
         return jsonify(success=True)
     except Exception as e:
+        # Basic error handling for writing to the serial port.
+        # More specific error handling or retries could be added.
         return jsonify(success=False, message=str(e)), 500
 
 def serial_listener():
@@ -1016,7 +1023,7 @@ def determine_orientation(image, user_orientation):
 # Error handling and reconnect logic are already present.
 def read_coin_slot_data():
     """
-    Continuously reads data from the Arduino serial port (COM3) for coin detection,
+    Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1052,7 +1059,7 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM3): {message}")
+                    print(f"Received from Arduino (COM6): {message}")
                     if message.startswith("Detected coin worth ₱"):
                         try:
                             # Extract coin value using regex for better robustness
@@ -1067,9 +1074,9 @@ def read_coin_slot_data():
                                 print(f"Could not parse coin value from serial message: {message}")
 
                         except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
+                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM3: {message}")
+                        print(f"Warning from COM6: {message}")
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
@@ -1081,7 +1088,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM3.")
+                print("Error decoding serial data from COM6.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1579,7 +1586,7 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM3)
+    # Start the Arduino coin detection thread (COM6)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
