@@ -97,11 +97,11 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM3
+coin_detection_active = False # Flag to control coin detection for COM6
 gsm_active = False # Flag to control GSM detection for COM15
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM3'
+COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM15'
 BAUD_RATE = 9600
 
@@ -735,7 +735,7 @@ def payment_page():
     coin_detection_active = True
     print("Coin detection activated for payment. Reset and fresh cycle.")
 
-    # 3) Force-close and re-open COM3 to ensure a clean serial state
+    # 3) Force-close and re-open COM6 to ensure a clean serial state
     try:
         if coin_slot_serial and coin_slot_serial.is_open:
             coin_slot_serial.close()
@@ -781,97 +781,171 @@ def upload_file():
     global printed_pages_today, files_uploaded_today, last_updated_date
     global uploaded_files_info
 
+    # Reset daily stats if the day has changed
     if datetime.now().date() != last_updated_date:
         printed_pages_today = 0
         files_uploaded_today = 0
         last_updated_date = datetime.now().date()
-        uploaded_files_info = []
+        uploaded_files_info = [] # Also clear file info for the new day
 
+    # Check if the file part is in the request
     if "file" not in request.files:
+        print("Upload Error: No file part in request.")
         return jsonify({"error": "No file part"}), 400
 
     file = request.files["file"]
+
+    # Check if a file was selected (filename is not empty)
     if file.filename == "":
+        print("Upload Error: No selected file (empty filename).")
         return jsonify({"error": "No selected file"}), 400
 
-    if file and allowed_file(file.filename):
-        original_filename = file.filename
-        file_ext = original_filename.split(".")[-1].lower()
+    original_filename = file.filename
+    file_ext = original_filename.rsplit(".", 1)[-1].lower()
 
-        # Create a safe, unique filename
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        safe_filename = f"{timestamp}_{original_filename}"
-        filepath = os.path.join(UPLOAD_FOLDER, safe_filename)
+    # Check if the file extension is allowed
+    if not allowed_file(original_filename):
+        print(f"Upload Error: Invalid file format: {original_filename}")
+        return jsonify({"error": f"Unsupported file format: .{file_ext}"}), 400
+
+    # --- File is valid and allowed, proceed with saving and processing ---
+
+    # Create a safe, unique filename for saving
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    # Use original_filename here to preserve the original extension in the saved path
+    # This is important for the file.save() method and subsequent processing
+    safe_saved_filename = f"{timestamp}_{original_filename}"
+    filepath = os.path.join(UPLOAD_FOLDER, safe_saved_filename)
+
+    try:
+        # Save the original uploaded file
         file.save(filepath)
+        print(f"File saved temporarily at: {filepath}")
+    except Exception as e:
+        print(f"Upload Error: Failed to save file {safe_saved_filename}: {e}")
+        return jsonify({"error": "Failed to save file on server."}), 500
 
-        # Reset previous data
-        images = []
-        total_pages = 0
+    # --- File saved, now process it ---
 
-        # Process based on file type
-        if file_ext == "pdf":
-            images = pdf_to_images(filepath)
-            total_pages = len(images)
+    # Initialize variables that will hold the *final* filename and total pages
+    # after potential conversion to PDF. Initialize filename here!
+    final_filename_for_info = safe_saved_filename # Start with the saved filename
+    final_file_ext_for_info = file_ext # Start with original extension
+    final_filepath_for_processing = filepath # Use the saved file initially
+    processed_images = []
+    calculated_total_pages = 0
 
-        elif file_ext in ("jpg", "jpeg", "png"):
-            img = cv2.imread(filepath)
-            if img is not None:
-                images = [img]
-                total_pages = 1
+    # Reset previous global image data
+    global images # Clear previous images before processing the new file
+    images = []
 
-                # Convert image to PDF
-                pdf_filename = safe_filename.rsplit(".", 1)[0] + ".pdf"
-                pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
 
-                try:
-                    image_to_pdf_fit_page(filepath, pdf_path)
-                    # Update tracking to PDF version
-                    filename = pdf_filename
-                    file_ext = "pdf"
-                    filepath = pdf_path
-                    os.remove(os.path.join(UPLOAD_FOLDER, safe_filename))  # delete original image
-                except Exception as e:
-                    print(f"Failed to convert image to PDF: {e}")
-                    os.remove(filepath)
-                    return jsonify({"error": "Image conversion to PDF failed"}), 500
-            else:
-                os.remove(filepath)
-                return jsonify({"error": "Failed to read image file"}), 500
+    # Process based on file type
+    if file_ext == "pdf":
+        print(f"Processing PDF: {original_filename}")
+        processed_images = pdf_to_images(final_filepath_for_processing)
+        calculated_total_pages = len(processed_images)
+        # final_filename_for_info and final_file_ext_for_info remain correct here
 
-        elif file_ext in ("doc", "docx"):
-            images, converted_pdf_path = docx_to_images(filepath)
-            total_pages = len(images)
-            if converted_pdf_path:
-                os.remove(filepath)  # Delete original DOC/DOCX
-                filename = os.path.basename(converted_pdf_path)
-                file_ext = "pdf"
-                filepath = converted_pdf_path
+    elif file_ext in ("jpg", "jpeg", "png"):
+        print(f"Processing Image: {original_filename}")
+        img = cv2.imread(final_filepath_for_processing)
+        if img is not None:
+            # Even for a single image, treat as a list of one for consistency
+            processed_images = [img]
+            calculated_total_pages = 1
 
+            # Convert image to PDF for consistent handling downstream (printing, page selection)
+            # Generate a PDF filename based on the safe_saved_filename base name
+            pdf_filename = safe_saved_filename.rsplit(".", 1)[0] + ".pdf"
+            pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+
+            try:
+                print(f"Converting image to PDF: {pdf_path}")
+                image_to_pdf_fit_page(final_filepath_for_processing, pdf_path)
+                # Update tracking variables to point to the new PDF
+                final_filename_for_info = pdf_filename
+                final_file_ext_for_info = "pdf"
+                final_filepath_for_processing = pdf_path
+                # Delete the original image file as it's been converted
+                os.remove(filepath) # Use the initial 'filepath' which points to the original image
+                print(f"Deleted original image file: {filepath}")
+
+            except Exception as e:
+                print(f"Upload Error: Failed to convert image to PDF: {e}")
+                # Clean up the original image if conversion failed
+                if os.path.exists(filepath): os.remove(filepath)
+                return jsonify({"error": "Image conversion to PDF failed"}), 500
         else:
-            os.remove(filepath)
-            return jsonify({"error": "Unsupported file format"}), 400
+            print(f"Upload Error: Failed to read image file: {final_filepath_for_processing}")
+            # Clean up the original image file if read failed
+            if os.path.exists(final_filepath_for_processing): os.remove(final_filepath_for_processing)
+            return jsonify({"error": "Failed to read image file"}), 500
 
-        if not images:
-            os.remove(filepath)
-            return jsonify({"error": "Failed to process file into images"}), 500
+    elif file_ext in ("doc", "docx"):
+        print(f"Processing Word Document: {original_filename}")
+        # docx_to_images returns images and the path to the *newly created PDF*
+        processed_images, converted_pdf_path = docx_to_images(final_filepath_for_processing) # Use the saved doc/docx path
+        calculated_total_pages = len(processed_images)
 
-        printed_pages_today += total_pages
-        files_uploaded_today += 1
+        if converted_pdf_path and os.path.exists(converted_pdf_path):
+            # Update tracking variables to point to the new PDF
+            final_filename_for_info = os.path.basename(converted_pdf_path) # Get just the filename
+            final_file_ext_for_info = "pdf"
+            final_filepath_for_processing = converted_pdf_path
+            # Delete the original DOC/DOCX file
+            os.remove(filepath) # Use the initial 'filepath' which points to the original doc/docx
+            print(f"Deleted original Word document file: {filepath}")
+        else:
+             print(f"Upload Error: Failed to convert Word document to PDF: {original_filename}")
+             # Clean up the original doc/docx if conversion failed
+             if os.path.exists(filepath): os.remove(filepath)
+             return jsonify({"error": "Failed to convert Word document to PDF"}), 500
 
-        uploaded_files_info.append({
-            "file": filename,
-            "type": file_ext,
-            "pages": total_pages,
-            "time": datetime.now().strftime('%I:%M %p')
-        })
+    else:
+        # This block should ideally be unreachable due to allowed_file check
+        print(f"Upload Error: Reached unsupported file format block for {original_filename}")
+        # Clean up the saved file
+        if os.path.exists(filepath): os.remove(filepath)
+        return jsonify({"error": "Internal server error: Unsupported file format after check."}), 500
 
-        return jsonify({
-            "message": "File uploaded successfully!",
-            "fileName": filename,
-            "totalPages": total_pages
-        }), 200
+    # --- Check if processing resulted in images ---
+    if not processed_images:
+        print(f"Upload Error: File processing resulted in no images for {final_filename_for_info}")
+        # Clean up the potentially converted file if processing failed
+        # Check using the potentially updated filepath
+        if os.path.exists(final_filepath_for_processing): os.remove(final_filepath_for_processing)
+        return jsonify({"error": "Failed to process file content (empty or invalid?)"}), 500
 
-    return jsonify({"error": "Invalid file format"}), 400
+    # --- If successful, update global state and return response ---
+
+    # Store the processed images globally (consider memory implications for large files)
+    images = processed_images
+    total_pages = calculated_total_pages # Update global total_pages
+
+    # Update daily stats
+    files_uploaded_today += 1
+    # Note: printed_pages_today should ideally count pages sent to the printer,
+    # not pages in the uploaded file. Keeping original logic for now.
+    printed_pages_today += total_pages
+
+    # Add file info to the admin view list
+    uploaded_files_info.append({
+        "file": final_filename_for_info, # Use the determined final filename
+        "type": final_file_ext_for_info, # Use the determined final extension ('pdf')
+        "pages": total_pages,
+        "time": datetime.now().strftime('%I:%M %p')
+    })
+
+    print(f"File uploaded and processed successfully: {final_filename_for_info}")
+
+    # --- Return success response ---
+    # Use the consistently assigned variable 'final_filename_for_info'
+    return jsonify({
+        "message": "File uploaded successfully!",
+        "fileName": final_filename_for_info, # <-- Use the variable assigned in all paths
+        "totalPages": total_pages
+    }), 200
 
 
 @app.route("/generate_preview", methods=["POST"])
@@ -1119,7 +1193,7 @@ def determine_orientation(image, user_orientation):
 # Error handling and reconnect logic are already present.
 def read_coin_slot_data():
     """
-    Continuously reads data from the Arduino serial port (COM3) for coin detection,
+    Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1155,7 +1229,7 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM3): {message}")
+                    print(f"Received from Arduino (COM6): {message}")
                     if message.startswith("Detected coin worth ₱"):
                         try:
                             # Extract coin value using regex for better robustness
@@ -1170,9 +1244,9 @@ def read_coin_slot_data():
                                 print(f"Could not parse coin value from serial message: {message}")
 
                         except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
+                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM3: {message}")
+                        print(f"Warning from COM6: {message}")
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
@@ -1184,7 +1258,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM3.")
+                print("Error decoding serial data from COM6.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1651,7 +1725,7 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM3)
+    # Start the Arduino coin detection thread (COM6)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 

@@ -403,7 +403,6 @@
               class="btn btn-primary"
               href="{{ toffee_share_link }}"
               id="openToffeeShareModal"
-              target="_blank"
               >Go To Toffeshare</a
             >
           </div>
@@ -594,7 +593,7 @@
           <div class="modal-header" style="background-color: #700000; color: white;">
             <h5 class="modal-title" id="toffeeshareModalLabel">ToffeeShare</h5>
             <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: white;">
-              <span aria-hidden="true">&times;</span>
+              <span aria-hidden="true">×</span>
             </button>
           </div>
           <div class="modal-body">
@@ -609,24 +608,37 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
+      // Merged script block using jQuery ready
       $(document).ready(function () {
         let previewTimeout;
         let totalPages = 0;
         let fileName = "";
 
+        // Elements references
+        const fileInput = document.getElementById("file");
+        const fileInfo = document.getElementById("fileInfo");
+        const fileNameSpan = document.getElementById("fileName");
+        const fileSizeSpan = document.getElementById("fileSize");
+        const removeFileBtn = document.getElementById("removeFileBtn");
+        const prevStepBtn = document.getElementById("prevStepBtn");
+
+
         // ========== STEP NAVIGATION & TERMS ==========
         let currentStep = 1;
         function showStep(step) {
-          currentStep = step; // FIX: update currentStep here!
+          currentStep = step;
           $(".step").removeClass("active");
           $("#step" + step).addClass("active");
           $(".step-indicator").removeClass("active");
           $("#step" + step + "-indicator").addClass("active");
-          // Keep prevStepBtn disabled in step 3 unless file is removed
-           $("#prevStepBtn").prop(
-             "disabled",
-             step === 3 && $("#file").val() !== ""
-           );
+
+          // Logic for Previous button in Step 3
+           if (step === 3) {
+              // Disable if a file is selected, enable otherwise
+              prevStepBtn.disabled = fileInput.files.length > 0;
+           } else {
+              prevStepBtn.disabled = false; // Always enabled in steps 1 and 2
+           }
         }
         $(".next-btn").click(() => {
           if (currentStep < 3) showStep(++currentStep);
@@ -651,23 +663,41 @@
         });
 
 
-        // ========== FILE UPLOAD HANDLING ==========
-        $("#file").change(function () {
-          const f = this.files[0];
-          if (f) {
-            $("#fileInfo").show();
-            $("#fileName").text(f.name);
-            $("#fileSize").text((f.size / 1024).toFixed(2) + " KB");
-            // No showStep(3) here, as the next button already takes them to step 3
-            $("#prevStepBtn").prop("disabled", true); // Disable 'Previous' button in step 3 once file is selected
-          }
-        });
-        $("#removeFileBtn").click(() => {
-          $("#file").val("");
-          $("#fileInfo").hide();
-          $("#fileName, #fileSize").text("N/A");
-           $("#prevStepBtn").prop("disabled", false); // Enable 'Previous' button if file is removed
-        });
+        // ========== FILE INPUT CHANGE HANDLING ==========
+        // Use the direct element listener and update the jQuery change handler logic
+        if (fileInput && fileInfo && fileNameSpan && fileSizeSpan && prevStepBtn) { // Check if elements exist
+             fileInput.addEventListener("change", function () {
+              if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameSpan.textContent = file.name;
+                fileSizeSpan.textContent = (file.size / 1024).toFixed(2) + " KB";
+                fileInfo.style.display = "block";
+                 // Disable prev button when file is selected in step 3
+                if (currentStep === 3) {
+                    prevStepBtn.disabled = true;
+                }
+              } else { // If file is deselected (e.g., by remove button clearing value)
+                 fileNameSpan.textContent = "N/A";
+                 fileSizeSpan.textContent = "N/A";
+                 fileInfo.style.display = "none";
+                 // Enable prev button if no file is selected in step 3
+                 if (currentStep === 3) {
+                     prevStepBtn.disabled = false;
+                 }
+              }
+            });
+        }
+
+        // ========== REMOVE FILE BUTTON HANDLING ==========
+        if (removeFileBtn && fileInput && fileInfo && fileNameSpan && fileSizeSpan && prevStepBtn) { // Check if elements exist
+            removeFileBtn.addEventListener("click", function () {
+              fileInput.value = ""; // Clear file input
+              // Manually trigger the change logic to update display and button state
+              const changeEvent = new Event('change');
+              fileInput.dispatchEvent(changeEvent);
+            });
+        }
+
 
         // ========== PAGE PICKER & PREVIEW ==========
         function buildPagePicker(n) {
@@ -742,8 +772,12 @@
                   .appendTo(pc);
               });
             },
-            error(xhr, status, error) {
-              console.error("Preview error:", error); // Log error for debugging
+            error: function(xhr, status, error) { // Use function keyword for clarity if needed
+              console.error("Preview error. Status:", status);
+              console.error("Error message:", error);
+              console.error("XHR responseText:", xhr.responseText);
+              console.error("XHR status:", xhr.status);
+              console.error("XHR responseJSON:", xhr.responseJSON); // Might be undefined
               pc.html("<p>Error generating preview.</p>");
             },
           });
@@ -753,7 +787,7 @@
         $("#uploadForm").submit(function (e) {
           e.preventDefault();
           // Check if a file is selected
-          if (!$("#file").val()) {
+          if (fileInput.files.length === 0) { // Use the direct fileInput element
               alert("Please select a file first.");
               return; // Stop submission if no file is selected
           }
@@ -763,9 +797,9 @@
             url: "/upload", // Ensure this endpoint exists and works
             method: "POST",
             data: new FormData(this),
-            contentType: false,
-            processData: false,
-            success(response) {
+            contentType: false, // Important for FormData
+            processData: false, // Important for FormData
+            success: function(response) {
               fileName = response.fileName;
               totalPages = response.totalPages; // Store total pages
               buildPagePicker(totalPages); // Build picker based on total pages
@@ -774,13 +808,43 @@
               $("#printOptionsModal").modal("show"); // Show print options modal
               // Initial preview load is handled by buildPagePicker -> updatePageSelection -> schedulePreview
             },
-            error(xhr, status, error) {
-              console.error("Upload error:", error); // Log error for debugging
-              alert(xhr.responseJSON?.error || "Upload failed. Please try again.");
+            error: function(xhr, status, error) { // Use function keyword for clarity if needed
+              console.error("Upload failed. Status:", status);
+              console.error("Error message:", error);
+              console.error("XHR responseText:", xhr.responseText);
+              console.error("XHR status:", xhr.status);
+              console.error("XHR responseJSON:", xhr.responseJSON); // Might be undefined
+
+              let errorMessage = "Upload failed. Please try again.";
+              if (xhr.responseJSON && xhr.responseJSON.error) {
+                  errorMessage = xhr.responseJSON.error;
+              } else if (xhr.status === 0) {
+                   errorMessage = "Upload failed: Could not connect to the server. Please check your network.";
+              } else if (xhr.responseText) {
+                  // Sometimes the error is just plain text or HTML
+                   try {
+                       // Attempt to parse as JSON in case it's not explicitly set
+                       const jsonError = JSON.parse(xhr.responseText);
+                       if (jsonError.error) {
+                           errorMessage = jsonError.error;
+                       } else {
+                            errorMessage += "\nDetails: " + xhr.responseText.substring(0, 200) + "...";
+                       }
+                   } catch (e) {
+                       // Not JSON, just show text
+                       errorMessage += "\nDetails: " + xhr.responseText.substring(0, 200) + "...";
+                   }
+              } else if (error) {
+                   errorMessage += "\nDetails: " + error;
+              } else {
+                   errorMessage += "\nStatus: " + status;
+              }
+
+              alert(errorMessage);
             },
-            complete() {
+            complete: function() {
               $("#preloader").hide(); // Hide preloader after AJAX completes
-            },
+            }
           });
         });
 
@@ -812,10 +876,11 @@
         // ========== CLOSE PRINT OPTIONS MODAL - CLEAR FILE ==========
         $("#closeModalBtn").click(function() {
             // Clear the file input and info when modal is closed
-            $("#file").val("");
+            $("#file").val(""); // Use jQuery for consistency
             $("#fileInfo").hide();
-            $("#fileName, #fileSize").text("N/A");
-             $("#prevStepBtn").prop("disabled", false); // Re-enable 'Previous' button
+            $("#fileName").text("N/A"); // Use jQuery for consistency
+            $("#fileSize").text("N/A"); // Use jQuery for consistency
+            $("#prevStepBtn").prop("disabled", false); // Re-enable 'Previous' button
             // Optionally clear preview and page picker
             $("#pageSelectionContainer").empty();
             $("#previewContainer").empty();
@@ -854,41 +919,6 @@
         }
 
       }); // End of $(document).ready
-    </script>
-    <script>
-      document.addEventListener("DOMContentLoaded", function () {
-        const fileInput = document.getElementById("file");
-        const fileInfo = document.getElementById("fileInfo");
-        const fileNameSpan = document.getElementById("fileName"); // Renamed to avoid conflict
-        const fileSizeSpan = document.getElementById("fileSize"); // Renamed to avoid conflict
-        const removeFileBtn = document.getElementById("removeFileBtn");
-        const prevStepBtn = document.getElementById("prevStepBtn");
-
-        // This part seems to be duplicated/handled by the jQuery .change() above,
-        // but keeping it separate might be intentional. Ensure logic is consistent.
-        if (fileInput) { // Check if element exists
-            fileInput.addEventListener("change", function () {
-              if (fileInput.files.length > 0) {
-                const file = fileInput.files[0];
-                fileNameSpan.textContent = file.name; // Use renamed variable
-                fileSizeSpan.textContent = (file.size / 1024).toFixed(2) + " KB"; // Use renamed variable
-                fileInfo.style.display = "block";
-                // prevStepBtn.disabled = true; // This logic is better handled by the step function or upload success
-              }
-            });
-        }
-
-
-        if (removeFileBtn && fileInput && fileInfo && fileNameSpan && fileSizeSpan && prevStepBtn) { // Check if all elements exist
-            removeFileBtn.addEventListener("click", function () {
-              fileInput.value = ""; // Clear file input
-              fileNameSpan.textContent = "N/A"; // Use renamed variable
-              fileSizeSpan.textContent = "N/A"; // Use renamed variable
-              fileInfo.style.display = "none"; // Hide file info section
-              // prevStepBtn.disabled = false; // This logic is handled in the jQuery ready function's removeFileBtn click
-            });
-        }
-      });
     </script>
   </body>
 </html>
