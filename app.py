@@ -1243,11 +1243,9 @@ def read_coin_slot_data():
                         if match:
                             value = int(match.group(1))
                             coin_value_sum += value
-                            hopper_balance += value  # Add to hopper balance too
-                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}, Hopper: ₱{hopper_balance}")
+                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
                             # Emit update to all connected clients
                             socketio.emit('update_coin_count', {'count': coin_value_sum})
-                            socketio.emit("hopper_balance_update", {"balance": hopper_balance})
                         else:
                             print(f"Could not parse coin value from serial message: {message}")
                     
