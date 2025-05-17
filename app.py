@@ -97,11 +97,11 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM6
+coin_detection_active = False # Flag to control coin detection for COM3
 gsm_active = False # Flag to control GSM detection for COM15
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM6'
+COIN_SLOT_PORT = 'COM3'
 GSM_PORT = 'COM15'
 BAUD_RATE = 9600
 
@@ -738,7 +738,7 @@ def payment_page():
     coin_detection_active = True
     print("Coin detection activated for payment. Reset and fresh cycle.")
 
-    # 3) Force-close and re-open COM6 to ensure a clean serial state
+    # 3) Force-close and re-open COM3 to ensure a clean serial state
     try:
         if coin_slot_serial and coin_slot_serial.is_open:
             coin_slot_serial.close()
@@ -779,17 +779,16 @@ def stop_coin_detection():
 # File Upload and Processing
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    """Handles file uploads, converts them to images, and stores file information."""
+    """Handles file uploads, converts them to images or PDFs, and stores file information."""
     global images, total_pages
     global printed_pages_today, files_uploaded_today, last_updated_date
     global uploaded_files_info
 
-    # Reset daily stats if the date has changed
     if datetime.now().date() != last_updated_date:
         printed_pages_today = 0
         files_uploaded_today = 0
         last_updated_date = datetime.now().date()
-        uploaded_files_info = [] # Clear uploaded files info for the new day
+        uploaded_files_info = []
 
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -799,68 +798,76 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
 
     if file and allowed_file(file.filename):
-        filename = file.filename
-        file_ext = filename.split(".")[-1].lower()
-        # Create a safe and unique filename to prevent overwriting
-        # Using a timestamp and original filename
+        original_filename = file.filename
+        file_ext = original_filename.split(".")[-1].lower()
+
+        # Create a safe, unique filename
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        safe_filename = f"{timestamp}_{filename}"
+        safe_filename = f"{timestamp}_{original_filename}"
         filepath = os.path.join(UPLOAD_FOLDER, safe_filename)
         file.save(filepath)
 
-        # Clear previous images and total_pages before processing a new file
+        # Reset previous data
         images = []
         total_pages = 0
 
+        # Process based on file type
         if file_ext == "pdf":
             images = pdf_to_images(filepath)
             total_pages = len(images)
 
         elif file_ext in ("jpg", "jpeg", "png"):
-            # Read image directly using cv2
             img = cv2.imread(filepath)
             if img is not None:
                 images = [img]
                 total_pages = 1
+
+                # Convert image to PDF
+                pdf_filename = safe_filename.rsplit(".", 1)[0] + ".pdf"
+                pdf_path = os.path.join(UPLOAD_FOLDER, pdf_filename)
+
+                try:
+                    image_to_pdf_fit_page(filepath, pdf_path)
+                    # Update tracking to PDF version
+                    filename = pdf_filename
+                    file_ext = "pdf"
+                    filepath = pdf_path
+                    os.remove(os.path.join(UPLOAD_FOLDER, safe_filename))  # delete original image
+                except Exception as e:
+                    print(f"Failed to convert image to PDF: {e}")
+                    os.remove(filepath)
+                    return jsonify({"error": "Image conversion to PDF failed"}), 500
             else:
-                 print(f"Error reading image file: {filepath}")
-                 os.remove(filepath) # Clean up the uploaded file
-                 return jsonify({"error": "Failed to read image file"}), 500
+                os.remove(filepath)
+                return jsonify({"error": "Failed to read image file"}), 500
 
-
-        elif file_ext in ("docx", "doc"):
+        elif file_ext in ("doc", "docx"):
             images = docx_to_images(filepath)
             total_pages = len(images)
 
         else:
-            os.remove(filepath)  # Clean up unsupported file
+            os.remove(filepath)
             return jsonify({"error": "Unsupported file format"}), 400
 
-        # Check if any images were generated
         if not images:
-             os.remove(filepath) # Clean up the uploaded file if processing failed
-             return jsonify({"error": "Failed to process file into images"}), 500
+            os.remove(filepath)
+            return jsonify({"error": "Failed to process file into images"}), 500
 
-
-        # Update daily stats
-        # Note: printed_pages_today is a bit misleading here, it counts total pages uploaded, not printed.
-        # Consider renaming this variable or tracking printed pages separately.
-        # For now, keeping the original logic.
         printed_pages_today += total_pages
         files_uploaded_today += 1
 
-        # Store uploaded file info
-        uploaded_files_info.append(
-            {"file": filename, "type": file_ext, "pages": total_pages, "time": datetime.now().strftime('%I:%M %p')}
-        )
+        uploaded_files_info.append({
+            "file": filename,
+            "type": file_ext,
+            "pages": total_pages,
+            "time": datetime.now().strftime('%I:%M %p')
+        })
 
-        return jsonify(
-            {
-                "message": "File uploaded successfully!",
-                "fileName": filename,
-                "totalPages": total_pages,
-            }
-        ), 200
+        return jsonify({
+            "message": "File uploaded successfully!",
+            "fileName": filename,
+            "totalPages": total_pages
+        }), 200
 
     return jsonify({"error": "Invalid file format"}), 400
 
@@ -1110,7 +1117,7 @@ def determine_orientation(image, user_orientation):
 # Error handling and reconnect logic are already present.
 def read_coin_slot_data():
     """
-    Continuously reads data from the Arduino serial port (COM6) for coin detection,
+    Continuously reads data from the Arduino serial port (COM3) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1146,7 +1153,7 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM6): {message}")
+                    print(f"Received from Arduino (COM3): {message}")
                     if message.startswith("Detected coin worth ₱"):
                         try:
                             # Extract coin value using regex for better robustness
@@ -1161,9 +1168,9 @@ def read_coin_slot_data():
                                 print(f"Could not parse coin value from serial message: {message}")
 
                         except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
+                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM6: {message}")
+                        print(f"Warning from COM3: {message}")
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
@@ -1175,7 +1182,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM6.")
+                print("Error decoding serial data from COM3.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1405,7 +1412,7 @@ def print_document_logic(print_options):
                 page.set_rotation(90)
             new_pdf.insert_pdf(doc, from_page=pno, to_page=pno)
 
-        output_pdf_path = os.path.join(upload_dir, f"print_ready_{filename}")
+        output_pdf_path = os.path.join(upload_dir, f"print_ready_{os.path.basename(file_path)}")
         new_pdf.save(output_pdf_path)
         new_pdf.close()
         doc.close()
@@ -1642,7 +1649,7 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM6)
+    # Start the Arduino coin detection thread (COM3)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
