@@ -97,12 +97,12 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM3
-gsm_active = False # Flag to control GSM detection for COM15
+coin_detection_active = False # Flag to control coin detection for COM6
+gsm_active = False # Flag to control GSM detection for COM3
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM3'
-GSM_PORT = 'COM15'
+COIN_SLOT_PORT = 'COM6'
+GSM_PORT = 'COM3'
 BAUD_RATE = 9600
 
 # Global variables to hold serial port objects
@@ -736,7 +736,7 @@ def payment_page():
     coin_detection_active = True
     print("Coin detection activated for payment. Reset and fresh cycle.")
 
-    # 3) Force-close and re-open COM3 to ensure a clean serial state
+    # 3) Force-close and re-open COM6 to ensure a clean serial state
     try:
         if coin_slot_serial and coin_slot_serial.is_open:
             coin_slot_serial.close()
@@ -1200,7 +1200,7 @@ def handle_connect():
 def read_coin_slot_data():
 
     """
-    Continuously reads data from the Arduino serial port (COM3) for coin detection,
+    Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1236,7 +1236,7 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM3): {message}")
+                    print(f"Received from Arduino (COM6): {message}")
                     
                     if message.startswith("Detected coin worth ₱"):
                         match = re.search(r"Detected coin worth ₱(\d+)", message)
@@ -1250,7 +1250,7 @@ def read_coin_slot_data():
                             print(f"Could not parse coin value from serial message: {message}")
                     
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM3: {message}")
+                        print(f"Warning from COM6: {message}")
                     
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
@@ -1268,7 +1268,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM3.")
+                print("Error decoding serial data from COM6.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1290,7 +1290,7 @@ def read_coin_slot_data():
 # Error handling and reconnect logic are already present.
 def read_gsm_data():
     """
-    Continuously reads data from the GSM module serial port (COM15)
+    Continuously reads data from the GSM module serial port (COM3)
     and processes incoming SMS for payment detection. Handles errors robustly.
     Only active when gsm_active flag is True.
     Triggers printing and deactivates GSM if the received amount matches the expected amount.
@@ -1327,7 +1327,7 @@ def read_gsm_data():
             try:
                 message = gsm_serial.readline().decode("utf-8", errors='ignore').strip() # Use errors='ignore' for robustness
                 if message:
-                    print(f"Received from GSM (COM15): {message}")
+                    print(f"Received from GSM (COM3): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
                     # Updated regex to match the new format "You received PHP X.XX via QRPH"
                     match = re.search(r"You received PHP (\d+\.\d{2}) via QRPH", message)
@@ -1366,7 +1366,7 @@ def read_gsm_data():
 
 
                         except ValueError:
-                            print("Error: Could not convert extracted amount to float from COM15.")
+                            print("Error: Could not convert extracted amount to float from COM3.")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
                     else:
                          # Handle other SMS messages if necessary, or ignore them
@@ -1375,7 +1375,7 @@ def read_gsm_data():
                          # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM15.")
+                print("Error decoding serial data from COM3.")
                 socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS."})
             except serial.SerialException as e:
                 print(f"Serial error on {GSM_PORT}: {e}")
@@ -1735,11 +1735,11 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM3)
+    # Start the Arduino coin detection thread (COM6)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
-    # Start the GSM module thread (COM15)
+    # Start the GSM module thread (COM3)
     # This thread runs continuously but only processes data when gsm_active is True
     socketio.start_background_task(read_gsm_data)
 
