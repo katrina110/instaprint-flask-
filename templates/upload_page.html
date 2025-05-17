@@ -262,6 +262,13 @@
         align-items: center;
         justify-content: center;
       }
+
+        /* Styles for the new ToffeeShare modal iframe */
+      #toffeeshareModal iframe {
+          width: 100%;
+          height: 80vh; /* Adjust height as needed */
+          border: none; /* Remove default iframe border */
+      }
     </style>
   </head>
   <body>
@@ -395,6 +402,7 @@
             <a
               class="btn btn-primary"
               href="{{ toffee_share_link }}"
+              id="openToffeeShareModal"
               target="_blank"
               >Go To Toffeshare</a
             >
@@ -514,12 +522,10 @@
             <div class="form-section">
               <div class="form-group">
                 <label>Pages to Print</label>
-                <!-- touch-driven picker -->
                 <div
                   id="pageSelectionContainer"
                   class="d-flex flex-wrap mb-2"
                 ></div>
-                <!-- keep the old input hidden so your existing code still reads from it -->
                 <input type="hidden" id="pageSelection" />
                 <small class="form-text text-muted">
                   Tap each page you want to print.
@@ -540,7 +546,6 @@
                 <label for="orientationOption">Orientation</label>
                 <select class="form-control" id="orientationOption">
                   <option value="auto">Auto</option>
-                  <!-- Add this line -->
                   <option value="portrait">Portrait</option>
                   <option value="landscape">Landscape</option>
                 </select>
@@ -582,6 +587,25 @@
         </div>
       </div>
     </div>
+
+    <div class="modal fade" id="toffeeshareModal" tabindex="-1" role="dialog" aria-labelledby="toffeeshareModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header" style="background-color: #700000; color: white;">
+            <h5 class="modal-title" id="toffeeshareModalLabel">ToffeeShare</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="color: white;">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <iframe id="toffeeshareIframe" src="" frameborder="0" style="width: 100%; height: 80vh;"></iframe>
+          </div>
+           <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -598,10 +622,11 @@
           $("#step" + step).addClass("active");
           $(".step-indicator").removeClass("active");
           $("#step" + step + "-indicator").addClass("active");
-          $("#prevStepBtn").prop(
-            "disabled",
-            step === 3 && $("#file").val() !== ""
-          );
+          // Keep prevStepBtn disabled in step 3 unless file is removed
+           $("#prevStepBtn").prop(
+             "disabled",
+             step === 3 && $("#file").val() !== ""
+           );
         }
         $(".next-btn").click(() => {
           if (currentStep < 3) showStep(++currentStep);
@@ -609,19 +634,22 @@
         $(".prev-btn").click(() => {
           if (currentStep > 1) showStep(--currentStep);
         });
+        // Only show terms modal if user hasn't accepted (you might need a cookie/local storage check)
+        // For now, it shows every time the page loads.
         $("#termsModal")
           .modal({ backdrop: "static", keyboard: false })
           .modal("show");
         $("#acceptTerms").change(function () {
           $("#acceptTermsButton")
             .prop("disabled", !this.checked)
-            .toggleClass("btn-secondary btn-theme-red");
+            .toggleClass("btn-secondary btn-theme-red"); // Toggle classes for styling
         });
         $("#acceptTermsButton").click(function () {
-          this.disabled
-            ? alert("Please agree…")
-            : $("#termsModal").modal("hide");
+          if (!this.disabled) { // Check if button is not disabled
+             $("#termsModal").modal("hide");
+          }
         });
+
 
         // ========== FILE UPLOAD HANDLING ==========
         $("#file").change(function () {
@@ -630,13 +658,15 @@
             $("#fileInfo").show();
             $("#fileName").text(f.name);
             $("#fileSize").text((f.size / 1024).toFixed(2) + " KB");
-            showStep(3);
+            // No showStep(3) here, as the next button already takes them to step 3
+            $("#prevStepBtn").prop("disabled", true); // Disable 'Previous' button in step 3 once file is selected
           }
         });
         $("#removeFileBtn").click(() => {
           $("#file").val("");
           $("#fileInfo").hide();
           $("#fileName, #fileSize").text("N/A");
+           $("#prevStepBtn").prop("disabled", false); // Enable 'Previous' button if file is removed
         });
 
         // ========== PAGE PICKER & PREVIEW ==========
@@ -654,6 +684,7 @@
               })
               .appendTo(c);
           }
+          // Select all pages by default
           c.find("button").addClass("selected");
           updatePageSelection();
         }
@@ -663,29 +694,35 @@
             .get()
             .sort((a, b) => a - b);
           $("#pageSelection").val(sel.join(","));
-          schedulePreview();
+          // Only schedule preview if there are selected pages
+          if (sel.length > 0) {
+            schedulePreview();
+          } else {
+             $("#previewContainer").html("<p>No pages selected for preview.</p>");
+             clearTimeout(previewTimeout); // Clear any pending preview updates
+          }
         }
         function schedulePreview() {
           clearTimeout(previewTimeout);
           previewTimeout = setTimeout(updatePreview, 300);
         }
         function updatePreview() {
-          if (!$("#pageSelection").val() || totalPages === 0) return;
+          if (!$("#pageSelection").val() || totalPages === 0) return; // Check if pages are selected
           const data = {
             pageSelection: $("#pageSelection").val(),
             numCopies: $("#numCopies").val(),
             pageSize: $("#pageSize").val(),
             colorOption: $("#colorOption").val(),
-            orientationOption: $("#orientationOption").val() || "auto",
+            orientationOption: $("#orientationOption").val() || "auto", // Ensure a default value
           };
-          const pc = $("#previewContainer").html("<p>Loading preview…</p>");
+          const pc = $("#previewContainer").html("<p>Loading preview…</p>"); // Show loading message
           $.ajax({
-            url: "/generate_preview",
+            url: "/generate_preview", // Ensure this endpoint exists and works
             method: "POST",
             contentType: "application/json",
             data: JSON.stringify(data),
             success(resp) {
-              pc.empty();
+              pc.empty(); // Clear loading message
               if (!resp.previews?.length) {
                 return pc.html("<p>No previews found.</p>");
               }
@@ -694,20 +731,19 @@
                   .addClass("preview-page")
                   .append(
                     $("<img>")
-                      .attr("src", url + "?t=" + Date.now())
+                      .attr("src", url + "?t=" + Date.now()) // Add timestamp to bust cache
                       .css({
-                        "max-width": "200px",
-                        "aspect-ratio":
-                          data.orientationOption === "landscape"
-                            ? "16/9"
-                            : "9/16",
-                        "object-fit": "contain",
+                        "max-width": "100%", // Use 100% to fit preview container
+                        "height": "auto", // Auto height
+                        "display": "block",
+                        "margin": "auto",
                       })
                   )
                   .appendTo(pc);
               });
             },
-            error() {
+            error(xhr, status, error) {
+              console.error("Preview error:", error); // Log error for debugging
               pc.html("<p>Error generating preview.</p>");
             },
           });
@@ -716,27 +752,34 @@
         // ========== UPLOAD FORM SUBMISSION ==========
         $("#uploadForm").submit(function (e) {
           e.preventDefault();
-          $("#preloader").show();
+          // Check if a file is selected
+          if (!$("#file").val()) {
+              alert("Please select a file first.");
+              return; // Stop submission if no file is selected
+          }
+
+          $("#preloader").show(); // Show preloader before AJAX
           $.ajax({
-            url: "/upload",
+            url: "/upload", // Ensure this endpoint exists and works
             method: "POST",
             data: new FormData(this),
             contentType: false,
             processData: false,
             success(response) {
               fileName = response.fileName;
-              buildPagePicker(response.totalPages);
+              totalPages = response.totalPages; // Store total pages
+              buildPagePicker(totalPages); // Build picker based on total pages
               $("#printFileName").text(fileName);
-              $("#totalPages").text(response.totalPages);
-              $("#printOptionsModal").modal("show");
-              $("#previewContainer").html("<p>Loading preview…</p>");
-              updatePreview();
+              $("#totalPages").text(totalPages); // Display total pages
+              $("#printOptionsModal").modal("show"); // Show print options modal
+              // Initial preview load is handled by buildPagePicker -> updatePageSelection -> schedulePreview
             },
-            error(err) {
-              alert(err.responseJSON?.error || "Upload failed.");
+            error(xhr, status, error) {
+              console.error("Upload error:", error); // Log error for debugging
+              alert(xhr.responseJSON?.error || "Upload failed. Please try again.");
             },
             complete() {
-              $("#preloader").hide();
+              $("#preloader").hide(); // Hide preloader after AJAX completes
             },
           });
         });
@@ -744,54 +787,107 @@
         // ========== SETTINGS CHANGE TRIGGERS ==========
         $("#numCopies, #pageSize, #colorOption, #orientationOption").on(
           "change",
-          schedulePreview
+          schedulePreview // Schedule preview update on settings change
         );
 
         // ========== CONTINUE BUTTON ==========
         $("#continueBtn").click(function () {
+          const selectedPages = $("#pageSelection").val();
+           if (!selectedPages) {
+                alert("Please select at least one page to print.");
+                return; // Prevent continue if no pages selected
+           }
           const opts = {
-            pageSelection: $("#pageSelection").val(),
+            pageSelection: selectedPages,
             numCopies: $("#numCopies").val(),
             pageSize: $("#pageSize").val(),
             colorOption: $("#colorOption").val(),
-            orientationOption: $("#orientationOption").val() || "auto",
-            fileName,
+            orientationOption: $("#orientationOption").val() || "auto", // Ensure a default value
+            fileName, // Use stored fileName
           };
           sessionStorage.setItem("printOptions", JSON.stringify(opts));
-          window.location.href = "/result";
+          window.location.href = "/result"; // Navigate to the result page
         });
 
-        // ========== ZOOM HANDLERS ==========
+        // ========== CLOSE PRINT OPTIONS MODAL - CLEAR FILE ==========
+        $("#closeModalBtn").click(function() {
+            // Clear the file input and info when modal is closed
+            $("#file").val("");
+            $("#fileInfo").hide();
+            $("#fileName, #fileSize").text("N/A");
+             $("#prevStepBtn").prop("disabled", false); // Re-enable 'Previous' button
+            // Optionally clear preview and page picker
+            $("#pageSelectionContainer").empty();
+            $("#previewContainer").empty();
+            $("#pageSelection").val("");
+            totalPages = 0;
+            fileName = "";
+        });
+
+
+        // ========== ZOOM HANDLERS (for QR code) ==========
         $(".qr-code-css").click(() => $("#zoomOverlay").show());
         $(".close-zoom, #zoomOverlay").click(() => $("#zoomOverlay").hide());
-      });
+
+
+        // ========== NEW TOFFEESHARE MODAL HANDLER ==========
+        const toffeeShareLink = document.getElementById("openToffeeShareModal");
+        const toffeeShareModal = $('#toffeeshareModal'); // Use jQuery for Bootstrap modal functions
+        const toffeeShareIframe = document.getElementById("toffeeshareIframe");
+
+        if (toffeeShareLink && toffeeShareModal.length && toffeeShareIframe) {
+            toffeeShareLink.addEventListener("click", function(event) {
+                event.preventDefault(); // Prevent the default link behavior
+                const url = this.href; // Get the URL from the link's href
+                if (url) {
+                    toffeeShareIframe.src = url; // Set the iframe's source
+                    toffeeShareModal.modal('show'); // Show the Bootstrap modal
+                }
+            });
+
+             // Clear the iframe source when the modal is hidden
+             toffeeShareModal.on('hidden.bs.modal', function () {
+                toffeeShareIframe.src = ""; // Stop any loading content
+             });
+        } else {
+             console.error("Required elements for ToffeeShare modal not found.");
+        }
+
+      }); // End of $(document).ready
     </script>
     <script>
       document.addEventListener("DOMContentLoaded", function () {
         const fileInput = document.getElementById("file");
         const fileInfo = document.getElementById("fileInfo");
-        const fileName = document.getElementById("fileName");
-        const fileSize = document.getElementById("fileSize");
+        const fileNameSpan = document.getElementById("fileName"); // Renamed to avoid conflict
+        const fileSizeSpan = document.getElementById("fileSize"); // Renamed to avoid conflict
         const removeFileBtn = document.getElementById("removeFileBtn");
         const prevStepBtn = document.getElementById("prevStepBtn");
 
-        fileInput.addEventListener("change", function () {
-          if (fileInput.files.length > 0) {
-            const file = fileInput.files[0];
-            fileName.textContent = file.name;
-            fileSize.textContent = (file.size / 1024).toFixed(2) + " KB";
-            fileInfo.style.display = "block";
-            prevStepBtn.disabled = true; // Ensure user can’t go back from step 3
-          }
-        });
+        // This part seems to be duplicated/handled by the jQuery .change() above,
+        // but keeping it separate might be intentional. Ensure logic is consistent.
+        if (fileInput) { // Check if element exists
+            fileInput.addEventListener("change", function () {
+              if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                fileNameSpan.textContent = file.name; // Use renamed variable
+                fileSizeSpan.textContent = (file.size / 1024).toFixed(2) + " KB"; // Use renamed variable
+                fileInfo.style.display = "block";
+                // prevStepBtn.disabled = true; // This logic is better handled by the step function or upload success
+              }
+            });
+        }
 
-        removeFileBtn.addEventListener("click", function () {
-          fileInput.value = ""; // Clear file input
-          fileName.textContent = "N/A";
-          fileSize.textContent = "N/A";
-          fileInfo.style.display = "none"; // Hide file info section
-          prevStepBtn.disabled = true; // Keep 'Previous' button disabled
-        });
+
+        if (removeFileBtn && fileInput && fileInfo && fileNameSpan && fileSizeSpan && prevStepBtn) { // Check if all elements exist
+            removeFileBtn.addEventListener("click", function () {
+              fileInput.value = ""; // Clear file input
+              fileNameSpan.textContent = "N/A"; // Use renamed variable
+              fileSizeSpan.textContent = "N/A"; // Use renamed variable
+              fileInfo.style.display = "none"; // Hide file info section
+              // prevStepBtn.disabled = false; // This logic is handled in the jQuery ready function's removeFileBtn click
+            });
+        }
       });
     </script>
   </body>
