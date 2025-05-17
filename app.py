@@ -314,38 +314,35 @@ def pdf_to_images(pdf_path):
         if document:
             document.close()  # Ensure document is closed
 
-
 def docx_to_images(file_path):
-    """Converts a Word document (doc or docx) to a list of OpenCV images."""
-    # Optimization Note: Using win32com is platform-dependent and requires Microsoft Word.
-    # For a production system, consider a cross-platform library that doesn't rely on COM.
+    """
+    Converts a Word document (doc or docx) to a list of OpenCV images and returns the PDF path.
+    """
     if not file_path.lower().endswith((".doc", ".docx")):
         raise ValueError("Unsupported file type for Word documents.")
 
-    pdf_path = None # Initialize pdf_path to None
+    pdf_path = None
     try:
         pythoncom.CoInitialize()
         word = client.Dispatch("Word.Application")
         word.visible = False
         doc = word.Documents.Open(file_path)
-        # Create a temporary PDF path in the UPLOAD_FOLDER
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(file_path).replace(".docx", ".pdf").replace(".doc", ".pdf"))
-        doc.SaveAs(pdf_path, FileFormat=17)  # 17 is PDF
+
+        # Create new filename by replacing .docx/.doc with .pdf
+        pdf_path = file_path.rsplit(".", 1)[0] + ".pdf"
+        doc.SaveAs(pdf_path, FileFormat=17)  # 17 = PDF format
         doc.Close()
         word.Quit()
+
         images = pdf_to_images(pdf_path)
-        return images
+        return images, pdf_path
+
     except Exception as e:
         print(f"Error processing Word document: {e}")
-        return []
+        return [], None
+
     finally:
-        pythoncom.CoUninitialize()  # Ensure COM is uninitialized
-        # Clean up temp PDF if it was created
-        if pdf_path and os.path.exists(pdf_path):
-            try:
-                os.remove(pdf_path)
-            except Exception as cleanup_e:
-                print(f"Error cleaning up temporary PDF {pdf_path}: {cleanup_e}")
+        pythoncom.CoUninitialize()
 
 def parse_page_selection(selection, total_pages):
     import re
@@ -842,8 +839,13 @@ def upload_file():
                 return jsonify({"error": "Failed to read image file"}), 500
 
         elif file_ext in ("doc", "docx"):
-            images = docx_to_images(filepath)
+            images, converted_pdf_path = docx_to_images(filepath)
             total_pages = len(images)
+            if converted_pdf_path:
+                os.remove(filepath)  # Delete original DOC/DOCX
+                filename = os.path.basename(converted_pdf_path)
+                file_ext = "pdf"
+                filepath = converted_pdf_path
 
         else:
             os.remove(filepath)
