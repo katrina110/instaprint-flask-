@@ -43,6 +43,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+def check_printer_status():
+    if not paper_detected():
+        socketio.emit('no_paper_detected')
+
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
@@ -581,6 +585,18 @@ def get_printer_status_wmi():
 
     return logs # Return the list of new logs generated during this check
 
+# Paper out notification
+def is_paper_out(printer_name=None):
+    if not printer_name:
+        printer_name = win32print.GetDefaultPrinter()
+
+    handle = win32print.OpenPrinter(printer_name)
+    try:
+        status = win32print.GetPrinter(handle, 2)['Status']
+        PRINTER_STATUS_PAPER_OUT = 0x00000040
+        return (status & PRINTER_STATUS_PAPER_OUT) != 0
+    finally:
+        win32print.ClosePrinter(handle)
 
 # Routes - Admin
 @app.route("/")
@@ -651,6 +667,11 @@ def printer_status_api():
 
     # Return the logs from the WMI status check
     return jsonify(get_printer_status_wmi())
+
+@app.route('/check-paper')
+def check_paper():
+    no_paper = is_paper_out()
+    return jsonify({"no_paper": no_paper})
 
 
 @app.route("/admin-balance")
