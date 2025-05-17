@@ -57,7 +57,7 @@
 
                 <div class="card">
                     <div class="card-content">
-                        <span class="currency">₱</span><span class="amount">{{ data.current_balance }}</span>
+                        <span class="currency">₱</span><span class="amount">{{ data.hopper_balance }}</span>
                     </div>
                     <div class="card-label">Current Balance</div>
                 </div>
@@ -193,6 +193,14 @@
             // Limit to last 10 transactions
             if (transactionList.children.length > 10) {
                 transactionList.removeChild(transactionList.lastChild);
+            }
+        });
+
+        // Listen for hopper balance updates
+        socket.on('hopper_balance_update', function(data) {
+            const balanceElement = document.getElementById('hopper-balance');
+            if (balanceElement) {
+                balanceElement.textContent = data.balance;
             }
         });
      </script>

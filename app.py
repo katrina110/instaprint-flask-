@@ -113,6 +113,7 @@ gsm_serial = None
 expected_gcash_amount = 0.0
 gcash_print_options = None
 
+hopper_balance = 100
 
 # WebSocket Connection
 @socketio.on("connect")
@@ -601,7 +602,7 @@ def admin_dashboard():
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "current_balance": 3000,
+        "hopper_balance": hopper_balance,
         "sales_history": [
             {
                 "method": t.method,
@@ -1191,13 +1192,19 @@ def determine_orientation(image, user_orientation):
 # The read_coin_slot_data function remains largely the same, as its performance
 # is tied to the serial communication speed and the Arduino's output rate.
 # Error handling and reconnect logic are already present.
+@socketio.on('connect')
+def handle_connect():
+    # Send the current hopper balance to the newly connected client
+    socketio.emit('hopper_balance_update', {'balance': hopper_balance})
+
 def read_coin_slot_data():
+
     """
     Continuously reads data from the Arduino serial port (COM3) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
-    global coin_value_sum, coin_detection_active, coin_slot_serial
+    global coin_value_sum, coin_detection_active, coin_slot_serial, hopper_balance
 
     while True:
         if not coin_detection_active:
@@ -1230,30 +1237,35 @@ def read_coin_slot_data():
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
                     print(f"Received from Arduino (COM3): {message}")
+                    
                     if message.startswith("Detected coin worth ₱"):
-                        try:
-                            # Extract coin value using regex for better robustness
-                            match = re.search(r"Detected coin worth ₱(\d+)", message)
-                            if match:
-                                value = int(match.group(1))
-                                coin_value_sum += value
-                                print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
-                                # Emit update to all connected clients
-                                socketio.emit('update_coin_count', {'count': coin_value_sum})
-                            else:
-                                print(f"Could not parse coin value from serial message: {message}")
-
-                        except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
+                        match = re.search(r"Detected coin worth ₱(\d+)", message)
+                        if match:
+                            value = int(match.group(1))
+                            coin_value_sum += value
+                            hopper_balance += value  # Add to hopper balance too
+                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}, Hopper: ₱{hopper_balance}")
+                            # Emit update to all connected clients
+                            socketio.emit('update_coin_count', {'count': coin_value_sum})
+                            socketio.emit("hopper_balance_update", {"balance": hopper_balance})
+                        else:
+                            print(f"Could not parse coin value from serial message: {message}")
+                    
                     elif message.startswith("Unknown coin"):
                         print(f"Warning from COM3: {message}")
+                    
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
+                    
                     elif message.startswith("CHANGE:"):
                          try:
                               amt = int(message.split(":")[1])
+                              hopper_balance -= amt
+                              hopper_balance = max(hopper_balance, 0)
+                              print(f"Change dispensed: ₱{amt}, Hopper balance: ₱{hopper_balance}")
                               socketio.emit("change_dispensed", {"amount": amt})
+                              socketio.emit("hopper_balance_update", {"balance": hopper_balance})
                          except ValueError:
                               print(f"Could not parse change amount from serial: {message}")
 
