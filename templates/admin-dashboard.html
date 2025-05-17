@@ -57,7 +57,7 @@
 
                 <div class="card">
                     <div class="card-content">
-                        <span class="currency">₱</span><span class="amount">{{ data.hopper_balance }}</span>
+                        <span class="currency">₱</span><span class="amount" id="hopper-balance">{{ data.hopper_balance }}</span>
                     </div>
                     <div class="card-label">Current Balance</div>
                 </div>
@@ -195,6 +195,12 @@
                 transactionList.removeChild(transactionList.lastChild);
             }
         });
+
+        socket.on('hopper_balance_update', function(data) {
+        const balanceElement = document.getElementById('hopper-balance'); // Assuming it's the 4th card
+        balanceCard.textContent = data.balance.toFixed(2);
+        });
+
      </script>
  
      <script src="./../static/js/main.js" rel="stylesheet"></script>
