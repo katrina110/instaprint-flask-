@@ -34,7 +34,7 @@ import multiprocessing
 import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
 import math
-
+import win32api
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
@@ -97,11 +97,11 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM6
+coin_detection_active = False # Flag to control coin detection for COM3
 gsm_active = False # Flag to control GSM detection for COM15
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM6'
+COIN_SLOT_PORT = 'COM3'
 GSM_PORT = 'COM15'
 BAUD_RATE = 9600
 
@@ -735,7 +735,7 @@ def payment_page():
     coin_detection_active = True
     print("Coin detection activated for payment. Reset and fresh cycle.")
 
-    # 3) Force-close and re-open COM6 to ensure a clean serial state
+    # 3) Force-close and re-open COM3 to ensure a clean serial state
     try:
         if coin_slot_serial and coin_slot_serial.is_open:
             coin_slot_serial.close()
@@ -1193,7 +1193,7 @@ def determine_orientation(image, user_orientation):
 # Error handling and reconnect logic are already present.
 def read_coin_slot_data():
     """
-    Continuously reads data from the Arduino serial port (COM6) for coin detection,
+    Continuously reads data from the Arduino serial port (COM3) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1229,7 +1229,7 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM6): {message}")
+                    print(f"Received from Arduino (COM3): {message}")
                     if message.startswith("Detected coin worth ₱"):
                         try:
                             # Extract coin value using regex for better robustness
@@ -1244,9 +1244,9 @@ def read_coin_slot_data():
                                 print(f"Could not parse coin value from serial message: {message}")
 
                         except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
+                            print(f"Error: Could not convert extracted coin value to integer from COM3 message: {message}.")
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM6: {message}")
+                        print(f"Warning from COM3: {message}")
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
@@ -1258,7 +1258,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM6.")
+                print("Error decoding serial data from COM3.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1425,12 +1425,8 @@ def stop_gsm_detection():
 
 
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
-def print_document_logic(print_options):
-    import fitz  # PyMuPDF
-    import win32api
-    import win32print
-    import os
 
+def print_document_logic(print_options):
     try:
         filename = print_options.get("fileName")
         if not filename:
@@ -1438,7 +1434,7 @@ def print_document_logic(print_options):
             return False
 
         page_size = print_options.get("pageSize", "A4")
-        page_selection = print_options.get("pageSelection", "")  # e.g. "1-3,5"
+        page_selection = print_options.get("pageSelection", "")
         num_copies = int(print_options.get("numCopies", 1))
         orientation = print_options.get("orientationOption", "auto").lower()
         color_option = print_options.get("colorOption", "Color").lower()
@@ -1447,7 +1443,6 @@ def print_document_logic(print_options):
         file_path = os.path.join(upload_dir, filename)
 
         if not os.path.exists(file_path):
-            # Try timestamped variants (optional)
             candidates = [f for f in os.listdir(upload_dir) if f.endswith("_" + filename)]
             if candidates:
                 file_path = os.path.join(upload_dir, candidates[0])
@@ -1455,61 +1450,57 @@ def print_document_logic(print_options):
                 print(f"Error: File not found: {file_path}")
                 return False
 
-        ext = filename.rsplit(".", 1)[1].lower()
+        ext = filename.rsplit('.', 1)[1].lower()
 
-        # Only handling PDF files here for page selection & orientation
-        if ext != "pdf":
-            print(f"File type '{ext}' is not fully supported for page selection and orientation.")
-            # For images, convert first to PDF with your existing function
-            if ext in ("jpg", "jpeg", "png"):
-                temp_pdf_path = os.path.join(upload_dir, f"{filename}_converted.pdf")
+        # Convert non-PDFs to PDF for consistent handling
+        if ext != 'pdf':
+            if ext in ('jpg', 'jpeg', 'png'):
+                temp_pdf = os.path.join(upload_dir, f"{filename}_converted.pdf")
                 try:
-                    image_to_pdf_fit_page(file_path, temp_pdf_path, page_size=page_size)
-                    file_path = temp_pdf_path
+                    image_to_pdf_fit_page(file_path, temp_pdf, page_size=page_size)
+                    file_path = temp_pdf
                 except Exception as e:
                     print(f"Error converting image to PDF: {e}")
                     return False
             else:
-                # For other types (doc/docx), fallback to current behavior
-                print("Unsupported file for partial print options, sending directly to printer.")
+                print("Unsupported file for page selection/orientation, sending raw to printer.")
                 file_path = os.path.join(upload_dir, filename)
 
+        # Open and select pages
         doc = fitz.open(file_path)
         total_pages = doc.page_count
-
-        # Parse page selection string into 0-based indexes
-        selected_pages = parse_page_selection(page_selection, total_pages)
-
-        # Create a new PDF with only selected pages and apply orientation
+        selected = parse_page_selection(page_selection, total_pages)
         new_pdf = fitz.open()
-        for pno in selected_pages:
-            page = doc.load_page(pno)
+        for p in selected:
+            page = doc.load_page(p)
             if orientation == 'landscape' and page.rect.width < page.rect.height:
                 page.set_rotation(90)
-            new_pdf.insert_pdf(doc, from_page=pno, to_page=pno)
+            new_pdf.insert_pdf(doc, from_page=p, to_page=p)
 
-        output_pdf_path = os.path.join(upload_dir, f"print_ready_{os.path.basename(file_path)}")
-        new_pdf.save(output_pdf_path)
+        base_output = os.path.basename(file_path)
+        output_pdf = os.path.join(upload_dir, f"print_ready_{base_output}")
+        new_pdf.save(output_pdf)
         new_pdf.close()
         doc.close()
 
-        printer_name = win32print.GetDefaultPrinter()
-        print(f"Sending {output_pdf_path} to printer {printer_name} with {num_copies} copies...")
+        # Apply grayscale conversion if requested
+        if color_option == 'grayscale':
+            gray_output = os.path.join(upload_dir, f"gs_{base_output}")
+            convert_pdf_to_grayscale(output_pdf, gray_output)
+            output_pdf = gray_output
 
-        # Printing copies - note: ShellExecute does not support copies,
-        # so send the print command in a loop for num_copies times.
+        printer = win32print.GetDefaultPrinter()
+        print(f"Sending {output_pdf} to printer {printer} ({num_copies} copies)...")
+
         for _ in range(num_copies):
             win32api.ShellExecute(
                 0,
                 "print",
-                output_pdf_path,
+                output_pdf,
                 None,
-                os.path.dirname(output_pdf_path),
+                os.path.dirname(output_pdf),
                 0
             )
-
-        # Optional: delete the temp print_ready file after printing
-        # os.remove(output_pdf_path)
 
         print("Print command issued successfully.")
         return True
@@ -1518,10 +1509,19 @@ def print_document_logic(print_options):
         print(f"Error in print_document_logic: {e}")
         return False
 
-
 # END OF PRINT DOCUMENT LOGIC
 
-
+def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
+    doc = fitz.open(input_pdf_path)
+    gray_doc = fitz.open()
+    for page in doc:
+        pix = page.get_pixmap(colorspace=fitz.csGRAY)
+        rect = page.rect
+        new_page = gray_doc.new_page(width=rect.width, height=rect.height)
+        new_page.insert_image(rect, pixmap=pix)
+    gray_doc.save(output_pdf_path)
+    gray_doc.close()
+    doc.close()
 
 
 # The print_document route now calls the print_document_logic function
@@ -1725,7 +1725,7 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM6)
+    # Start the Arduino coin detection thread (COM3)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
