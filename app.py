@@ -42,6 +42,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+hopper_balance = 100 # Initialize hopper balance
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -112,8 +113,6 @@ gsm_serial = None
 # Global variables to store GCash payment details temporarily
 expected_gcash_amount = 0.0
 gcash_print_options = None
-
-hopper_balance = 100
 
 # WebSocket Connection
 @socketio.on("connect")
@@ -721,8 +720,6 @@ def online_upload():
         return render_template(
             "upload_page.html", files=files, toffee_share_link=toffee_share_link
         )
-
-
 
 @app.route("/payment")
 def payment_page():
