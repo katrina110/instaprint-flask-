@@ -593,6 +593,7 @@
         // ========== STEP NAVIGATION & TERMS ==========
         let currentStep = 1;
         function showStep(step) {
+          currentStep = step; // FIX: update currentStep here!
           $(".step").removeClass("active");
           $("#step" + step).addClass("active");
           $(".step-indicator").removeClass("active");
@@ -636,7 +637,6 @@
           $("#file").val("");
           $("#fileInfo").hide();
           $("#fileName, #fileSize").text("N/A");
-          showStep(2);
         });
 
         // ========== PAGE PICKER & PREVIEW ==========
@@ -764,6 +764,34 @@
         // ========== ZOOM HANDLERS ==========
         $(".qr-code-css").click(() => $("#zoomOverlay").show());
         $(".close-zoom, #zoomOverlay").click(() => $("#zoomOverlay").hide());
+      });
+    </script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const fileInput = document.getElementById("file");
+        const fileInfo = document.getElementById("fileInfo");
+        const fileName = document.getElementById("fileName");
+        const fileSize = document.getElementById("fileSize");
+        const removeFileBtn = document.getElementById("removeFileBtn");
+        const prevStepBtn = document.getElementById("prevStepBtn");
+
+        fileInput.addEventListener("change", function () {
+          if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            fileName.textContent = file.name;
+            fileSize.textContent = (file.size / 1024).toFixed(2) + " KB";
+            fileInfo.style.display = "block";
+            prevStepBtn.disabled = true; // Ensure user can’t go back from step 3
+          }
+        });
+
+        removeFileBtn.addEventListener("click", function () {
+          fileInput.value = ""; // Clear file input
+          fileName.textContent = "N/A";
+          fileSize.textContent = "N/A";
+          fileInfo.style.display = "none"; // Hide file info section
+          prevStepBtn.disabled = true; // Keep 'Previous' button disabled
+        });
       });
     </script>
   </body>
