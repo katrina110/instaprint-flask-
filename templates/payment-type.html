@@ -1,171 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Payment</title>
-    <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
-    <link href="./../static/css/header.css" rel="stylesheet">
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='images/logo.jpg') }}"
+      type="image/x-icon"
+    />
+    <link href="./../static/css/header.css" rel="stylesheet" />
     <style>
-        body, html {
-            height: 100%;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        main {
-            display: flex;
-            flex: 1;
-            align-items: center;
-            padding: 20px;
-            justify-content: space-around; /* Distribute space between sections */
-        }
-        .payment-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .payment-section img {
-            max-width: 300px;
-            height: auto;
-            margin: 75px auto 20px auto; /* Adjust top/bottom margin and center horizontally */
-            filter: none; /* Default: no filter */
-        }
-        .payment-section.disabled img {
-            filter: grayscale(100%);
-        }
-        .right-section .payment-section img { /* Target GCash logo */
-            max-width: 150px;
-            margin: 25px auto 20px auto; /* Adjust top/bottom margin and center horizontally */
-        }
-        main h1 {
-            margin: 10px 0;
-            text-align: center;
-        }
-        main p {
-            margin: 10px 0;
-            text-align: center;
-            font-size: 1.1rem;
-        }
-        .amount, .amount-value {
-            font-size: 15px;
-            margin-top: 15px;
-            color: gray;
-            text-align: center; /* Center the amount text */
-            opacity: 0.75;
-        }
-        .btn-coins {
-            border-radius: 1.50rem;
-            border: none;
-            background-color: #700000;
-            color: white;
-            width: 200px;
-            height: 50px;
-            margin-top: 20px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 15px;
-            filter: none; /* Default: no filter */
-        }
-        .btn-gcash {
-            border-radius: 1.50rem;
-            border: none;
-            background-color: #700000;
-            color: white;
-            width: 175px;
-            height: 50px;
-            margin-top: 20px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 15px;
-        }
-        .btn-gcash.disabled {
-            background-color: gray;
-            cursor: not-allowed;
-            filter: grayscale(100%);
-        }
-        .left-section {
-            padding-left: 100px; /* Add some spacing between the sections */
-        }
-        .right-section {
-            padding-right: 100px; /* Add some spacing between the sections */
-        }
+      body,
+      html {
+        height: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      main {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        padding: 20px;
+        justify-content: space-around; /* Distribute space between sections */
+      }
+      .payment-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .payment-section img {
+        max-width: 300px;
+        height: auto;
+        margin: 75px auto 20px auto; /* Adjust top/bottom margin and center horizontally */
+        filter: none; /* Default: no filter */
+      }
+      .payment-section.disabled img {
+        filter: grayscale(100%);
+      }
+      .right-section .payment-section img {
+        /* Target GCash logo */
+        max-width: 150px;
+        margin: 25px auto 20px auto; /* Adjust top/bottom margin and center horizontally */
+      }
+      main h1 {
+        margin: 10px 0;
+        text-align: center;
+      }
+      main p {
+        margin: 10px 0;
+        text-align: center;
+        font-size: 1.1rem;
+      }
+      .amount,
+      .amount-value {
+        font-size: 15px;
+        margin-top: 15px;
+        color: gray;
+        text-align: center; /* Center the amount text */
+        opacity: 0.75;
+      }
+      .btn-coins {
+        border-radius: 1.5rem;
+        border: none;
+        background-color: #700000;
+        color: white;
+        width: 200px;
+        height: 50px;
+        margin-top: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 15px;
+        filter: none; /* Default: no filter */
+      }
+      .btn-gcash {
+        border-radius: 1.5rem;
+        border: none;
+        background-color: #700000;
+        color: white;
+        width: 175px;
+        height: 50px;
+        margin-top: 20px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 15px;
+      }
+      .btn-gcash.disabled {
+        background-color: gray;
+        cursor: not-allowed;
+        filter: grayscale(100%);
+      }
+      .left-section {
+        padding-left: 100px; /* Add some spacing between the sections */
+      }
+      .right-section {
+        padding-right: 100px; /* Add some spacing between the sections */
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <header class="header">
-        <img src="./../static/images/pup-logo.png" alt="sample" />
-        <div class="center-text" style="background-color: white;">INSTAPRINT <h6>SELECT PAYMENT</h6></div>
-        <img src="./../static/images/cpe-logo.png" alt="sample" />
+      <img src="./../static/images/pup-logo.png" alt="sample" />
+      <div class="center-text" style="background-color: white">
+        INSTAPRINT
+        <h6>SELECT PAYMENT</h6>
+      </div>
+      <img src="./../static/images/cpe-logo.png" alt="sample" />
     </header>
     <main>
-        <div class="left-section payment-section">
-            <h1>Pay with Coins</h1>
-            <img src="./../static/images/coins.png" alt="Pay with Coins" style="max-width: 400px; height: auto; margin:75px">
-            <p>It is recommended to choose this type of payment<br>for amounts <strong>₱19.00 and below</strong>.</p>
-            <button class="btn-coins" id="coinsButton">Choose this Payment</button>
-            <p class="amount"><i>Amount to pay: <span class="amount-value" id="coinsAmount"></span></i></p>
-        </div>
-        <div class="right-section payment-section" id="gcashSection">
-            <h1>Pay with GCash</h1>
-            <img id="gcashLogo" src="./../static/images/gcash-logo.png" alt="Pay with GCash" style="max-width: 150px; height: auto; margin:25px">
-            <p>This payment option is only available <br>for amounts <strong>₱20.00 and up</strong>.</p>
-            <button class="btn-gcash" id="gcashButton">Pay with GCash</button>
-            <p class="amount"><i>Amount to pay: <span class="amount-value" id="gcashAmount"></span></i></p>
-        </div>
+      <div class="left-section payment-section">
+        <h1>Pay with Coins</h1>
+        <img
+          src="./../static/images/coins.png"
+          alt="Pay with Coins"
+          style="max-width: 400px; height: auto; margin: 75px"
+        />
+        <p>
+          It is recommended to choose this type of payment<br />for amounts
+          <strong>₱19.00 and below</strong>.
+        </p>
+        <button class="btn-coins" id="coinsButton">Choose this Payment</button>
+        <p class="amount">
+          <i
+            >Amount to pay: <span class="amount-value" id="coinsAmount"></span
+          ></i>
+        </p>
+      </div>
+      <div class="right-section payment-section" id="gcashSection">
+        <h1>Pay with GCash</h1>
+        <img
+          id="gcashLogo"
+          src="./../static/images/gcash-logo.png"
+          alt="Pay with GCash"
+          style="max-width: 150px; height: auto; margin: 25px"
+        />
+        <p>
+          This payment option is only available <br />for amounts
+          <strong>₱20.00 and up</strong>.
+        </p>
+        <button class="btn-gcash" id="gcashButton">Pay with GCash</button>
+        <p class="amount">
+          <i
+            >Amount to pay: <span class="amount-value" id="gcashAmount"></span
+          ></i>
+        </p>
+      </div>
     </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const totalPrice = parseFloat(sessionStorage.getItem('totalPrice'));
-            const gcashSection = document.getElementById('gcashSection');
-            const gcashLogo = document.getElementById('gcashLogo');
-            const gcashButton = document.getElementById('gcashButton');
-            const coinsAmountSpan = document.getElementById('coinsAmount');
-            const gcashAmountSpan = document.getElementById('gcashAmount');
-            const coinsButtonElement = document.getElementById('coinsButton'); // Get the coins button element
+      document.addEventListener("DOMContentLoaded", function () {
+        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice"));
+        const gcashSection = document.getElementById("gcashSection");
+        const gcashLogo = document.getElementById("gcashLogo");
+        const gcashButton = document.getElementById("gcashButton");
+        const coinsAmountSpan = document.getElementById("coinsAmount");
+        const gcashAmountSpan = document.getElementById("gcashAmount");
+        const coinsButtonElement = document.getElementById("coinsButton"); // Get the coins button element
 
-            if (totalPrice < 20.00) {
-                gcashSection.classList.add('disabled');
-                gcashLogo.style.filter = 'grayscale(100%)';
-                gcashButton.classList.add('disabled');
-                gcashButton.disabled = true;
-            } else {
-                gcashSection.classList.remove('disabled');
-                gcashLogo.style.filter = 'none';
-                gcashButton.classList.remove('disabled');
-                gcashButton.disabled = false;
-            }
+        if (totalPrice < 20.0) {
+          gcashSection.classList.add("disabled");
+          gcashLogo.style.filter = "grayscale(100%)";
+          gcashButton.classList.add("disabled");
+          gcashButton.disabled = true;
+        } else {
+          gcashSection.classList.remove("disabled");
+          gcashLogo.style.filter = "none";
+          gcashButton.classList.remove("disabled");
+          gcashButton.disabled = false;
+        }
 
-            // Display the total price under both sections
-            if (!isNaN(totalPrice)) {
-                coinsAmountSpan.textContent = '₱' + totalPrice.toFixed(2);
-                gcashAmountSpan.textContent = '₱' + totalPrice.toFixed(2);
-            } else {
-                coinsAmountSpan.textContent = '₱0.00';
-                gcashAmountSpan.textContent = '₱0.00';
-            }
+        // Display the total price under both sections
+        if (!isNaN(totalPrice)) {
+          coinsAmountSpan.textContent = "₱" + totalPrice.toFixed(2);
+          gcashAmountSpan.textContent = "₱" + totalPrice.toFixed(2);
+        } else {
+          coinsAmountSpan.textContent = "₱0.00";
+          gcashAmountSpan.textContent = "₱0.00";
+        }
 
-            // Event listener for the Coins button (you can modify this as needed)
-            coinsButtonElement.addEventListener('click', () => {
-                window.location.href = '/payment';
-            });
-
-            // Redirect to gcash-payment.html when gcashButton is clicked
-            gcashButton.addEventListener('click', () => {
-                if (!gcashButton.disabled) {
-                    window.location.href = '/gcash-payment';
-                }
-            });
+        // Event listener for the Coins button (you can modify this as needed)
+        coinsButtonElement.addEventListener("click", () => {
+          fetch("/record-sale", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ method: "Coinslot", amount: totalPrice }),
+          }).then(() => (window.location.href = "/payment"));
         });
+
+        // Redirect to gcash-payment.html when gcashButton is clicked
+        if (!gcashButton.disabled) {
+          gcashButton.addEventListener("click", () => {
+            fetch("/record-sale", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ method: "GCash", amount: totalPrice }),
+            }).then(() => (window.location.href = "/gcash-payment"));
+          });
+        }
+      });
     </script>
 
-    <div style="text-align: center; margin-bottom: 30px;">
-        <button onclick="history.back()" style="margin-bottom: 20px; padding: 10px 20px; font-size: 16px; background-color: #800000; color: white; border: none; border-radius: 8px; cursor: pointer;">
-            Return
-        </button>
+    <div style="text-align: center; margin-bottom: 30px">
+      <button
+        onclick="history.back()"
+        style="
+          margin-bottom: 20px;
+          padding: 10px 20px;
+          font-size: 16px;
+          background-color: #800000;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+        "
+      >
+        Return
+      </button>
     </div>
-
-</body>
+  </body>
 </html>
