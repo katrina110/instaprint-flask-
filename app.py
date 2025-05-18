@@ -605,6 +605,7 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
+    load_balance() # For latest saved hopper balance
     transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
     total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
     
@@ -1263,6 +1264,7 @@ def read_coin_slot_data():
                               amt = int(message.split(":")[1])
                               hopper_balance -= amt
                               hopper_balance = max(hopper_balance, 0)
+                              save_balance() # To save updated balance
                               print(f"Change dispensed: ₱{amt}, Hopper balance: ₱{hopper_balance}")
                               socketio.emit("change_dispensed", {"amount": amt})
                               socketio.emit("hopper_balance_update", {"balance": hopper_balance})
