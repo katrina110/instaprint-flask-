@@ -633,40 +633,6 @@ def admin_dashboard():
     }
     return render_template("admin-dashboard.html", data=data)
 
-# For testing purposes
-#@app.route('/test-transaction/<method>/<amount>')
-#def test_transaction(method, amount):
-#    try:
-#        record_transaction(method, float(amount))
-#        return f"Test transaction recorded: {method} - {amount}"
-#    except Exception as e:
-#        return f"Error: {str(e)}"
-    
-# End of testing
-
-# For hopper balance testing
-#@app.route('/test/add', methods=['POST'])
-#def add_to_balance():
-#    global hopper_balance
-#    amount = float(request.json.get("amount", 0))
-#    hopper_balance += amount
-#    save_balance()
-#    return jsonify({"message": "Balance added", "new_balance": hopper_balance})
-
-#@app.route('/test/subtract', methods=['POST'])
-#def subtract_from_balance():
-#    global hopper_balance
-#    amount = float(request.json.get("amount", 0))
-#    hopper_balance -= amount
-#    save_balance()
-#    return jsonify({"message": "Balance subtracted", "new_balance": hopper_balance})
-
-#@app.route('/test/balance')
-#def check_balance():
-#    load_balance()
-#    return jsonify({"hopper_balance": hopper_balance})
-
-# End of hopper balance testing
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
