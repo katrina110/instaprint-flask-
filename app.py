@@ -49,6 +49,11 @@ class Transaction(db.Model):
     amount = db.Column(db.Float, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
+# Define a new model for the hopper state
+class HopperState(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    balance = db.Column(db.Float, default=100.00) # Initial balance: 100 coins, assuming ₱1 each
+
     # For total sales tracking
 
 def record_transaction(method, amount):
@@ -209,6 +214,7 @@ def serial_listener():
         if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting:
             try:
                 line = coin_slot_serial.readline().decode().strip()
+                print(f"Received from serial: {line}") # Debug print
                 # Arduino will send lines like:
                 #   COIN:<total>
                 #   PRINTING
@@ -222,11 +228,40 @@ def serial_listener():
                 elif line == "PRINTING":
                     socketio.emit("printer_status", {"status": "Printing"})
                 elif line.startswith("CHANGE:"):
+                    # Corrected indentation for the try block
                     try:
-                        amt = int(line.split(":")[1])
-                        socketio.emit("change_dispensed", {"amount": amt})
+                        # This is the amount of change dispensed
+                        change_amount = float(line.split(":")[1]) # Use float for currency
+                        print(f"Dispensed change: {change_amount}") # Debug print
+
+                        # *** Update Hopper Balance in Database ***
+                        # Running database operations in a separate thread requires an app context
+                        with app.app_context():
+                            hopper_state = HopperState.query.first()
+                            if hopper_state:
+                                hopper_state.balance -= change_amount
+                                # Ensure balance doesn't go below zero conceptually, though physically limited by hopper
+                                hopper_state.balance = max(0.0, hopper_state.balance)
+                                db.session.commit()
+                                print(f"Hopper balance updated to: {hopper_state.balance}") # Debug print
+
+                                # *** Emit SocketIO Update to the Dashboard ***
+                                # Use socketio.emit directly (not emit from flask_socketio)
+                                # if you are outside a SocketIO event handler
+                                socketio.emit("hopper_balance_update", {"balance": hopper_state.balance})
+                                print(f"Emitted hopper_balance_update: {hopper_state.balance}") # Debug print
+
+                            else:
+                                print("HopperState record not found!")
+
+                    # Corrected indentation for the except blocks
                     except ValueError:
                          print(f"Could not parse change amount from serial: {line}")
+                    except Exception as db_error:
+                         print(f"Database error updating hopper balance: {db_error}")
+                         db.session.rollback() # Rollback in case of error
+
+            # Corrected indentation for the except blocks related to the main try block
             except serial.SerialException as e:
                 print(f"Serial error during read on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -235,21 +270,33 @@ def serial_listener():
                         coin_slot_serial.close()
                         print(f"Closed serial port {COIN_SLOT_PORT} due to error.")
                     except Exception as close_e:
-                         print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
+                        print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
                 coin_slot_serial = None # Set to None to trigger reconnect logic
+
+            except Exception as e:
+                 # Catch any other potential errors during processing
+                 print(f"An unexpected error occurred in serial listener: {e}")
+
 
         # Reconnect logic if serial port is not open
         elif coin_slot_serial is None or not coin_slot_serial.is_open:
              try:
+                 print(f"Attempting to open serial port {COIN_SLOT_PORT}...")
                  # Attempt to open the serial port
                  coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-                 print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
-                 time.sleep(2) # Wait for Arduino
+                 print(f"Successfully opened serial port {COIN_SLOT_PORT}.")
+                 time.sleep(2) # Wait for Arduino to reset/initialize
+
              except serial.SerialException as e:
                  # If opening fails, print error and wait before retrying
-                 print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
+                 print(f"Failed to open serial port {COIN_SLOT_PORT}: {e}")
                  coin_slot_serial = None # Ensure it's None if opening failed
                  time.sleep(5) # Wait longer before next retry
+             except Exception as e:
+                 print(f"An unexpected error occurred during serial port opening: {e}")
+                 coin_slot_serial = None
+                 time.sleep(5) # Wait longer before next retry
+
 
         time.sleep(0.05) # Short sleep to prevent excessive CPU usage
 
@@ -619,33 +666,44 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
-    total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
-    
-    # Count by method
-    gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
-    coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+    # Ensure the database is created and initial hopper state exists
+    with app.app_context():
+        db.create_all() # Ensure all tables are created
+        hopper_state = HopperState.query.first()
+        if not hopper_state:
+            hopper_state = HopperState(balance=100.00) # Initial ₱100 (100 coins * ₱1)
+            db.session.add(hopper_state)
+            db.session.commit()
 
-    data = {
-        "total_sales": total_sales,
-        "printed_pages": printed_pages_today,
-        "files_uploaded": files_uploaded_today,
-        "current_balance": 3000,
-        "sales_history": [
-            {
-                "method": t.method,
-                "amount": t.amount,
-                "date": t.timestamp.strftime('%Y-%m-%d'),
-                "time": t.timestamp.strftime('%H:%M:%S')
-            } for t in transactions
-        ],
-        "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
-        "transaction_method_summary": {
-            "gcash": round(gcash_total, 2),
-            "coinslot": round(coinslot_total, 2)
+        current_hopper_balance = hopper_state.balance    
+
+        transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
+        total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    
+        # Count by method
+        gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
+        coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+
+        data = {
+            "total_sales": total_sales,
+            "printed_pages": printed_pages_today,
+            "files_uploaded": files_uploaded_today,
+            "current_balance": 3000,
+            "sales_history": [
+                {
+                    "method": t.method,
+                    "amount": t.amount,
+                    "date": t.timestamp.strftime('%Y-%m-%d'),
+                    "time": t.timestamp.strftime('%H:%M:%S')
+                } for t in transactions
+            ],
+            "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
+            "transaction_method_summary": {
+                "gcash": round(gcash_total, 2),
+                "coinslot": round(coinslot_total, 2)
+            }
         }
-    }
-    return render_template("admin-dashboard.html", data=data)
+        return render_template("admin-dashboard.html", data=data)
 
 # For testing purposes
 #@app.route('/test-transaction/<method>/<amount>')
