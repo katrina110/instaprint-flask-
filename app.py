@@ -581,6 +581,21 @@ def get_printer_status_wmi():
 
     return logs # Return the list of new logs generated during this check
 
+# Hoppper Balance JSON  File
+def save_balance():
+    with open("balance.json", "w") as f:
+        json.dump({"hopper_balance": hopper_balance}, f)
+
+def load_balance():
+    global hopper_balance
+    try:
+        with open("balance.json", "r") as f:
+            data = json.load(f)
+            hopper_balance = data.get("hopper_balance", 0)
+    except FileNotFoundError:
+        hopper_balance = 0
+
+
 
 # Routes - Admin
 @app.route("/")
