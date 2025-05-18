@@ -1,4 +1,21 @@
 import os
+import cv2
+import json
+import math
+import time
+import re
+import wmi
+import fitz  # PyMuPDF
+import serial
+import pywintypes
+import threading
+import numpy as np
+import pythoncom
+from io import BytesIO
+from fpdf import FPDF
+from datetime import datetime
+from PyPDF2 import PdfReader
+from win32com import client
 from flask import (
     Flask,
     jsonify,
@@ -8,40 +25,19 @@ from flask import (
     redirect,
     url_for,
 )
-import cv2
-import numpy as np
-import fitz  # PyMuPDF
-from io import BytesIO # Import BytesIO for in-memory image handling
-import pythoncom
-from win32com import client
-from fpdf import FPDF
-import serial
-import time
-from datetime import datetime
-from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
-import threading
+from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 import win32print
-from flask_sqlalchemy import SQLAlchemy
-import csv
-import requests
-from io import StringIO
 
-# import multiprocessing # Removed multiprocessing as we'll use threading for printer status
-import pywintypes
-import wmi
-import multiprocessing
-import json # Import json for parsing printOptions
-import re # Import regex for more robust parsing
-import math
-import win32api
-
+# Initialize Flask app
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize DB and SocketIO
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -97,12 +93,12 @@ arduino = None # This might still be used in the arduino_payment_page route, wil
 coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
-coin_detection_active = False # Flag to control coin detection for COM3
-gsm_active = False # Flag to control GSM detection for COM15
+coin_detection_active = False # Flag to control coin detection for COM6
+gsm_active = False # Flag to control GSM detection for COM3
 
 # Define COM ports and baud rate for both Arduinos
-COIN_SLOT_PORT = 'COM3'
-GSM_PORT = 'COM15'
+COIN_SLOT_PORT = 'COM6'
+GSM_PORT = 'COM3'
 BAUD_RATE = 9600
 
 # Global variables to hold serial port objects
@@ -224,6 +220,27 @@ def serial_listener():
                  time.sleep(5) # Wait longer before next retry
 
         time.sleep(0.05) # Short sleep to prevent excessive CPU usage
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+
+@app.route("/record-sale", methods=["POST"])
+def record_sale():
+    data = request.get_json()
+    method = data.get("method")
+    amount = float(data.get("amount"))
+    if method and amount:
+        record_transaction(method, amount)
+        return jsonify(success=True)
+    return jsonify(success=False, message="Invalid data"), 400
 
 
 # Helper Functions
@@ -736,7 +753,7 @@ def payment_page():
     coin_detection_active = True
     print("Coin detection activated for payment. Reset and fresh cycle.")
 
-    # 3) Force-close and re-open COM3 to ensure a clean serial state
+    # 3) Force-close and re-open COM6 to ensure a clean serial state
     try:
         if coin_slot_serial and coin_slot_serial.is_open:
             coin_slot_serial.close()
@@ -1200,7 +1217,7 @@ def handle_connect():
 def read_coin_slot_data():
 
     """
-    Continuously reads data from the Arduino serial port (COM3) for coin detection,
+    Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
@@ -1270,7 +1287,7 @@ def read_coin_slot_data():
                               print(f"Could not parse change amount from serial: {message}")
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM3.")
+                print("Error decoding serial data from COM6.")
             except serial.SerialException as e:
                 print(f"Serial error on {COIN_SLOT_PORT}: {e}")
                 # Attempt to close and reopen the port on error
@@ -1292,7 +1309,7 @@ def read_coin_slot_data():
 # Error handling and reconnect logic are already present.
 def read_gsm_data():
     """
-    Continuously reads data from the GSM module serial port (COM15)
+    Continuously reads data from the GSM module serial port (COM3)
     and processes incoming SMS for payment detection. Handles errors robustly.
     Only active when gsm_active flag is True.
     Triggers printing and deactivates GSM if the received amount matches the expected amount.
@@ -1329,7 +1346,7 @@ def read_gsm_data():
             try:
                 message = gsm_serial.readline().decode("utf-8", errors='ignore').strip() # Use errors='ignore' for robustness
                 if message:
-                    print(f"Received from GSM (COM15): {message}")
+                    print(f"Received from GSM (COM3): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
                     # Updated regex to match the new format "You received PHP X.XX via QRPH"
                     match = re.search(r"You received PHP (\d+\.\d{2}) via QRPH", message)
@@ -1338,26 +1355,27 @@ def read_gsm_data():
                             extracted_amount = float(match.group(1))
                             print(f"Successfully extracted amount from SMS: ₱{extracted_amount}")
 
-                            # Check if the extracted amount matches or exceeds the expected amount
                             if extracted_amount >= expected_gcash_amount and gcash_print_options:
                                 print("GCash payment amount matched. Triggering print.")
-                                # Trigger the printing process
-                                success = print_document_logic(gcash_print_options)
+                                # Call print_document_logic and unpack the returned tuple
+                                # 'success' will be True or False, 'print_message' will contain the status/error message
+                                success, print_message = print_document_logic(gcash_print_options)
 
                                 if success:
                                     print("Printing initiated successfully for GCash payment.")
                                     # Emit success event to frontend
                                     socketio.emit("gcash_payment_success", {"success": True, "message": "Payment confirmed and printing started."})
                                 else:
-                                     print("Failed to initiate printing for GCash payment.")
-                                     # Emit failure event to frontend
-                                     socketio.emit("gcash_payment_success", {"success": False, "message": "Payment confirmed, but printing failed."})
+                                    # If printing failed, use the print_message variable to log and emit the specific error
+                                    print(f"Failed to initiate printing for GCash payment: {print_message}")
+                                    # Emit failure event to frontend with the specific error message
+                                    socketio.emit("gcash_payment_failed", {"success": False, "message": f"Payment confirmed, but printing failed: {print_message}"})
 
-
-                                # Deactivate GSM after successful payment and printing attempt
+                                # Deactivate GSM and reset stored GCash details
+                                # This block should be executed after attempting to print, regardless of success or failure,
+                                # to ensure the GSM module stops processing messages for this payment.
                                 gsm_active = False
-                                print("GSM detection deactivated after GCash payment.")
-                                # Reset stored GCash details
+                                print("GSM detection deactivated after GCash payment attempt.")
                                 expected_gcash_amount = 0.0
                                 gcash_print_options = None
 
@@ -1368,7 +1386,7 @@ def read_gsm_data():
 
 
                         except ValueError:
-                            print("Error: Could not convert extracted amount to float from COM15.")
+                            print("Error: Could not convert extracted amount to float from COM3.")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
                     else:
                          # Handle other SMS messages if necessary, or ignore them
@@ -1377,7 +1395,7 @@ def read_gsm_data():
                          # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM15.")
+                print("Error decoding serial data from COM3.")
                 socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS."})
             except serial.SerialException as e:
                 print(f"Serial error on {GSM_PORT}: {e}")
@@ -1439,6 +1457,177 @@ def stop_gsm_detection():
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
 
 def print_document_logic(print_options):
+    try:
+        filename_to_print = print_options.get("fileName")
+        if not filename_to_print:
+            error_msg = "Print Error: No filename provided in print options."
+            print(error_msg) # Log the error on the backend
+            return False, error_msg # Return False and the error message
+
+        page_size = print_options.get("pageSize", "A4")
+        page_selection = print_options.get("pageSelection", "")
+        num_copies = int(print_options.get("numCopies", 1))
+        # Ensure orientation and color_option are handled consistently
+        orientation = print_options.get("orientationOption", "auto").lower()
+        color_option = print_options.get("colorOption", "Color").lower()
+
+
+        upload_dir = app.config['UPLOAD_FOLDER']
+        # Construct the expected path to the final PDF file
+        file_path = os.path.join(upload_dir, filename_to_print)
+
+        # --- 1. Verify File Existence ---
+        if not os.path.exists(file_path):
+            error_msg = f"Print Error: Printable file not found at expected path: {file_path}"
+            print(error_msg)
+            # Remove the risky 'candidates' logic
+            return False, error_msg
+
+        # --- 2. Handle Grayscale Conversion ---
+        # Only convert if grayscale is requested AND the file isn't already marked as grayscale
+        if color_option == 'grayscale' and not filename_to_print.startswith("gs_"):
+            gray_output_filename = f"gs_{filename_to_print}" # Consistent naming for grayscale
+            gray_output_path = os.path.join(upload_dir, gray_output_filename)
+            try:
+                convert_pdf_to_grayscale(file_path, gray_output_path)
+                file_path = gray_output_path # Use the grayscale PDF for printing
+                filename_to_print = gray_output_filename # Update filename for logging/tracking
+                print(f"Successfully converted {filename_to_print} to grayscale.")
+            except Exception as e:
+                error_msg = f"Print Error: Failed to convert PDF to grayscale: {e}"
+                print(error_msg)
+                # If grayscale conversion fails, consider if you want to fail printing
+                # or proceed with color. Failing is safer for expected output.
+                return False, error_msg
+
+        # --- 3. Process PDF (Page Selection/Orientation) ---
+        doc = None
+        new_pdf = None
+        output_pdf_path = None # Initialize to None
+        try:
+            doc = fitz.open(file_path)
+            total_pages = doc.page_count
+            selected = parse_page_selection(page_selection, total_pages)
+            # Filter for valid page indices
+            valid_selected = [p for p in selected if 0 <= p < total_pages]
+
+            if not valid_selected:
+                 error_msg = f"Print Error: No valid pages selected for printing from file {filename_to_print}."
+                 print(error_msg)
+                 return False, error_msg
+
+            new_pdf = fitz.open()
+            for p in valid_selected:
+                page = doc.load_page(p)
+                # Insert the page as is. Rely on print driver for orientation handling
+                # unless explicit rotation is strictly necessary here.
+                new_pdf.insert_pdf(doc, from_page=p, to_page=p)
+
+
+            # Create a unique temporary filename for the print-ready PDF
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f") # Add microseconds for higher uniqueness
+            print_ready_filename = f"print_ready_{timestamp}_{filename_to_print}"
+            output_pdf_path = os.path.join(upload_dir, print_ready_filename)
+
+            new_pdf.save(output_pdf_path)
+            print(f"Created print-ready PDF: {print_ready_filename}")
+
+        except Exception as processing_e:
+            error_msg = f"Print Error: Error during PDF processing (fitz operations): {processing_e}"
+            print(error_msg)
+             # Clean up partial files if they exist
+            if 'new_pdf' in locals() and new_pdf:
+                 try: new_pdf.close()
+                 except Exception as e: print(f"Error closing new_pdf in processing error: {e}")
+            if 'doc' in locals() and doc:
+                 try: doc.close()
+                 except Exception as e: print(f"Error closing doc in processing error: {e}")
+            if output_pdf_path and os.path.exists(output_pdf_path):
+                try: os.remove(output_pdf_path)
+                except Exception as e: print(f"Error removing partial output_pdf in processing error: {e}")
+
+            return False, error_msg
+        finally:
+             # Ensure docs are closed even on success within this block
+             if 'doc' in locals() and doc:
+                  try: doc.close()
+                  except Exception as e: print(f"Error closing doc in finally (processing): {e}")
+             if 'new_pdf' in locals() and new_pdf:
+                  try: new_pdf.close()
+                  except Exception as e: print(f"Error closing new_pdf in finally (processing): {e}")
+
+
+        # --- 4. Check Printer Status Before Printing ---
+        try:
+            printer_status = check_printer_status(win32print.GetDefaultPrinter())
+            # Define critical error states that should prevent printing
+            critical_error_states = ["Error", "Offline", "Paper Jam", "No Paper", "Unknown"]
+            if any(state in printer_status for state in critical_error_states):
+                 error_msg = f"Print Error: Printer is not ready for printing. Status: {printer_status}"
+                 print(error_msg)
+                 # Clean up the generated temporary print-ready PDF
+                 if output_pdf_path and os.path.exists(output_pdf_path):
+                      try: os.remove(output_pdf_path)
+                      except Exception as e: print(f"Error removing print-ready PDF after printer check failure: {e}")
+                 return False, error_msg
+        except Exception as printer_check_e:
+            error_msg = f"Print Error: Failed to check printer status before printing: {printer_check_e}"
+            print(error_msg)
+            # Clean up the generated temporary print-ready PDF
+            if output_pdf_path and os.path.exists(output_pdf_path):
+                 try: os.remove(output_pdf_path)
+                 except Exception as e: print(f"Error removing print-ready PDF after printer check exception: {e}")
+            return False, error_msg
+
+
+        print(f"Sending {print_ready_filename} to printer {win32print.GetDefaultPrinter()} ({num_copies} copies)...")
+
+        # --- 5. Initiate Printing with ShellExecute ---
+        # ShellExecute is asynchronous. Errors here are typically initial call failures.
+        try:
+            for i in range(num_copies):
+                win32api.ShellExecute(
+                    0, # hwnd
+                    "print", # operation
+                    output_pdf_path, # file
+                    None, # parameters (can specify printer here, but using default via operation)
+                    os.path.dirname(output_pdf_path), # directory
+                    0 # show_cmd (SW_HIDE - hide the application window)
+                )
+                print(f"Print command issued for copy {i+1} of {num_copies}.")
+                # A small delay might help if sending many copies rapidly causes issues, but usually not needed.
+                # time.sleep(0.1)
+
+            # IMPORTANT: The monitor_printer_status thread is responsible for cleaning up
+            # the print-ready PDF file after the print job is complete in the spooler.
+            # Do NOT delete output_pdf_path immediately here.
+
+            print("All print commands issued successfully to the print spooler.")
+            return True, "Document sent to the printer successfully!"
+
+        except Exception as shell_execute_e:
+            error_msg = f"Print Error: Failed to execute print command: {shell_execute_e}"
+            print(error_msg)
+            # Clean up the generated temporary print-ready PDF on initial failure
+            if output_pdf_path and os.path.exists(output_pdf_path):
+                 try: os.remove(output_pdf_path)
+                 except Exception as e: print(f"Error removing print-ready PDF after ShellExecute failure: {e}")
+            return False, error_msg
+
+    except Exception as e:
+        # Catch any other unexpected errors in the function
+        error_msg = f"Print Error: An unexpected error occurred in print_document_logic: {e}"
+        print(error_msg)
+        # Attempt cleanup of the print-ready file if it was created before the error
+        if 'output_pdf_path' in locals() and output_pdf_path and os.path.exists(output_pdf_path):
+             try: os.remove(output_pdf_path)
+             except Exception as cleanup_e: print(f"Error removing output_pdf on unexpected error: {cleanup_e}")
+        # Clean up the grayscale PDF if it was created before the error
+        elif color_option == 'grayscale' and 'gray_output_path' in locals() and os.path.exists(gray_output_path):
+             try: os.remove(gray_output_path)
+             except Exception as cleanup_e: print(f"Error removing grayscale PDF on unexpected error: {cleanup_e}")
+
+        return False, error_msg
     try:
         filename = print_options.get("fileName")
         if not filename:
@@ -1524,6 +1713,59 @@ def print_document_logic(print_options):
 # END OF PRINT DOCUMENT LOGIC
 
 def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
+    doc = None
+    gray_doc = None
+    try:
+        doc = fitz.open(input_pdf_path)
+        gray_doc = fitz.open()
+        for page in doc:
+            # Ensure the pixmap conversion is robust
+            try:
+                pix = page.get_pixmap(colorspace=fitz.csGRAY)
+            except Exception as pixmap_e:
+                print(f"Grayscale Conversion Warning: Could not get pixmap for page {page.number} in {input_pdf_path}: {pixmap_e}")
+                # Optionally, skip this page or insert a blank page
+                continue # Skip to the next page
+
+            rect = page.rect
+            new_page = gray_doc.new_page(width=rect.width, height=rect.height)
+            # Ensure insertion is robust
+            try:
+                new_page.insert_image(rect, pixmap=pix)
+            except Exception as insert_e:
+                 print(f"Grayscale Conversion Warning: Could not insert pixmap for page {page.number} in {input_pdf_path}: {insert_e}")
+                 continue # Skip to the next page
+
+        # Ensure save is robust
+        try:
+            gray_doc.save(output_pdf_path)
+            print(f"Successfully converted {input_pdf_path} to grayscale PDF at {output_pdf_path}.")
+        except Exception as save_e:
+            error_msg = f"Grayscale Conversion Error: Failed to save grayscale PDF: {save_e}"
+            print(error_msg)
+            raise Exception(error_msg) # Re-raise with a specific message
+
+    except fitz.FileNotFoundError:
+         error_msg = f"Grayscale Conversion Error: Input PDF not found at {input_pdf_path}"
+         print(error_msg)
+         raise Exception(error_msg) # Re-raise with a specific message
+    except Exception as e:
+        error_msg = f"Grayscale Conversion Error: An unexpected error occurred: {e}"
+        print(error_msg)
+         # Clean up potentially created partial output file
+        if 'gray_doc' in locals() and gray_doc and os.path.exists(output_pdf_path):
+             try:
+                  gray_doc.close() # Close before attempting to remove
+                  os.remove(output_pdf_path)
+                  print(f"Cleaned up partial grayscale output file: {output_pdf_path}")
+             except Exception as cleanup_e:
+                  print(f"Error during grayscale cleanup: {cleanup_e}")
+        raise Exception(error_msg) # Re-raise the exception with a specific message
+    finally:
+        if doc:
+            doc.close()
+        if gray_doc:
+            gray_doc.close()
     doc = fitz.open(input_pdf_path)
     gray_doc = fitz.open()
     for page in doc:
@@ -1545,12 +1787,14 @@ def print_document_route():
         return jsonify({"error": "Invalid JSON payload."}), 400
 
     print("Received print request via /print_document route.")
-    success = print_document_logic(data) # Call the core printing logic
+    # success = print_document_logic(data) # Original call
+    success, message = print_document_logic(data) # Updated call
 
     if success:
-        return jsonify({"success": True, "message": "Document sent to the printer successfully!"}), 200
+        return jsonify({"success": True, "message": message}), 200
     else:
-        return jsonify({"error": "Failed to print document."}), 500
+        # Return the specific error message from print_document_logic
+        return jsonify({"error": message}), 500
 
 
 # Update result route to display both previews and segmentation
@@ -1679,15 +1923,21 @@ def monitor_printer_status(printer_name, upload_folder):
         elif current_status == "Idle" and last_status == "Printing" and printing_was_active:
             time.sleep(10)  # allow any pending tasks to finish
             for filename in os.listdir(upload_folder):
-                path = os.path.join(upload_folder, filename)
-                if os.path.isfile(path):
-                    try:
-                        os.remove(path)
-                        print(f"Deleted file: {path}")
-                    except Exception as e:
-                        print(f"Error deleting {path}: {e}")
-            printing_was_active = False
-            print("Cleanup after printing complete.")
+                # Only delete files created by the printing process logic
+                # The timestamp helps ensure we don't delete files from a previous run if names clash (less likely with timestamp)
+                if filename.startswith("print_ready_") or filename.startswith("gs_"):
+                    path = os.path.join(upload_folder, filename)
+                    if os.path.isfile(path):
+                        try:
+                            # Add a small delay or retry logic if encountering "file in use" errors
+                            os.remove(path)
+                            print(f"Cleaned up temporary print file: {path}")
+                        except OSError as e:
+                            # This often means the file is still in use by the print spooler or PDF viewer
+                            print(f"Cleanup Warning: Could not delete temporary print file {path} (in use?): {e}")
+                            # Consider retrying deletion later or logging this for manual cleanup
+                        except Exception as e:
+                            print(f"Cleanup Error: Could not delete temporary print file {path}: {e}")
 
         last_status = current_status
         time.sleep(2)
@@ -1737,11 +1987,11 @@ if __name__ == "__main__":
     # Path to the uploads folder
     upload_folder = app.config['UPLOAD_FOLDER'] # Use the configured UPLOAD_FOLDER
 
-    # Start the Arduino coin detection thread (COM3)
+    # Start the Arduino coin detection thread (COM6)
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
-    # Start the GSM module thread (COM15)
+    # Start the GSM module thread (COM3)
     # This thread runs continuously but only processes data when gsm_active is True
     socketio.start_background_task(read_gsm_data)
 

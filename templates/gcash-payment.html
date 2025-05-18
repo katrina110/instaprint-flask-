@@ -306,9 +306,11 @@
             });
 
             socket.on('gcash_payment_failed', function(data) {
-                 console.error('GCash Payment Failed Event:', data);
-                 alert(data.message); // Show error message to user
-                 // Stay on the page or provide options
+                console.error('GCash Payment Failed Event:', data);
+                // Display the specific error message received from the backend
+                alert("Payment failed: " + data.message);
+                // Decide on next steps - maybe redirect back to file upload or result page
+                // window.location.href = "/manual-display-upload"; // Example redirect
             });
 
 

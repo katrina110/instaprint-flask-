@@ -33,6 +33,26 @@
          </leftmenu>
  
          <content class="contents">
+            <div class="sales-summary d-flex justify-content-around mt-4">
+  <div class="card text-center">
+    <div class="card-content">
+      <span class="currency">GCash ₱</span><span class="amount">{{ data.transaction_method_summary.gcash }}</span>
+    </div>
+    <div class="card-label">GCash Sales</div>
+  </div>
+  <div class="card text-center">
+    <div class="card-content">
+      <span class="currency">Coinslot ₱</span><span class="amount">{{ data.transaction_method_summary.coinslot }}</span>
+    </div>
+    <div class="card-label">Coinslot Sales</div>
+  </div>
+  <div class="card text-center">
+    <div class="card-content">
+      <span class="currency">Total ₱</span><span class="amount">{{ data.transaction_method_summary.gcash + data.transaction_method_summary.coinslot }}</span>
+    </div>
+    <div class="card-label">Total Combined Sales</div>
+  </div>
+</div>
             <div class="stats">
                 <div class="card">
                     <div class="card-content">
