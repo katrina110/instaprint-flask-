@@ -1,21 +1,4 @@
 import os
-import cv2
-import json
-import math
-import time
-import re
-import wmi
-import fitz  # PyMuPDF
-import serial
-import pywintypes
-import threading
-import numpy as np
-import pythoncom
-from io import BytesIO
-from fpdf import FPDF
-from datetime import datetime
-from PyPDF2 import PdfReader
-from win32com import client
 from flask import (
     Flask,
     jsonify,
@@ -25,19 +8,40 @@ from flask import (
     redirect,
     url_for,
 )
-from flask_sqlalchemy import SQLAlchemy
+import cv2
+import numpy as np
+import fitz  # PyMuPDF
+from io import BytesIO # Import BytesIO for in-memory image handling
+import pythoncom
+from win32com import client
+from fpdf import FPDF
+import serial
+import time
+from datetime import datetime
+from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
+import threading
 from flask_socketio import SocketIO, emit
 import win32print
+from flask_sqlalchemy import SQLAlchemy
+import csv
+import requests
+from io import StringIO
 
-# Initialize Flask app
+# import multiprocessing # Removed multiprocessing as we'll use threading for printer status
+import pywintypes
+import wmi
+import multiprocessing
+import json # Import json for parsing printOptions
+import re # Import regex for more robust parsing
+import math
+import win32api
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Initialize DB and SocketIO
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
-
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -94,11 +98,11 @@ coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
 coin_detection_active = False # Flag to control coin detection for COM6
-gsm_active = False # Flag to control GSM detection for COM3
+gsm_active = False # Flag to control GSM detection for COM4
 
 # Define COM ports and baud rate for both Arduinos
 COIN_SLOT_PORT = 'COM6'
-GSM_PORT = 'COM3'
+GSM_PORT = 'COM4'
 BAUD_RATE = 9600
 
 # Global variables to hold serial port objects
@@ -109,7 +113,6 @@ gsm_serial = None
 expected_gcash_amount = 0.0
 gcash_print_options = None
 
-hopper_balance = 100
 
 # WebSocket Connection
 @socketio.on("connect")
@@ -127,6 +130,7 @@ def update_coin_count(count):
 
 # New SocketIO handler to receive GCash payment details from frontend
 @socketio.on("confirm_gcash_payment")
+
 def handle_confirm_gcash_payment(data):
     """
     Receives expected amount and print options for GCash payment.
@@ -141,6 +145,34 @@ def handle_confirm_gcash_payment(data):
     except Exception as e:
         print(f"Error receiving GCash payment details via SocketIO: {e}")
         emit("gcash_payment_initiated", {"success": False, "message": f"Error receiving payment details: {e}"})
+
+@app.route('/api/record-transaction', methods=['POST'])
+def api_record_transaction():
+    data = request.get_json(force=True)
+    method = data.get('method')
+    amount = float(data.get('amount', 0))
+    if method not in ('Coinslot','GCash'):
+        return jsonify(success=False, message='Invalid payment method'), 400
+
+    record_transaction(method, amount)
+    return jsonify(success=True)
+
+
+@app.route("/admin-sales")
+def admin_sales():
+    # totals already computed in admin_dashboard
+    total = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    gcash = (db.session.query(db.func.sum(Transaction.amount))
+                .filter(Transaction.method=="GCash")
+                .scalar() or 0)
+    coins = (db.session.query(db.func.sum(Transaction.amount))
+                 .filter(Transaction.method=="Coinslot")
+                 .scalar() or 0)
+    return render_template("admin-sales.html",
+                           total_sales=round(total,2),
+                           gcash_sales=round(gcash,2),
+                           coins_sales=round(coins,2))
+
 
 @app.route("/set_price", methods=["POST"])
 def set_price():
@@ -220,27 +252,6 @@ def serial_listener():
                  time.sleep(5) # Wait longer before next retry
 
         time.sleep(0.05) # Short sleep to prevent excessive CPU usage
-
-def record_transaction(method, amount):
-    transaction = Transaction(method=method, amount=amount)
-    db.session.add(transaction)
-    db.session.commit()
-    socketio.emit('new_transaction', {
-        'method': method,
-        'amount': amount,
-        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-    })
-
-
-@app.route("/record-sale", methods=["POST"])
-def record_sale():
-    data = request.get_json()
-    method = data.get("method")
-    amount = float(data.get("amount"))
-    if method and amount:
-        record_transaction(method, amount)
-        return jsonify(success=True)
-    return jsonify(success=False, message="Invalid data"), 400
 
 
 # Helper Functions
@@ -619,7 +630,7 @@ def admin_dashboard():
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "hopper_balance": hopper_balance,
+        "current_balance": 3000,
         "sales_history": [
             {
                 "method": t.method,
@@ -1209,19 +1220,13 @@ def determine_orientation(image, user_orientation):
 # The read_coin_slot_data function remains largely the same, as its performance
 # is tied to the serial communication speed and the Arduino's output rate.
 # Error handling and reconnect logic are already present.
-@socketio.on('connect')
-def handle_connect():
-    # Send the current hopper balance to the newly connected client
-    socketio.emit('hopper_balance_update', {'balance': hopper_balance})
-
 def read_coin_slot_data():
-
     """
     Continuously reads data from the Arduino serial port (COM6) for coin detection,
     parses coin values, and updates the total coin count. Handles errors robustly.
     Only active when coin_detection_active flag is True.
     """
-    global coin_value_sum, coin_detection_active, coin_slot_serial, hopper_balance
+    global coin_value_sum, coin_detection_active, coin_slot_serial
 
     while True:
         if not coin_detection_active:
@@ -1253,36 +1258,31 @@ def read_coin_slot_data():
             try:
                 message = coin_slot_serial.readline().decode('utf-8').strip()
                 if message: # Process message only if it's not empty
-                    print(f"Received from Arduino (COM3): {message}")
-                    
+                    print(f"Received from Arduino (COM6): {message}")
                     if message.startswith("Detected coin worth ₱"):
-                        match = re.search(r"Detected coin worth ₱(\d+)", message)
-                        if match:
-                            value = int(match.group(1))
-                            coin_value_sum += value
-                            hopper_balance += value  # Add to hopper balance too
-                            print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}, Hopper: ₱{hopper_balance}")
-                            # Emit update to all connected clients
-                            socketio.emit('update_coin_count', {'count': coin_value_sum})
-                            socketio.emit("hopper_balance_update", {"balance": hopper_balance})
-                        else:
-                            print(f"Could not parse coin value from serial message: {message}")
-                    
+                        try:
+                            # Extract coin value using regex for better robustness
+                            match = re.search(r"Detected coin worth ₱(\d+)", message)
+                            if match:
+                                value = int(match.group(1))
+                                coin_value_sum += value
+                                print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
+                                # Emit update to all connected clients
+                                socketio.emit('update_coin_count', {'count': coin_value_sum})
+                            else:
+                                print(f"Could not parse coin value from serial message: {message}")
+
+                        except ValueError:
+                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
                     elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM3: {message}")
-                    
+                        print(f"Warning from COM6: {message}")
                     # Add handling for other potential messages from Arduino if needed
                     elif message == "PRINTING":
                          socketio.emit("printer_status", {"status": "Printing"})
-                    
                     elif message.startswith("CHANGE:"):
                          try:
                               amt = int(message.split(":")[1])
-                              hopper_balance -= amt
-                              hopper_balance = max(hopper_balance, 0)
-                              print(f"Change dispensed: ₱{amt}, Hopper balance: ₱{hopper_balance}")
                               socketio.emit("change_dispensed", {"amount": amt})
-                              socketio.emit("hopper_balance_update", {"balance": hopper_balance})
                          except ValueError:
                               print(f"Could not parse change amount from serial: {message}")
 
@@ -1309,7 +1309,7 @@ def read_coin_slot_data():
 # Error handling and reconnect logic are already present.
 def read_gsm_data():
     """
-    Continuously reads data from the GSM module serial port (COM3)
+    Continuously reads data from the GSM module serial port (COM4)
     and processes incoming SMS for payment detection. Handles errors robustly.
     Only active when gsm_active flag is True.
     Triggers printing and deactivates GSM if the received amount matches the expected amount.
@@ -1346,7 +1346,7 @@ def read_gsm_data():
             try:
                 message = gsm_serial.readline().decode("utf-8", errors='ignore').strip() # Use errors='ignore' for robustness
                 if message:
-                    print(f"Received from GSM (COM3): {message}")
+                    print(f"Received from GSM (COM4): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
                     # Updated regex to match the new format "You received PHP X.XX via QRPH"
                     match = re.search(r"You received PHP (\d+\.\d{2}) via QRPH", message)
@@ -1386,7 +1386,7 @@ def read_gsm_data():
 
 
                         except ValueError:
-                            print("Error: Could not convert extracted amount to float from COM3.")
+                            print("Error: Could not convert extracted amount to float from COM4.")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
                     else:
                          # Handle other SMS messages if necessary, or ignore them
@@ -1395,7 +1395,7 @@ def read_gsm_data():
                          # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM3.")
+                print("Error decoding serial data from COM4.")
                 socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS."})
             except serial.SerialException as e:
                 print(f"Serial error on {GSM_PORT}: {e}")
@@ -1991,7 +1991,7 @@ if __name__ == "__main__":
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
-    # Start the GSM module thread (COM3)
+    # Start the GSM module thread (COM4)
     # This thread runs continuously but only processes data when gsm_active is True
     socketio.start_background_task(read_gsm_data)
 
