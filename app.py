@@ -1,4 +1,21 @@
 import os
+import cv2
+import json
+import math
+import time
+import re
+import wmi
+import fitz  # PyMuPDF
+import serial
+import pywintypes
+import threading
+import numpy as np
+import pythoncom
+from io import BytesIO
+from fpdf import FPDF
+from datetime import datetime
+from PyPDF2 import PdfReader
+from win32com import client
 from flask import (
     Flask,
     jsonify,
@@ -8,40 +25,19 @@ from flask import (
     redirect,
     url_for,
 )
-import cv2
-import numpy as np
-import fitz  # PyMuPDF
-from io import BytesIO # Import BytesIO for in-memory image handling
-import pythoncom
-from win32com import client
-from fpdf import FPDF
-import serial
-import time
-from datetime import datetime
-from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
-import threading
+from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 import win32print
-from flask_sqlalchemy import SQLAlchemy
-import csv
-import requests
-from io import StringIO
 
-# import multiprocessing # Removed multiprocessing as we'll use threading for printer status
-import pywintypes
-import wmi
-import multiprocessing
-import json # Import json for parsing printOptions
-import re # Import regex for more robust parsing
-import math
-import win32api
-
+# Initialize Flask app
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize DB and SocketIO
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -223,6 +219,27 @@ def serial_listener():
                  time.sleep(5) # Wait longer before next retry
 
         time.sleep(0.05) # Short sleep to prevent excessive CPU usage
+
+def record_transaction(method, amount):
+    transaction = Transaction(method=method, amount=amount)
+    db.session.add(transaction)
+    db.session.commit()
+    socketio.emit('new_transaction', {
+        'method': method,
+        'amount': amount,
+        'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+
+@app.route("/record-sale", methods=["POST"])
+def record_sale():
+    data = request.get_json()
+    method = data.get("method")
+    amount = float(data.get("amount"))
+    if method and amount:
+        record_transaction(method, amount)
+        return jsonify(success=True)
+    return jsonify(success=False, message="Invalid data"), 400
 
 
 # Helper Functions
