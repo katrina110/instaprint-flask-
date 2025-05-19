@@ -43,6 +43,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+hopper_balance = 50.00  # Initial balance for the hopper, can be adjusted as needed
+
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
@@ -202,17 +204,24 @@ def set_price():
         # More specific error handling or retries could be added.
         return jsonify(success=False, message=str(e)), 500
 
+def update_hopper_balance(change_dispensed):
+    global hopper_balance
+    if hopper_balance >= change_dispensed:
+        hopper_balance -= change_dispensed
+        print(f"[HOPPER] Dispensed ₱{change_dispensed}. Remaining balance: ₱{hopper_balance:.2f}")
+        return True
+    else:
+        print("[HOPPER] Not enough balance to dispense change.")
+        return False
+
 def serial_listener():
     global coin_slot_serial
+    global hopper_balance
+
     while True:
-        # Check if serial port is open before trying to read
         if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting:
             try:
                 line = coin_slot_serial.readline().decode().strip()
-                # Arduino will send lines like:
-                #   COIN:<total>
-                #   PRINTING
-                #   CHANGE:<n>
                 if line.startswith("COIN:"):
                     try:
                         total = int(line.split(":")[1])
@@ -224,36 +233,35 @@ def serial_listener():
                 elif line.startswith("CHANGE:"):
                     try:
                         amt = int(line.split(":")[1])
-                        socketio.emit("change_dispensed", {"amount": amt})
+                        # Update hopper balance here
+                        if update_hopper_balance(amt):
+                            socketio.emit("change_dispensed", {"amount": amt})
+                        else:
+                            socketio.emit("change_error", {"message": "Insufficient change in hopper."})
                     except ValueError:
-                         print(f"Could not parse change amount from serial: {line}")
+                        print(f"Could not parse change amount from serial: {line}")
             except serial.SerialException as e:
                 print(f"Serial error during read on {COIN_SLOT_PORT}: {e}")
-                # Attempt to close and reopen the port on error
                 if coin_slot_serial and coin_slot_serial.is_open:
                     try:
                         coin_slot_serial.close()
                         print(f"Closed serial port {COIN_SLOT_PORT} due to error.")
                     except Exception as close_e:
-                         print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
-                coin_slot_serial = None # Set to None to trigger reconnect logic
+                        print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
+                coin_slot_serial = None
 
-        # Reconnect logic if serial port is not open
         elif coin_slot_serial is None or not coin_slot_serial.is_open:
-             try:
-                 # Attempt to open the serial port
-                 coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-                 print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
-                 time.sleep(2) # Wait for Arduino
-             except serial.SerialException as e:
-                 # If opening fails, print error and wait before retrying
-                 print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
-                 coin_slot_serial = None # Ensure it's None if opening failed
-                 time.sleep(5) # Wait longer before next retry
+            try:
+                coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+                print(f"Successfully re-opened serial port {COIN_SLOT_PORT}.")
+                time.sleep(2)
+            except serial.SerialException as e:
+                print(f"Failed to re-open serial port {COIN_SLOT_PORT}: {e}")
+                coin_slot_serial = None
+                time.sleep(5)
 
-        time.sleep(0.05) # Short sleep to prevent excessive CPU usage
-
-
+        time.sleep(0.05)
+        
 # Helper Functions
 def allowed_file(filename):
     """Checks if the given filename has an allowed extension."""
