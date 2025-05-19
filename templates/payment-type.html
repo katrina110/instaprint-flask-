@@ -110,6 +110,32 @@
       <img src="./../static/images/cpe-logo.png" alt="sample" />
     </header>
     <main>
+      <div
+        class="payment-section"
+        style="margin-bottom: 40px; text-align: center"
+      >
+        <h2>Feed Paper to Printer</h2>
+        <p style="max-width: 500px; margin: 10px auto; font-size: 1rem">
+          Before proceeding with payment, ensure the printer is loaded with
+          paper. Press and hold the button below to feed a sheet into the
+          printer.
+        </p>
+        <button
+          id="spinMotorButton"
+          style="
+            padding: 12px 30px;
+            font-size: 16px;
+            background-color: #800000;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 10px;
+          "
+        >
+          Feed Paper (Spin Motor)
+        </button>
+      </div>
       <div class="left-section payment-section">
         <h1>Pay with Coins</h1>
         <img
@@ -199,6 +225,31 @@
             }).then(() => (window.location.href = "/gcash-payment"));
           });
         }
+      });
+    </script>
+    <script>
+      const spinBtn = document.getElementById("spinMotorButton");
+
+      spinBtn.addEventListener("mousedown", () => {
+        fetch("/spin-motor/start", { method: "POST" });
+      });
+
+      spinBtn.addEventListener("mouseup", () => {
+        fetch("/spin-motor/stop", { method: "POST" });
+      });
+
+      spinBtn.addEventListener("mouseleave", () => {
+        fetch("/spin-motor/stop", { method: "POST" });
+      });
+
+      spinBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        fetch("/spin-motor/start", { method: "POST" });
+      });
+
+      spinBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        fetch("/spin-motor/stop", { method: "POST" });
       });
     </script>
 

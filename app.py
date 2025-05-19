@@ -1785,6 +1785,18 @@ def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
     gray_doc.close()
     doc.close()
 
+@app.route('/spin-motor/start', methods=['POST'])
+def start_motor():
+    if gsm_serial and gsm_serial.is_open:
+        gsm_serial.write(b's')  # 's' = start motor
+    return '', 204
+
+@app.route('/spin-motor/stop', methods=['POST'])
+def stop_motor():
+    if gsm_serial and gsm_serial.is_open:
+        gsm_serial.write(b'x')  # 'x' = stop motor
+    return '', 204
+
 
 # The print_document route now calls the print_document_logic function
 @app.route('/print_document', methods=['POST'])
