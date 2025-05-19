@@ -106,6 +106,7 @@ gsm_active = False # Flag to control GSM detection for COM4
 COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM4'
 BAUD_RATE = 9600
+MOTOR_PORT = serial.Serial('COM15', 9600)
 
 # Global variables to hold serial port objects
 coin_slot_serial = None
@@ -1785,16 +1786,18 @@ def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
     gray_doc.close()
     doc.close()
 
+@app.route('/')
+def index():
+    return send_from_directory('.', 'spin-motor.html')
+
 @app.route('/spin-motor/start', methods=['POST'])
 def start_motor():
-    if gsm_serial and gsm_serial.is_open:
-        gsm_serial.write(b's')  # 's' = start motor
+    MOTOR_PORT.write(b's')  # s = start
     return '', 204
 
 @app.route('/spin-motor/stop', methods=['POST'])
 def stop_motor():
-    if gsm_serial and gsm_serial.is_open:
-        gsm_serial.write(b'x')  # 'x' = stop motor
+    MOTOR_PORT.write(b'x')  # x = stop
     return '', 204
 
 
