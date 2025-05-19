@@ -1786,20 +1786,23 @@ def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
     gray_doc.close()
     doc.close()
 
-@app.route('/')
-def index():
-    return send_from_directory('.', 'spin-motor.html')
-
 @app.route('/spin-motor/start', methods=['POST'])
-def start_motor():
-    MOTOR_PORT.write(b's')  # s = start
+def spin_motor_start():
+    try:
+        MOTOR_PORT.write(b's')  # Start motor
+        print("[MOTOR] Start signal sent.")
+    except Exception as e:
+        print(f"[MOTOR ERROR] Failed to start motor: {e}")
     return '', 204
 
 @app.route('/spin-motor/stop', methods=['POST'])
-def stop_motor():
-    MOTOR_PORT.write(b'x')  # x = stop
+def spin_motor_stop():
+    try:
+        MOTOR_PORT.write(b'x')  # Stop motor
+        print("[MOTOR] Stop signal sent.")
+    except Exception as e:
+        print(f"[MOTOR ERROR] Failed to stop motor: {e}")
     return '', 204
-
 
 # The print_document route now calls the print_document_logic function
 @app.route('/print_document', methods=['POST'])
