@@ -1452,6 +1452,47 @@ def stop_gsm_detection():
     gcash_print_options = None
     return jsonify({"success": True, "message": "GSM detection stopped."})
 
+# Add near the top of app.py
+GSM_ALERT_NUMBER = "+639560361941"  # Replace with the actual recipient phone number
+
+# Utility to send SMS via GSM
+
+def send_gsm_message(message: str, phone_number: str):
+    global gsm_serial
+    try:
+        if gsm_serial is None or not gsm_serial.is_open:
+            gsm_serial = serial.Serial(GSM_PORT, BAUD_RATE, timeout=1)
+            time.sleep(2)
+
+        at_cmds = [
+            b'AT\r',
+            b'AT+CMGF=1\r',
+            f'AT+CMGS="{phone_number}"\r'.encode(),
+            f'{message}\x1A'.encode()  # \x1A = CTRL+Z
+        ]
+
+        for cmd in at_cmds:
+            gsm_serial.write(cmd)
+            time.sleep(1)
+
+        print(f"Sent SMS to {phone_number}: {message}")
+
+    except Exception as e:
+        print(f"Failed to send SMS via GSM: {e}")
+
+
+# Example usage: Log user printed a file
+
+def log_user_printed_file(filename: str):
+    now = datetime.now()
+    msg = f"User printed: {filename}"
+    log = {
+        "date": now.strftime("%m/%d/%Y"),
+        "time": now.strftime("%I:%M %p"),
+        "event": msg
+    }
+    activity_log.append(log)
+    send_gsm_message(f"Activity: {msg}", GSM_ALERT_NUMBER)
 
 
 # START OF PRINT DOCUMENT LOGIC (extracted from route)
