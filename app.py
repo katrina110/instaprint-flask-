@@ -172,9 +172,9 @@ def admin_sales():
                  .filter(Transaction.method=="Coinslot")
                  .scalar() or 0)
     return render_template("admin-sales.html",
-                           total_sales=round(total,2),
-                           gcash_sales=round(gcash,2),
-                           coins_sales=round(coins,2))
+                           total_sales=round(total),
+                           gcash_sales=round(gcash),
+                           coins_sales=round(coins))
 
 
 @app.route("/set_price", methods=["POST"])

@@ -10,25 +10,180 @@
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        /* Basic styling for the calendar */
+        .calendar-container {
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .calendar-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+            margin: 0 15px;
+        }
+        .calendar-nav button {
+            background: none;
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .calendar-nav button:hover {
+            background-color: #f0f0f0;
+        }
+
+        .selection-controls {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .selection-controls button {
+            margin-right: 8px;
+            padding: 8px 12px;
+            border: 1px solid #007bff;
+            background-color: #fff;
+            color: #007bff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .selection-controls button:hover {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .selection-controls button.active-mode {
+            background-color: #007bff;
+            color: #fff;
+            font-weight: bold;
+        }
+        .selection-controls button#clearSelection {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        .selection-controls button#clearSelection:hover {
+            background-color: #dc3545;
+            color: #fff;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            text-align: center;
+        }
+        .calendar-grid .day-cell, .calendar-grid .day-header, .calendar-grid .empty-cell {
+            padding: 12px 5px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            font-weight: 500;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 40px;
+        }
+        .calendar-grid .day-header {
+            background-color: #e9e9e9;
+            font-weight: 700;
+            padding: 10px 5px;
+        }
+        .calendar-grid .day-cell {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .calendar-grid .day-cell:hover {
+            background-color: #e6f2ff;
+        }
+        .calendar-grid .today {
+            background-color: #ffc107;
+            color: #333;
+            font-weight: bold;
+        }
+        .calendar-grid .day-cell.selected {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        .calendar-grid .empty-cell {
+            background-color: transparent;
+        }
+
+        /* Ensure content area takes up remaining space if menu is fixed width */
+        .container {
+            display: flex;
+        }
+        .menu {
+            flex-shrink: 0;
+        }
+        .contents {
+            flex-grow: 1;
+            padding: 20px;
+        }
+
+        /* Styles for the re-added sales cards */
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap; 
+            gap: 20px;
+        }
+        .stats .card { /* Original card class from user's HTML */
+            background-color: #ffffff; /* White background for each card */
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Slightly more pronounced shadow */
+            min-width: 220px; 
+            flex: 1; 
+            max-width: 280px; /* Adjusted max-width */
+            border: 1px solid #e0e0e0; /* Subtle border */
+            margin-top: 10px;
+        }
+        .stats .card .card-content {
+            font-size: 2.25rem; 
+            font-weight: 700; /* Bolder */
+            color: green; /* Darker shade of blue */
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+        .stats .card .card-content .currency {
+            font-size: 1.75rem; /* Slightly smaller currency symbol */
+            margin-right: 4px;
+            color: #333; /* Darker currency symbol */
+        }
+        .stats .card .card-label {
+            font-size: 1rem; /* Standard label size */
+            color: #495057; /* Bootstrap's gray-700 for text */
+            font-weight: 500;
+        }
+        .amount {
+            font-size: 2rem;
+        }
+
+    </style>
 </head>
 
 <body>
 <div class="container">
 
     <leftmenu class="menu">
-
         <div class="account">
-
             <i class="fa-solid fa-user-circle profile-icon"></i>
             <div class="account-info">
                 <p class="name">InstaPrint</p>
                 <p class="role">Admin</p>
             </div>
-
         </div>
-
         <h2>Navigation</h2>
-
         <ul>
             <li><i class="fa-solid fa-house"></i> <a href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
             <li><i class="fa-solid fa-print"></i> <a href="{{ url_for('admin_printed_pages') }}">Files Upload</a></li>
@@ -36,30 +191,51 @@
             <li><i class="fa-solid fa-upload"></i> <a href="{{ url_for('admin_activity_log') }}">Activity Log</a></li>
             <li><i class="fa-solid fa-chart-bar"></i> <a href="{{ url_for('admin_sales') }}">Total Sales</a></li>
         </ul>
-
     </leftmenu>
  
     <content class="contents">
+        <div class="calendar-container">
+            <div class="calendar-header">
+                <div class="calendar-nav">
+                    <button id="prevMonth">&lt; Prev</button>
+                </div>
+                <h2 id="currentMonthYear">Month Year</h2>
+                <div class="calendar-nav">
+                    <button id="nextMonth">Next &gt;</button>
+                </div>
+            </div>
+
+            <div class="selection-controls">
+                <button id="selectDayMode" class="active-mode">Select Day(s)</button>
+                <button id="selectWeekMode">Select Week</button>
+                <button id="selectMonthMode">Select Month</button>
+                <button id="clearSelection">Clear All Selections</button>
+            </div>
+
+            <div class="calendar-grid" id="calendarDays">
+                <div class="day-header">Sun</div>
+                <div class="day-header">Mon</div>
+                <div class="day-header">Tue</div>
+                <div class="day-header">Wed</div>
+                <div class="day-header">Thu</div>
+                <div class="day-header">Fri</div>
+                <div class="day-header">Sat</div>
+                </div>
+        </div>
 
         <div class="stats">
-
             <div class="card">
-
                 <div class="card-content">
                     <span class="currency">₱</span><span class="amount">{{ total_sales }}</span>
                 </div>
-
                 <div class="card-label">Total Sales</div>
-
             </div>
 
             <div class="card">
-                
                 <div class="card-content">
                     <span class="currency">₱</span><span class="amount">{{ gcash_sales }}</span>
                 </div>
                 <div class="card-label">GCash</div>
-
             </div>
 
             <div class="card">
@@ -68,11 +244,193 @@
                 </div>
                 <div class="card-label">Coinslot</div>
             </div>
+        </div>
+        </content>
 
-    </content>
+</div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const monthYearElement = document.getElementById('currentMonthYear');
+    const calendarDaysElement = document.getElementById('calendarDays');
+    const prevMonthButton = document.getElementById('prevMonth');
+    const nextMonthButton = document.getElementById('nextMonth');
+
+    const selectDayModeButton = document.getElementById('selectDayMode');
+    const selectWeekModeButton = document.getElementById('selectWeekMode');
+    const selectMonthModeButton = document.getElementById('selectMonthMode');
+    const clearSelectionButton = document.getElementById('clearSelection');
+    const modeButtons = [selectDayModeButton, selectWeekModeButton, selectMonthModeButton];
+
+    let currentDate = new Date();
+    let currentSelectionMode = 'day'; 
+    let selectedDates = new Set(); 
+
+    function updateModeButtons() {
+        modeButtons.forEach(btn => btn.classList.remove('active-mode'));
+        if (currentSelectionMode === 'day') selectDayModeButton.classList.add('active-mode');
+        else if (currentSelectionMode === 'week') selectWeekModeButton.classList.add('active-mode');
+        else if (currentSelectionMode === 'month') selectMonthModeButton.classList.add('active-mode');
+    }
+
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth(); 
+
+        monthYearElement.textContent = `${currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
+        
+        const dayHeaders = Array.from(calendarDaysElement.querySelectorAll('.day-header'));
+        calendarDaysElement.innerHTML = ''; 
+        dayHeaders.forEach(header => calendarDaysElement.appendChild(header)); 
+
+
+        const firstDayOfMonth = new Date(year, month, 1);
+        const lastDayOfMonth = new Date(year, month + 1, 0);
+        const daysInMonth = lastDayOfMonth.getDate();
+        const startingDayOfWeek = firstDayOfMonth.getDay(); 
+
+        for (let i = 0; i < startingDayOfWeek; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.classList.add('empty-cell');
+            calendarDaysElement.appendChild(emptyCell);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayCell = document.createElement('div');
+            dayCell.classList.add('day-cell');
+            dayCell.textContent = day;
+            const cellDate = new Date(year, month, day);
+            const cellDateString = formatDate(cellDate);
+            dayCell.dataset.date = cellDateString;
+
+            const today = new Date();
+            if (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) {
+                dayCell.classList.add('today');
+            }
+
+            if (selectedDates.has(cellDateString)) {
+                dayCell.classList.add('selected');
+            }
+
+            dayCell.addEventListener('click', () => handleDayClick(cellDate));
+            calendarDaysElement.appendChild(dayCell);
+        }
+        updateModeButtons();
+    }
+
+    function handleDayClick(dateObject) {
+        const clickedDateString = formatDate(dateObject);
+
+        if (currentSelectionMode === 'day') {
+            if (selectedDates.has(clickedDateString)) {
+                selectedDates.delete(clickedDateString);
+            } else {
+                selectedDates.add(clickedDateString);
+            }
+        } else if (currentSelectionMode === 'week') {
+            const weekDates = getWeekDates(dateObject);
+            const isWeekSelected = selectedDates.has(formatDate(weekDates[0]));
+            
+            const currentMonthDates = getAllDatesInCurrentMonthView();
+            currentMonthDates.forEach(dStr => selectedDates.delete(dStr)); 
+
+            if (!isWeekSelected) { 
+                weekDates.forEach(wd => {
+                    if (currentMonthDates.includes(formatDate(wd))) {
+                         selectedDates.add(formatDate(wd));
+                    }
+                });
+            }
+        } else if (currentSelectionMode === 'month') {
+            const allMonthDates = getAllDatesInCurrentMonthView();
+            const isAllSelected = allMonthDates.length > 0 && allMonthDates.every(d => selectedDates.has(d));
+
+            if (isAllSelected) { 
+                allMonthDates.forEach(d => selectedDates.delete(d));
+            } else { 
+                allMonthDates.forEach(d => selectedDates.add(d));
+            }
+        }
+        renderCalendar(); 
+    }
+
+    function getWeekDates(dateObject) {
+        const dates = [];
+        const year = dateObject.getFullYear();
+        const month = dateObject.getMonth();
+        const day = dateObject.getDate();
+        
+        const currentDayOfWeek = dateObject.getDay(); 
+        const startDate = new Date(year, month, day - currentDayOfWeek); 
+
+        for (let i = 0; i < 7; i++) {
+            dates.push(new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i));
+        }
+        return dates;
+    }
+    
+    function getAllDatesInCurrentMonthView() {
+        const dates = [];
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let day = 1; day <= daysInMonth; day++) {
+            dates.push(formatDate(new Date(year, month, day)));
+        }
+        return dates;
+    }
+
+    prevMonthButton.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+    });
+
+    nextMonthButton.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+    });
+
+    selectDayModeButton.addEventListener('click', () => {
+        currentSelectionMode = 'day';
+        updateModeButtons(); // update active button appearance immediately
+        // renderCalendar(); // No need to re-render if only mode changes and not selection
+    });
+
+    selectWeekModeButton.addEventListener('click', () => {
+        currentSelectionMode = 'week';
+         updateModeButtons();
+        // renderCalendar();
+    });
+
+    selectMonthModeButton.addEventListener('click', () => {
+        currentSelectionMode = 'month';
+        updateModeButtons();
+        // For month mode, clicking the button itself should toggle selection
+        const allMonthDates = getAllDatesInCurrentMonthView();
+        const isAllSelected = allMonthDates.length > 0 && allMonthDates.every(d => selectedDates.has(d));
+        
+        if (isAllSelected) {
+             allMonthDates.forEach(d => selectedDates.delete(d));
+        } else {
+             allMonthDates.forEach(d => selectedDates.add(d));
+        }
+        renderCalendar();
+    });
+
+    clearSelectionButton.addEventListener('click', () => {
+        selectedDates.clear();
+        renderCalendar();
+    });
+
+    renderCalendar(); 
+});
+</script>
 </body>
 </html>
-
-
-
