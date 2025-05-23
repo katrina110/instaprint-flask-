@@ -250,6 +250,12 @@
 </div>
 
 <script>
+    const totalSalesAmountElement = document.querySelector('.stats .card:nth-child(1) .amount');
+    const gcashSalesAmountElement = document.querySelector('.stats .card:nth-child(2) .amount');
+    const coinsSalesAmountElement = document.querySelector('.stats .card:nth-child(3) .amount');
+</script>
+
+<script>
 document.addEventListener('DOMContentLoaded', function() {
     const monthYearElement = document.getElementById('currentMonthYear');
     const calendarDaysElement = document.getElementById('calendarDays');
@@ -358,8 +364,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 allMonthDates.forEach(d => selectedDates.add(d));
             }
         }
-        renderCalendar(); 
+        renderCalendar();
+        fetchAndUpdateSalesData(); 
     }
+
+    fetchAndUpdateSalesData();
 
     function getWeekDates(dateObject) {
         const dates = [];
@@ -390,11 +399,13 @@ document.addEventListener('DOMContentLoaded', function() {
     prevMonthButton.addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() - 1);
         renderCalendar();
+        fetchAndUpdateSalesData();
     });
 
     nextMonthButton.addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
+        fetchAndUpdateSalesData();
     });
 
     selectDayModeButton.addEventListener('click', () => {
@@ -422,14 +433,54 @@ document.addEventListener('DOMContentLoaded', function() {
              allMonthDates.forEach(d => selectedDates.add(d));
         }
         renderCalendar();
+        fetchAndUpdateSalesData();
     });
 
     clearSelectionButton.addEventListener('click', () => {
         selectedDates.clear();
         renderCalendar();
+        fetchAndUpdateSalesData();
     });
 
-    renderCalendar(); 
+    renderCalendar();
+    fetchAndUpdateSalesData();
+
+    async function fetchAndUpdateSalesData() {
+    const datesArray = Array.from(selectedDates); // selectedDates is your existing Set of 'YYYY-MM-DD' strings
+
+    try {
+        const response = await fetch('/api/filtered-sales', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ dates: datesArray }),
+        });
+
+        if (!response.ok) {
+            console.error('Error fetching filtered sales:', response.statusText);
+            totalSalesAmountElement.textContent = 'Error';
+            gcashSalesAmountElement.textContent = 'Error';
+            coinsSalesAmountElement.textContent = 'Error';
+            return;
+        }
+
+        const salesData = await response.json();
+
+        totalSalesAmountElement.textContent = salesData.total_sales !== null ? String(Math.round(salesData.total_sales)) : '0';
+        gcashSalesAmountElement.textContent = salesData.gcash_sales !== null ? String(Math.round(salesData.gcash_sales)) : '0';
+        coinsSalesAmountElement.textContent = salesData.coins_sales !== null ? String(Math.round(salesData.coins_sales)) : '0';
+
+    } catch (error) {
+        console.error('Error fetching or parsing sales data:', error);
+        // Handle errors, e.g., display N/A or previous values
+        totalSalesAmountElement.textContent = 'N/A';
+        gcashSalesAmountElement.textContent = 'N/A';
+        coinsSalesAmountElement.textContent = 'N/A';
+    }
+
+
+}
 });
 </script>
 </body>

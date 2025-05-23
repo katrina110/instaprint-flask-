@@ -36,6 +36,9 @@ import re # Import regex for more robust parsing
 import math
 import win32api
 
+from sqlalchemy import func
+from datetime import datetime
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -160,21 +163,47 @@ def api_record_transaction():
     record_transaction(method, amount)
     return jsonify(success=True)
 
+@app.route('/api/filtered-sales', methods=['POST'])
+def get_filtered_sales():
+    data = request.get_json()
+    selected_dates_str = data.get('dates', [])
+
+    # Base queries using the imported func
+    query_total = db.session.query(func.sum(Transaction.amount))
+    query_gcash = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == "GCash")
+    query_coins = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == "Coinslot")
+
+    if selected_dates_str:
+        # Using func.date
+        query_total = query_total.filter(func.date(Transaction.timestamp).in_(selected_dates_str))
+        query_gcash = query_gcash.filter(func.date(Transaction.timestamp).in_(selected_dates_str))
+        query_coins = query_coins.filter(func.date(Transaction.timestamp).in_(selected_dates_str))
+
+    total_sales = query_total.scalar() or 0.0
+    gcash_sales = query_gcash.scalar() or 0.0
+    coins_sales = query_coins.scalar() or 0.0
+
+    return jsonify({
+        'total_sales': total_sales,
+        'gcash_sales': gcash_sales,
+        'coins_sales': coins_sales
+    })
+
 
 @app.route("/admin-sales")
 def admin_sales():
-    # totals already computed in admin_dashboard
-    total = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    # This still provides the initial view with overall totals
+    total = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0 #
     gcash = (db.session.query(db.func.sum(Transaction.amount))
                 .filter(Transaction.method=="GCash")
-                .scalar() or 0)
+                .scalar() or 0) #
     coins = (db.session.query(db.func.sum(Transaction.amount))
                  .filter(Transaction.method=="Coinslot")
-                 .scalar() or 0)
+                 .scalar() or 0) #
     return render_template("admin-sales.html",
-                           total_sales=round(total),
-                           gcash_sales=round(gcash),
-                           coins_sales=round(coins))
+                           total_sales=round(total), #
+                           gcash_sales=round(gcash), #
+                           coins_sales=round(coins)) #
 
 
 @app.route("/set_price", methods=["POST"])
@@ -639,7 +668,7 @@ def admin_dashboard():
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "current_balance": 3000,
+        "current_balance": 0,
         "sales_history": [
             {
                 "method": t.method,
@@ -650,22 +679,12 @@ def admin_dashboard():
         ],
         "sales_chart": [500, 600, 700, 800],  # Example sales data for Chart.js
         "transaction_method_summary": {
-            "gcash": round(gcash_total, 2),
-            "coinslot": round(coinslot_total, 2)
+            "gcash": round(gcash_total),
+            "coinslot": round(coinslot_total)
         }
     }
     return render_template("admin-dashboard.html", data=data)
 
-# For testing purposes
-#@app.route('/test-transaction/<method>/<amount>')
-#def test_transaction(method, amount):
-#    try:
-#        record_transaction(method, float(amount))
-#        return f"Test transaction recorded: {method} - {amount}"
-#    except Exception as e:
-#        return f"Error: {str(e)}"
-    
-# End of testing
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
