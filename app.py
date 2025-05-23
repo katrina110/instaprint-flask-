@@ -661,7 +661,7 @@ def admin_dashboard():
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "current_balance": 0,
+        "current_balance": 200,
         "sales_history": [
             {
                 "method": t.method,
