@@ -268,9 +268,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearSelectionButton = document.getElementById('clearSelection');
     const modeButtons = [selectDayModeButton, selectWeekModeButton, selectMonthModeButton];
 
+    // References to the sales amount elements
+    const totalSalesAmountElement = document.querySelector('.stats .card:nth-child(1) .amount');
+    const gcashSalesAmountElement = document.querySelector('.stats .card:nth-child(2) .amount');
+    const coinsSalesAmountElement = document.querySelector('.stats .card:nth-child(3) .amount');
+
     let currentDate = new Date();
-    let currentSelectionMode = 'day'; 
-    let selectedDates = new Set(); 
+    let currentSelectionMode = 'day';
+    let selectedDates = new Set();
 
     function updateModeButtons() {
         modeButtons.forEach(btn => btn.classList.remove('active-mode'));
@@ -286,9 +291,54 @@ document.addEventListener('DOMContentLoaded', function() {
         return `${y}-${m}-${d}`;
     }
 
+    async function fetchAndUpdateSalesData() {
+        const datesArray = Array.from(selectedDates);
+
+        // If no dates are selected, set cards to 0 and do not fetch from the backend.
+        if (datesArray.length === 0) {
+            totalSalesAmountElement.textContent = '0';
+            gcashSalesAmountElement.textContent = '0';
+            coinsSalesAmountElement.textContent = '0';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/filtered-sales', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dates: datesArray }),
+            });
+
+            if (!response.ok) {
+                console.error('Error fetching filtered sales:', response.statusText);
+                totalSalesAmountElement.textContent = 'Error';
+                gcashSalesAmountElement.textContent = 'Error';
+                coinsSalesAmountElement.textContent = 'Error';
+                return;
+            }
+
+            const salesData = await response.json();
+
+            totalSalesAmountElement.textContent = salesData.total_sales !== null ? String(Math.round(salesData.total_sales)) : '0';
+            gcashSalesAmountElement.textContent = salesData.gcash_sales !== null ? String(Math.round(salesData.gcash_sales)) : '0';
+            coinsSalesAmountElement.textContent = salesData.coins_sales !== null ? String(Math.round(salesData.coins_sales)) : '0';
+
+        } catch (error) {
+            console.error('Error fetching or parsing sales data:', error);
+            totalSalesAmountElement.textContent = 'N/A';
+            gcashSalesAmountElement.textContent = 'N/A';
+            coinsSalesAmountElement.textContent = 'N/A';
+        }
+    }
+
     function renderCalendar() {
+        // ... (renderCalendar function body as previously defined)
+        // Ensure this function correctly adds 'selected' class based on `selectedDates`
+        // and attaches event listeners to day cells.
         const year = currentDate.getFullYear();
-        const month = currentDate.getMonth(); 
+        const month = currentDate.getMonth();
 
         monthYearElement.textContent = `${currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
         
@@ -325,50 +375,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 dayCell.classList.add('selected');
             }
 
-            dayCell.addEventListener('click', () => handleDayClick(cellDate));
+            dayCell.addEventListener('click', () => handleDayClick(cellDate)); // Make sure this calls handleDayClick
             calendarDaysElement.appendChild(dayCell);
         }
         updateModeButtons();
     }
-
-    function handleDayClick(dateObject) {
-        const clickedDateString = formatDate(dateObject);
-
-        if (currentSelectionMode === 'day') {
-            if (selectedDates.has(clickedDateString)) {
-                selectedDates.delete(clickedDateString);
-            } else {
-                selectedDates.add(clickedDateString);
-            }
-        } else if (currentSelectionMode === 'week') {
-            const weekDates = getWeekDates(dateObject);
-            const isWeekSelected = selectedDates.has(formatDate(weekDates[0]));
-            
-            const currentMonthDates = getAllDatesInCurrentMonthView();
-            currentMonthDates.forEach(dStr => selectedDates.delete(dStr)); 
-
-            if (!isWeekSelected) { 
-                weekDates.forEach(wd => {
-                    if (currentMonthDates.includes(formatDate(wd))) {
-                         selectedDates.add(formatDate(wd));
-                    }
-                });
-            }
-        } else if (currentSelectionMode === 'month') {
-            const allMonthDates = getAllDatesInCurrentMonthView();
-            const isAllSelected = allMonthDates.length > 0 && allMonthDates.every(d => selectedDates.has(d));
-
-            if (isAllSelected) { 
-                allMonthDates.forEach(d => selectedDates.delete(d));
-            } else { 
-                allMonthDates.forEach(d => selectedDates.add(d));
-            }
-        }
-        renderCalendar();
-        fetchAndUpdateSalesData(); 
-    }
-
-    fetchAndUpdateSalesData();
 
     function getWeekDates(dateObject) {
         const dates = [];
@@ -396,91 +407,105 @@ document.addEventListener('DOMContentLoaded', function() {
         return dates;
     }
 
+
+    function handleDayClick(dateObject) {
+        const clickedDateString = formatDate(dateObject);
+
+        if (currentSelectionMode === 'day') {
+            if (selectedDates.has(clickedDateString)) {
+                selectedDates.delete(clickedDateString);
+            } else {
+                selectedDates.add(clickedDateString);
+            }
+        } else if (currentSelectionMode === 'week') {
+            const weekDates = getWeekDates(dateObject);
+            const isWeekSelected = selectedDates.has(formatDate(weekDates[0])); // Check if first day of week is selected
+            
+            // Get all dates currently visible in the calendar for the current month view
+            const currentMonthDatesInView = getAllDatesInCurrentMonthView();
+            
+            // First, clear any selections that are part of the current month's view
+            // This prevents overlapping selections if user clicks multiple weeks.
+            // More robustly, you might want to clear ALL selectedDates before selecting a new week.
+            // For simplicity, let's clear all selectedDates before new week selection.
+            selectedDates.clear(); // Clear all previous selections when selecting a new week
+
+            if (!isWeekSelected) { // If the week wasn't selected, select it now
+                weekDates.forEach(wd => {
+                    // Only add the date if it's part of the currently displayed month
+                    if (currentMonthDatesInView.includes(formatDate(wd))) {
+                         selectedDates.add(formatDate(wd));
+                    }
+                });
+            }
+            // If the week was selected (isWeekSelected was true), clearing selectedDates already handled deselecting it.
+        } else if (currentSelectionMode === 'month') {
+            // Month selection is handled by the selectMonthModeButton logic
+            // Clicking a day in month mode could select that day, or toggle the month.
+            // For now, let's make it select the day as if in 'day' mode if month mode is active.
+            // This simplifies; month selection itself is done via the button.
+            if (selectedDates.has(clickedDateString)) {
+                selectedDates.delete(clickedDateString);
+            } else {
+                selectedDates.add(clickedDateString);
+            }
+        }
+        renderCalendar();
+        fetchAndUpdateSalesData(); // Fetch new sales data after selection changes
+    }
+
     prevMonthButton.addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() - 1);
         renderCalendar();
-        fetchAndUpdateSalesData();
+        // Do not fetch data just by changing month view
     });
 
     nextMonthButton.addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
-        fetchAndUpdateSalesData();
+        // Do not fetch data just by changing month view
     });
 
     selectDayModeButton.addEventListener('click', () => {
         currentSelectionMode = 'day';
-        updateModeButtons(); // update active button appearance immediately
-        // renderCalendar(); // No need to re-render if only mode changes and not selection
+        updateModeButtons();
     });
 
     selectWeekModeButton.addEventListener('click', () => {
         currentSelectionMode = 'week';
-         updateModeButtons();
-        // renderCalendar();
+        updateModeButtons();
     });
 
     selectMonthModeButton.addEventListener('click', () => {
         currentSelectionMode = 'month';
         updateModeButtons();
-        // For month mode, clicking the button itself should toggle selection
-        const allMonthDates = getAllDatesInCurrentMonthView();
-        const isAllSelected = allMonthDates.length > 0 && allMonthDates.every(d => selectedDates.has(d));
         
-        if (isAllSelected) {
-             allMonthDates.forEach(d => selectedDates.delete(d));
+        const allMonthDates = getAllDatesInCurrentMonthView();
+        // Check if all dates in the current month view are already selected
+        const isAllCurrentlySelected = allMonthDates.length > 0 && allMonthDates.every(d => selectedDates.has(d));
+
+        if (isAllCurrentlySelected) {
+            // If all are selected, deselect them
+            allMonthDates.forEach(d => selectedDates.delete(d));
         } else {
-             allMonthDates.forEach(d => selectedDates.add(d));
+            // Otherwise, select all dates in the current month view
+            // (Optionally, you might want to clear other selections first: selectedDates.clear();)
+            allMonthDates.forEach(d => selectedDates.add(d));
         }
         renderCalendar();
-        fetchAndUpdateSalesData();
+        fetchAndUpdateSalesData(); // Update sales based on month selection
     });
 
     clearSelectionButton.addEventListener('click', () => {
         selectedDates.clear();
         renderCalendar();
-        fetchAndUpdateSalesData();
+        fetchAndUpdateSalesData(); // This will now correctly set cards to 0
     });
 
+    // Initial render of the calendar
     renderCalendar();
-    fetchAndUpdateSalesData();
-
-    async function fetchAndUpdateSalesData() {
-    const datesArray = Array.from(selectedDates); // selectedDates is your existing Set of 'YYYY-MM-DD' strings
-
-    try {
-        const response = await fetch('/api/filtered-sales', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ dates: datesArray }),
-        });
-
-        if (!response.ok) {
-            console.error('Error fetching filtered sales:', response.statusText);
-            totalSalesAmountElement.textContent = 'Error';
-            gcashSalesAmountElement.textContent = 'Error';
-            coinsSalesAmountElement.textContent = 'Error';
-            return;
-        }
-
-        const salesData = await response.json();
-
-        totalSalesAmountElement.textContent = salesData.total_sales !== null ? String(Math.round(salesData.total_sales)) : '0';
-        gcashSalesAmountElement.textContent = salesData.gcash_sales !== null ? String(Math.round(salesData.gcash_sales)) : '0';
-        coinsSalesAmountElement.textContent = salesData.coins_sales !== null ? String(Math.round(salesData.coins_sales)) : '0';
-
-    } catch (error) {
-        console.error('Error fetching or parsing sales data:', error);
-        // Handle errors, e.g., display N/A or previous values
-        totalSalesAmountElement.textContent = 'N/A';
-        gcashSalesAmountElement.textContent = 'N/A';
-        coinsSalesAmountElement.textContent = 'N/A';
-    }
-
-
-}
+    // DO NOT call fetchAndUpdateSalesData() on initial load.
+    // The page will load with 0s from the Flask template.
 });
 </script>
 </body>

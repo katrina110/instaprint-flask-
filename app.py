@@ -192,18 +192,11 @@ def get_filtered_sales():
 
 @app.route("/admin-sales")
 def admin_sales():
-    # This still provides the initial view with overall totals
-    total = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0 #
-    gcash = (db.session.query(db.func.sum(Transaction.amount))
-                .filter(Transaction.method=="GCash")
-                .scalar() or 0) #
-    coins = (db.session.query(db.func.sum(Transaction.amount))
-                 .filter(Transaction.method=="Coinslot")
-                 .scalar() or 0) #
+    # Pass 0 for initial rendering. Dynamic updates will be handled by JavaScript.
     return render_template("admin-sales.html",
-                           total_sales=round(total), #
-                           gcash_sales=round(gcash), #
-                           coins_sales=round(coins)) #
+                           total_sales=0,
+                           gcash_sales=0,
+                           coins_sales=0)
 
 
 @app.route("/set_price", methods=["POST"])
