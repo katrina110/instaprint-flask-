@@ -105,8 +105,8 @@ gsm_active = False # Flag to control GSM detection for COM4
 # Define COM ports and baud rate for both Arduinos
 COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM4'
+MOTOR_PORT = 'COM15'
 BAUD_RATE = 9600
-MOTOR_PORT = serial.Serial('COM15', 9600)
 
 # Global variables to hold serial port objects
 coin_slot_serial = None
