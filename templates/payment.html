@@ -217,6 +217,15 @@
     const totalPrice = sessionStorage.getItem("totalPrice");
     const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
+    function logError(message) {
+      fetch('/log_activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      }).catch(err => console.error("Failed to log activity:", err));
+    }
+
+
     // Display total price or handle missing data
     if (totalPrice && !isNaN(parseFloat(totalPrice))) {
       priceValueElement.textContent = parseFloat(totalPrice).toFixed(2);
@@ -240,6 +249,7 @@
       .then(data => {
           if (!data.success) {
                console.error('Backend reported failure setting price:', data.message);
+               logError("Backend reported failure setting price: " + data.message);
                // Optionally inform the user
                // alert("Failed to set price with the system. Please try again.");
                // window.location.href = "/manual-display-upload"; // Redirect on failure
@@ -249,10 +259,9 @@
       })
       .catch((error) => {
         console.error("Error sending price to backend:", error);
-        // Handle network errors or other exceptions
-        // alert("Could not communicate with the system to set price. Please check connection and try again.");
-        // window.location.href = "/manual-display-upload"; // Redirect on error
+        logError("Error sending price to backend: " + error.message);
       });
+
 
     } else {
       // If total price is missing or invalid, alert user and redirect
@@ -308,6 +317,7 @@
               }, 30000); // 30 seconds delay
             } else {
               console.error("Backend reported print failure:", data.error);
+              logError("Backend reported print failure: " + data.error);
               // Optionally show an error message from the backend
               alert("Printing failed: " + data.error);
               // Redirect or handle error appropriately
@@ -316,6 +326,7 @@
           })
           .catch((error) => {
             console.error("Error during print request:", error);
+            logError("Error during print request: " + error.message);
             // Handle network errors or other exceptions during the fetch call
             alert("An error occurred while trying to print. Please check connection and try again.");
             window.location.href = "/"; // Example: Redirect to home on error
@@ -387,6 +398,7 @@
             })
             .catch(error => {
                 console.error('Error stopping coin detection:', error);
+                logError("Error stopping coin detection: " + error.message);
                 // Still navigate back even if there's an error, to avoid getting stuck
                 window.history.back();
             });

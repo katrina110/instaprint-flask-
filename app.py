@@ -114,11 +114,11 @@ coin_count = 0
 coin_value_sum = 0  # Track the total value of inserted coins
 coin_detection_active = False # Flag to control coin detection for
 coin_detection_active = False # Flag to control coin detection for COM6
-gsm_active = False # Flag to control GSM detection for COM4
+gsm_active = False # Flag to control GSM detection for COM5
 
 # Define COM ports and baud rate for both Arduinos
 COIN_SLOT_PORT = 'COM6'
-GSM_PORT = 'COM4'
+GSM_PORT = 'COM5'
 MOTOR_PORT = 'COM15'
 BAUD_RATE = 9600
 
@@ -714,6 +714,22 @@ def admin_activity_log():
     # Pass the global activity log to the template
     return render_template('admin-activity-log.html', printed=activity_log)
 
+# Store logs in memory (or ideally, use a database)
+activity_logs = []
+
+@app.route('/log_activity', methods=['POST'])
+def log_activity():
+    data = request.get_json()
+    log_entry = {
+        "message": data.get("message"),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    activity_logs.append(log_entry)
+    return jsonify(success=True)
+
+@app.route('/admin_activity_data')
+def admin_activity_data():
+    return jsonify(activity_logs)
 @app.route('/api/printer-status')
 def printer_status_api():
     global printer_name  # Declare printer_name as global here
@@ -1369,7 +1385,7 @@ def read_coin_slot_data():
 # Error handling and reconnect logic are already present.
 def read_gsm_data():
     """
-    Continuously reads data from the GSM module serial port (COM4)
+    Continuously reads data from the GSM module serial port (COM5)
     and processes incoming SMS for payment detection. Handles errors robustly.
     Only active when gsm_active flag is True.
     Triggers printing and deactivates GSM if the received amount matches the expected amount.
@@ -1406,7 +1422,7 @@ def read_gsm_data():
             try:
                 message = gsm_serial.readline().decode("utf-8", errors='ignore').strip() # Use errors='ignore' for robustness
                 if message:
-                    print(f"Received from GSM (COM4): {message}")
+                    print(f"Received from GSM (COM5): {message}")
                     # --- Extract Payment Amount from the specific SMS format ---
                     # Updated regex to match the new format "You received PHP X.XX via QRPH"
                     match = re.search(r"You received PHP (\d+\.\d{2}) via QRPH", message)
@@ -1446,7 +1462,7 @@ def read_gsm_data():
 
 
                         except ValueError:
-                            print("Error: Could not convert extracted amount to float from COM4.")
+                            print("Error: Could not convert extracted amount to float from COM5.")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert amount to number."})
                     else:
                          # Handle other SMS messages if necessary, or ignore them
@@ -1455,7 +1471,7 @@ def read_gsm_data():
                          # socketio.emit("gcash_payment_failed", {"success": False, "message": "Received unexpected SMS format."})
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM4.")
+                print("Error decoding serial data from COM5.")
                 socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS."})
             except serial.SerialException as e:
                 print(f"Serial error on {GSM_PORT}: {e}")
@@ -2019,6 +2035,15 @@ def monitor_printer_status(printer_name, upload_folder):
         last_status = current_status
         time.sleep(2)
 
+def log_activity(event_type, message):
+    from datetime import datetime
+    log_entry = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'event_type': event_type,
+        'message': message
+    }
+    # Store to database or append to a file or list
+    db.insert_log(log_entry)  # Replace with your database or log logic
 
 @app.route('/payment-success')
 def payment_success():
@@ -2068,7 +2093,7 @@ if __name__ == "__main__":
     # This thread runs continuously but only processes data when coin_detection_active is True
     socketio.start_background_task(read_coin_slot_data)
 
-    # Start the GSM module thread (COM4)
+    # Start the GSM module thread (COM5)
     # This thread runs continuously but only processes data when gsm_active is True
     socketio.start_background_task(read_gsm_data)
 
