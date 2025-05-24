@@ -109,7 +109,6 @@
       </leftmenu>
 
       <content class="contents">
-        <h1>Activity Log</h1>
         <div class="log-table" id="activityLogContainer">
           <!-- Logs will be dynamically injected here -->
           <p>Loading activity logs...</p>
@@ -118,46 +117,89 @@
     </div>
 
     <script>
-      // Fetch activity logs from backend
+      function sanitizeHTML(str) {
+        const temp = document.createElement('div');
+        temp.textContent = str;
+        return temp.innerHTML;
+      }
+
       function loadActivityLogs() {
-        fetch("/admin_activity_data")
-          .then((response) => response.json())
+        fetch("/admin_activity_data") // This route now fetches from ErrorLog table
+          .then((response) => {
+            if (!response.ok) {
+                // Try to get error message from response if possible
+                return response.json().then(errData => {
+                    throw new Error(`HTTP error! Status: ${response.status}, Message: ${errData.error || response.statusText}`);
+                }).catch(() => { // Fallback if response is not JSON or no error field
+                    throw new Error(`HTTP error! Status: ${response.status} ${response.statusText}`);
+                });
+            }
+            return response.json();
+          })
           .then((data) => {
             const container = document.getElementById("activityLogContainer");
-            container.innerHTML = `
-            <div class="log-header">
-              <div class="log-date">Date</div>
-              <div class="log-event">Event Name</div>
-            </div>
-          `;
+            container.innerHTML = ""; // Clear previous logs (header is separate now)
 
-            if (data.length === 0) {
-              container.innerHTML += "<p>No activity logs yet.</p>";
+            if (data.error) {
+                container.innerHTML = `<p class="no-logs">Error loading logs: ${sanitizeHTML(data.error)}. Details: ${sanitizeHTML(data.details || '')}</p>`;
+                console.error("Error from /admin_activity_data:", data.error, data.details);
+                return;
+            }
+
+            if (!Array.isArray(data) || data.length === 0) {
+              container.innerHTML = '<p class="no-logs">No error logs found.</p>';
               return;
             }
 
-            data.reverse().forEach((log) => {
+            // Data is already sorted by timestamp desc from backend
+            data.forEach((log) => {
               const logEntry = document.createElement("div");
               logEntry.classList.add("log-entry");
+              logEntry.setAttribute('role', 'row');
+
+              const detailsHTML = log.details ? `<div class="log-details" role="cell" aria-hidden="true">${sanitizeHTML(log.details)}</div>` : '';
+
               logEntry.innerHTML = `
-              <div class="log-date">${log.timestamp}</div>
-              <div class="log-event">${log.message}</div>
-            `;
+                <div class="log-date" role="cell">${sanitizeHTML(log.timestamp)}</div>
+                <div class="log-source" role="cell">${sanitizeHTML(log.source || 'N/A')}</div>
+                <div class="log-event" role="cell" tabindex="0" aria-expanded="false" aria-controls="details-${log.id}">${sanitizeHTML(log.message)}</div>
+                ${detailsHTML}
+              `;
+              
+              const eventDiv = logEntry.querySelector('.log-event');
+              const detailsDiv = logEntry.querySelector('.log-details');
+
+              if (detailsDiv) {
+                eventDiv.addEventListener('click', () => toggleDetails(eventDiv, detailsDiv));
+                eventDiv.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        toggleDetails(eventDiv, detailsDiv);
+                        e.preventDefault();
+                    }
+                });
+              }
               container.appendChild(logEntry);
             });
           })
           .catch((err) => {
             console.error("Failed to load activity logs:", err);
-            document.getElementById("activityLogContainer").innerHTML =
-              "<p>Error loading logs.</p>";
+            const container = document.getElementById("activityLogContainer");
+            container.innerHTML = `<p class="no-logs">Error loading logs: ${sanitizeHTML(err.message)}. Check console.</p>`;
           });
+      }
+
+      function toggleDetails(eventDiv, detailsDiv) {
+        const isHidden = detailsDiv.style.display === 'none' || detailsDiv.style.display === '';
+        detailsDiv.style.display = isHidden ? 'block' : 'none';
+        eventDiv.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        detailsDiv.setAttribute('aria-hidden', isHidden ? 'false' : 'true');
       }
 
       // Initial load
       loadActivityLogs();
 
-      // Optional: Refresh logs every 5 seconds (if real-time is needed)
-      setInterval(loadActivityLogs, 5000);
+      // Refresh logs periodically (e.g., every 30 seconds)
+      setInterval(loadActivityLogs, 30000);
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="./../static/js/main.js"></script>

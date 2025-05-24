@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment</title>
+    <title>Payment - GCash</title>
     <link rel="icon" href="{{ url_for('static', filename='images/logo.jpg') }}" type="image/x-icon">
-    <link href="./../static/css/header.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/header.css') }}" rel="stylesheet">
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 
     <style>
@@ -14,32 +14,32 @@
             margin: 0;
             display: flex;
             flex-direction: column;
+            font-family: "Inter", sans-serif;
         }
         header.header {
-            /* Existing header styles */
-            z-index: 10; /* Ensure header is below the modal (which will have a higher z-index) */
+            z-index: 10; 
         }
         main {
-            display: flex; /* Enable Flexbox for the main section */
+            display: flex; 
             flex: 1;
-            align-items: center; /* Vertically center the content within main */
-            padding: 20px; /* Add some padding around the main content */
+            align-items: center; 
+            padding: 20px; 
         }
         .left-section {
-            flex: 1; /* Takes up remaining space on the left */
-            display: flex; /* Enable Flexbox for the left section */
-            flex-direction: column; /* Stack items vertically */
-            align-items: center; /* Horizontally center items */
-            padding-right: 20px; /* Add some spacing between the sections */
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding-right: 20px; 
         }
         .right-section {
-            flex: 1; /* Takes up remaining space on the right */
-            text-align: center; /* Center the image container */
+            flex: 1; 
+            text-align: center; 
         }
         .right-section img {
-            max-width: 300px; /* Adjust the maximum width of the image */
+            max-width: 300px; 
             height: auto;
-            margin-right: 150px; /* Add some left margin to move the image right */
+            margin-right: 150px; 
             margin-top: 30px;
         }
         main h1, main h3, main p {
@@ -101,43 +101,34 @@
             color: white;
             width: 200px;
             height: 40px;
-            margin-top: 15px; /* Add some space above the button */
+            margin-top: 15px; 
             cursor: pointer;
         }
 
-        /* Modal styles from payment.html */
         .modal {
-            display: none; /* Hidden by default */
+            display: none; 
             position: fixed;
-            z-index: 1000; /* Ensure it's on top */
+            z-index: 1000; 
             left: 0;
             top: 0;
             width: 100%;
             height: 100%;
             overflow: auto;
             background-color: rgba(0,0,0,0.4);
-            /* Removed padding-top: 60px; to allow vertical centering */
-
-            /* Added flex properties for centering */
             align-items: center;
             justify-content: center;
         }
 
         .modal-content {
             background-color: #fefefe;
-            margin: auto; /* Center horizontally and vertically with flex */
+            margin: auto; 
             padding: 20px;
             border: 1px solid #888;
-            width: 80%; /* Adjusted width for better responsiveness */
-            max-width: 600px; /* Max width for larger screens */
+            width: 80%; 
+            max-width: 600px; 
             border-radius: 15px;
-            text-align: center; /* Center content inside modal */
+            text-align: center; 
         }
-
-        /* Close button style is already defined above */
-
-        /* Star rating style is already defined above */
-
         .btn-homepage {
             border-radius: 1.50rem;
             border: none;
@@ -149,9 +140,8 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 15px;
-            filter: none; /* Default: no filter */
+            filter: none; 
         }
-
          .amount {
             font-size: 15px;
             margin-top: 15px;
@@ -164,9 +154,9 @@
 </head>
 <body>
     <header class="header">
-        <img src="./../static/images/pup-logo.png" alt="sample" />
+        <img src="{{ url_for('static', filename='images/pup-logo.png') }}" alt="PUP Logo" />
         <div class="center-text" style="background-color: white;">INSTAPRINT <h6>GCASH PAYMENT</h6></div>
-        <img src="./../static/images/cpe-logo.png" alt="sample" />
+        <img src="{{ url_for('static', filename='images/cpe-logo.png') }}" alt="CPE Logo" />
     </header>
     <main>
         <div class="left-section">
@@ -177,7 +167,7 @@
             <button class="btn-cancel" id="cancelPayment"><strong>Cancel Payment</strong></button>
         </div>
         <div class="right-section">
-            <img src="./../static/images/gcash-qr.png" alt="GCash QR Code" style="max-width: 400px; height: auto;">
+            <img src="{{ url_for('static', filename='images/gcash-qr.png') }}" alt="GCash QR Code" style="max-width: 400px; height: auto;">
         </div>
     </main>
 
@@ -199,7 +189,7 @@
         </div>
         <br>
         <h4>Give Us Your Feedback</h4>
-        <img src="static/images/test_qr.png" style="width: 150px; height: 150px; margin-top: 10px;" alt="Feedback QR Code"/>
+        <img src="{{ url_for('static', filename='images/test_qr.png') }}" style="width: 150px; height: 150px; margin-top: 10px;" alt="Feedback QR Code"/>
         <p class="amount"><i>Redirecting to home page after 30 seconds.</i></p>
         </div>
     </div>
@@ -210,170 +200,219 @@
             const paymentAmountElement = document.getElementById("paymentAmount");
             const totalPrice = sessionStorage.getItem("totalPrice");
             const modal = document.getElementById("myModal");
-            // Using querySelector for the close button as there might be multiple elements with class 'close'
-            const closeBtn = modal.querySelector(".close");
-            const printOptions = JSON.parse(sessionStorage.getItem("printOptions")); // Get print options
+            const closeBtn = modal.querySelector(".close"); // Assuming close button exists in modal
+            const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
-            console.log("DOMContentLoaded fired.");
+            console.log("DOMContentLoaded fired for gcash-payment.html.");
             console.log("Total Price from sessionStorage:", totalPrice);
             console.log("Print Options from sessionStorage:", printOptions);
 
-            // Ensure modal is hidden on page load
             modal.style.display = "none";
             console.log("Modal display set to none on load.");
 
-
-            if (!printOptions) {
-                console.error("Print options not found in sessionStorage!");
-                alert("Print options not found! Please start the process again.");
-                window.location.href = "/manual-display-upload";
-                return;
+            // Function to log client-side errors to the backend
+            function logClientError(message, details) {
+                console.error("Client-side GCash Error:", message, details); // Log to browser console
+                fetch('/log_activity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: String(message),
+                        source: 'gcash-payment.html', // Specific source
+                        details: details ? String(details) : null
+                    })
+                }).catch(err => console.error("Failed to send client-side GCash error to backend:", err));
             }
 
-            if (totalPrice) {
+            if (!printOptions) {
+                const errMsg = "Print options not found in sessionStorage for GCash payment!";
+                console.error(errMsg);
+                logClientError(errMsg, "SessionStorage printOptions was null or undefined.");
+                alert("Critical error: Print options missing. Please start the process again.");
+                window.location.href = "/manual-display-upload"; // Redirect to a safe starting page
+                return; // Stop further execution
+            }
+
+            if (totalPrice && !isNaN(parseFloat(totalPrice))) {
                 paymentAmountElement.textContent = `₱${parseFloat(totalPrice).toFixed(2)}`;
                 console.log("Displayed expected payment amount:", paymentAmountElement.textContent);
             } else {
-                paymentAmountElement.textContent = "₱0.00 (Price not found)";
-                console.error("Total price not found in sessionStorage.");
-                // Optionally, redirect back or show a specific error state
-                // window.location.href = "/result";
+                const errMsg = "Total price not found or invalid in sessionStorage for GCash payment.";
+                paymentAmountElement.textContent = "₱0.00 (Price error)";
+                console.error(errMsg);
+                logClientError(errMsg, `SessionStorage totalPrice: ${totalPrice}`);
+                alert("Critical error: Total price missing. Please re-select your print options.");
+                window.location.href = "/manual-display-upload"; // Redirect
+                return; // Stop further execution
             }
-
-            console.log("JavaScript file loaded!");
-            console.log("DOMContentLoaded event fired!");
 
             const socket = io.connect();
 
             socket.on('connect', function() {
-                console.log('SocketIO connected to the server!');
-                // Send payment details to backend upon connection
-                if (totalPrice && printOptions) {
+                console.log('SocketIO connected to the server from gcash-payment.html!');
+                if (totalPrice && printOptions) { // Redundant check, but safe
                      socket.emit('confirm_gcash_payment', {
                          totalPrice: parseFloat(totalPrice),
                          printOptions: printOptions
                      });
                      console.log("Emitted 'confirm_gcash_payment' event to backend.");
                 } else {
-                     console.error("Could not retrieve total price or print options for GCash payment. Cannot emit 'confirm_gcash_payment'.");
-                     // Handle this error, maybe display a message to the user
+                     // This case should have been caught by earlier checks
+                     const errMsg = "Critical state error: totalPrice or printOptions became null before emitting confirm_gcash_payment.";
+                     console.error(errMsg);
+                     logClientError(errMsg, `totalPrice: ${totalPrice}, printOptions exist: ${!!printOptions}`);
                 }
             });
 
             socket.on('disconnect', function() {
-                console.log('SocketIO disconnected from the server!');
+                const msg = 'SocketIO disconnected from the server!';
+                console.warn(msg);
+                logClientError(msg, "Socket.IO 'disconnect' event.");
             });
 
             socket.on('connect_error', function(error) {
-                console.error('SocketIO connection error:', error);
+                const errMsg = 'SocketIO connection error from gcash-payment.html.';
+                console.error(errMsg, error);
+                logClientError(errMsg, `Error object: ${JSON.stringify(error)}`);
+                alert("Connection to server failed. Please check your internet and try again.");
             });
 
             socket.on('connect_timeout', function(timeout) {
-                console.error('SocketIO connection timeout:', timeout);
+                const errMsg = 'SocketIO connection timeout from gcash-payment.html.';
+                console.error(errMsg, timeout);
+                logClientError(errMsg, `Timeout: ${timeout}`);
+                alert("Server connection timed out. Please try again.");
             });
 
              socket.on('gcash_payment_initiated', function(data) {
                  console.log('GCash Payment Initiated Event:', data);
                  if (!data.success) {
-                      console.error("Backend reported error initiating payment:", data.message);
-                      alert("Error initiating payment: " + data.message);
-                      // Decide on next steps, e.g., redirecting or showing an error state
+                      const errMsg = `Backend reported error initiating GCash payment: ${data.message}`;
+                      console.error(errMsg);
+                      logClientError(errMsg, `Backend data: ${JSON.stringify(data)}`);
+                      alert("Error initiating payment: " + (data.message || "Unknown error from server."));
+                 } else {
+                      console.log("GCash payment initiation acknowledged by backend.");
                  }
              });
 
-
-            // Listen for payment confirmation from the backend
             socket.on('gcash_payment_success', function(data) {
                 console.log('GCash Payment Success Event:', data);
-                // Check if the payment was successful based on backend logic
                 if (data.success) {
                     console.log("Payment confirmed and printing initiated by backend. Showing modal.");
-                    modal.style.display = "flex"; // Show the success modal
-                    document.body.style.overflow = "hidden"; // Disable scroll
+                    modal.style.display = "flex"; 
+                    document.body.style.overflow = "hidden"; 
 
-                    // Redirect to admin-user.html after 30 seconds
+                    // Record successful GCash transaction
+                    fetch('/api/record-transaction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ method: 'GCash', amount: parseFloat(totalPrice) })
+                    }).then(res => res.json()).then(transData => {
+                        if(transData.success) console.log("GCash transaction recorded successfully.");
+                        else {
+                            const transErr = "Failed to record GCash transaction after successful payment.";
+                            console.error(transErr, transData);
+                            logClientError(transErr, `Backend response: ${JSON.stringify(transData)}`);
+                        }
+                    }).catch(err => {
+                        const transCatchErr = "Error during fetch to record GCash transaction.";
+                        console.error(transCatchErr, err);
+                        logClientError(transCatchErr, err.stack);
+                    });
+
                     setTimeout(() => {
-                         console.log("Redirecting to home page (/admin-user) after 30 seconds.");
-                         // Assuming the home page is the admin-user page rendered by the '/' route
-                         window.location.href = "/";
-                    }, 30000); // 30 seconds delay
+                         console.log("Redirecting to home page (/) after 30 seconds.");
+                         window.location.href = "/"; 
+                    }, 30000); 
                 } else {
-                    // Handle payment failure reported by the backend
-                    console.error(`GCash Payment Failed: ${data.message}`);
-                    alert(`Payment failed: ${data.message}`); // Show error message to user
-                    // Stay on the page or redirect to an error page
+                    const errMsg = `GCash Payment Success event, but backend reported failure: ${data.message}`;
+                    console.error(errMsg);
+                    logClientError(errMsg, `Backend data: ${JSON.stringify(data)}`);
+                    alert(`Payment processing issue: ${data.message || "Unknown error."}`); 
                 }
             });
 
             socket.on('gcash_payment_failed', function(data) {
-                console.error('GCash Payment Failed Event:', data);
-                // Display the specific error message received from the backend
-                alert("Payment failed: " + data.message);
-                // Decide on next steps - maybe redirect back to file upload or result page
-                // window.location.href = "/manual-display-upload"; // Example redirect
+                const errMsg = `GCash Payment Failed Event from backend: ${data.message}`;
+                console.error(errMsg, data);
+                logClientError(errMsg, `Backend data: ${JSON.stringify(data)}`);
+                alert("Payment failed: " + (data.message || "Please try again or use a different payment method."));
             });
 
-
-            // Function to stop GSM detection
-            function stopGsmDetection() {
-                console.log("Attempting to stop GSM detection via fetch.");
-                fetch('/stop_gsm_detection', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({}) // Send an empty body
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        console.error('Failed to stop GSM detection. Status:', response.status);
-                    } else {
-                         response.json().then(data => {
-                            console.log('GSM detection stopped successfully:', data.message);
-                         }).catch(e => console.error("Error parsing stop_gsm_detection response:", e));
+            function stopGsmDetection(isUnloading = false) {
+                const action = isUnloading ? "Stopping GSM detection on page unload." : "Stopping GSM detection via cancel button.";
+                console.log(action);
+                // Use sendBeacon if unloading, otherwise fetch
+                const payload = JSON.stringify({});
+                if (isUnloading && navigator.sendBeacon) {
+                    const status = navigator.sendBeacon('/stop_gsm_detection', payload);
+                    console.log(`navigator.sendBeacon for /stop_gsm_detection status: ${status}`);
+                    if (!status) {
+                         logClientError("navigator.sendBeacon for /stop_gsm_detection failed.", "Could be due to various reasons like data size or browser policy.");
                     }
-                })
-                .catch(error => {
-                    console.error('Error calling stop_gsm_detection fetch:', error);
-                });
+                } else {
+                    fetch('/stop_gsm_detection', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: payload,
+                        keepalive: isUnloading // Important for unload scenarios if not using sendBeacon
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            const errMsg = `Failed to stop GSM detection. Status: ${response.status}`;
+                            console.error(errMsg);
+                            if (!isUnloading) logClientError(errMsg, `Response: ${response.statusText}`);
+                        } else {
+                             response.json().then(data => {
+                                console.log('GSM detection stopped successfully via fetch:', data.message);
+                             }).catch(e => {
+                                 const parseErr = "Error parsing stop_gsm_detection response.";
+                                 console.error(parseErr, e);
+                                 if (!isUnloading) logClientError(parseErr, e.stack);
+                             });
+                        }
+                    })
+                    .catch(error => {
+                        const fetchErr = 'Error calling stop_gsm_detection fetch.';
+                        console.error(fetchErr, error);
+                        if (!isUnloading) logClientError(fetchErr, error.stack);
+                    });
+                }
             }
 
-            // Also call stopGsmDetection when the cancel button is clicked
             document.getElementById('cancelPayment').addEventListener('click', function() {
                 console.log("Cancel Payment button clicked.");
-                stopGsmDetection(); // Stop GSM detection
-                // Then navigate back
-                window.history.back(); // Or window.location.href = '/payment-type';
+                stopGsmDetection(false); 
+                window.history.back(); 
             });
 
-
-            // Close the modal when the close button is clicked
-            // Ensure closeBtn is found before adding event listener
             if (closeBtn) {
                 closeBtn.onclick = function() {
                     console.log("Modal close button clicked.");
                     modal.style.display = "none";
-                    document.body.style.overflow = ""; // Enable scroll
-                    // Redirect to the home page (admin-user.html)
+                    document.body.style.overflow = ""; 
                     window.location.href = "/";
-                    // No need to call stopGsmDetection here, as it's handled by backend on success
                 }
+            } else {
+                console.warn("Modal close button not found in gcash-payment.html");
             }
+            
+            let paymentConsideredSuccessful = false;
+            socket.on('gcash_payment_success', function(data) {
+                if (data.success) {
+                    paymentConsideredSuccessful = true;
+                }
+            });
 
-
-            // Important: Stop GSM detection when leaving the page for any reason other than successful payment
-            // This handles cases like closing the tab, navigating away, etc.
             window.addEventListener('beforeunload', function(event) {
-                 console.log("Window beforeunload event fired.");
-                 // Check if payment was successful before stopping detection on unload
-                 // A more robust check might be needed depending on your application state management
-                 const paymentSuccessful = modal.style.display === "flex"; // Assuming modal is shown on success
-                 if (!paymentSuccessful) {
+                 console.log("Window beforeunload event fired on gcash-payment.html.");
+                 if (!paymentConsideredSuccessful) { // Check the flag
                       console.log("Payment not marked as successful. Stopping GSM detection on unload.");
-                      stopGsmDetection();
+                      stopGsmDetection(true); // Pass true for unloading
                  } else {
-                      console.log("Payment marked as successful. Not stopping GSM detection on unload.");
+                      console.log("Payment was successful. Not stopping GSM detection on unload.");
                  }
-                 // Note: event.preventDefault() is often used with beforeunload to show a confirmation dialog.
-                 // We don't need that here, just ensure the fetch request is sent.
             });
 
         });

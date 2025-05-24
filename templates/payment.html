@@ -203,204 +203,207 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-    // Initialize Socket.IO connection
     const socket = io();
-
-    // Get necessary DOM elements
     const priceValueElement = document.getElementById("priceValue");
     const coinCountH3 = document.getElementById("coin-count");
-    const coinCountSpan = coinCountH3 ? coinCountH3.querySelector("span") : null; // Safely get the span
+    const coinCountSpan = coinCountH3 ? coinCountH3.querySelector("span") : null;
     const modal = document.getElementById("myModal");
     const cancelBtn = document.getElementById("cancelPayment");
 
-    // Retrieve total price and print options from sessionStorage
     const totalPrice = sessionStorage.getItem("totalPrice");
     const printOptions = JSON.parse(sessionStorage.getItem("printOptions"));
 
-    function logError(message) {
-      fetch('/log_activity', {
+    // Updated logError function
+    function logError(message, details) { // Added details parameter
+      console.error("Client-side error:", message, details); // Also log to browser console
+      fetch('/log_activity', { // This route now saves to ErrorLog DB
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      }).catch(err => console.error("Failed to log activity:", err));
+        body: JSON.stringify({ 
+            message: String(message), // Ensure message is a string
+            source: 'payment.html', // Identify the source
+            details: details ? String(details) : null // Send details if available
+        })
+      }).catch(err => console.error("Failed to send client-side error to backend:", err));
     }
 
 
-    // Display total price or handle missing data
     if (totalPrice && !isNaN(parseFloat(totalPrice))) {
       priceValueElement.textContent = parseFloat(totalPrice).toFixed(2);
-
-      // 1) Send the total price to the backend to set the price on the Arduino
-      fetch("/set_price", { // <--- This fetch request
+      fetch("/set_price", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price: parseFloat(totalPrice) }), // Ensure price is a number
+        body: JSON.stringify({ price: parseFloat(totalPrice) }),
       })
       .then(response => {
           if (!response.ok) {
-              // Handle HTTP errors
-              console.error('Failed to set price:', response.status, response.statusText);
-              // Optionally inform the user
-              // alert("Failed to set price with the system. Please try again.");
-              // window.location.href = "/manual-display-upload"; // Redirect on failure
+              response.text().then(text => { // Get text for more detailed error
+                const errMsg = `Failed to set price. Status: ${response.status}. Response: ${text}`;
+                console.error(errMsg);
+                logError(errMsg, `Response URL: ${response.url}`);
+                // alert("Failed to set price with the system. Please try again or contact support.");
+                // window.location.href = "/manual-display-upload"; 
+              });
+              throw new Error('Failed to set price HTTP error'); // Stop further processing in .then chain
           }
-          return response.json(); // Parse JSON response
+          return response.json();
       })
       .then(data => {
           if (!data.success) {
-               console.error('Backend reported failure setting price:', data.message);
-               logError("Backend reported failure setting price: " + data.message);
-               // Optionally inform the user
-               // alert("Failed to set price with the system. Please try again.");
-               // window.location.href = "/manual-display-upload"; // Redirect on failure
+               const errMsg = `Backend reported failure setting price: ${data.message}`;
+               console.error(errMsg);
+               logError(errMsg, `Backend data: ${JSON.stringify(data)}`);
+               // alert("Failed to set price with the system (backend). Please try again or contact support.");
+               // window.location.href = "/manual-display-upload"; 
           } else {
-               console.log('Price set successfully:', data.message);
+               console.log('Price set successfully via backend:', data.message);
           }
       })
       .catch((error) => {
-        console.error("Error sending price to backend:", error);
-        logError("Error sending price to backend: " + error.message);
+        // Catch network errors or the error thrown from !response.ok
+        if (error.message !== 'Failed to set price HTTP error') { // Avoid double logging if already handled
+            const errMsg = `Error sending price to backend /set_price: ${error.message}`;
+            console.error(errMsg, error);
+            logError(errMsg, error.stack); // Send stack trace if available
+        }
       });
-
-
     } else {
-      // If total price is missing or invalid, alert user and redirect
-      alert("Total Price could not be loaded. Please go back and reselect your options.");
-      window.location.href = "/manual-display-upload";
+      const errMsg = "Total Price could not be loaded from sessionStorage or is invalid.";
+      alert(errMsg + " Please go back and reselect your options.");
+      logError(errMsg, `SessionStorage totalPrice: ${totalPrice}`);
+      window.location.href = "/manual-display-upload"; // Redirect to a safe page
     }
 
-      // WebSocket Listener: Update coin count display
       socket.on("update_coin_count", (data) => {
-        const value = parseInt(data.count) || 0; // Ensure value is an integer, default to 0
+        const value = parseInt(data.count) || 0;
         if (coinCountSpan) {
             coinCountSpan.textContent = value;
         }
-
-        // Disable Cancel button when coin is inserted (value > 0)
         if (cancelBtn) {
           cancelBtn.disabled = value > 0;
         }
 
-        // Check if inserted coins meet or exceed the total price
-        // Ensure both values are numbers before comparison
         const currentPrice = parseFloat(priceValueElement.textContent) || 0;
-        if (value >= currentPrice && printOptions) {
-          console.log("Payment complete. Triggering print.");
-          // Trigger the printing process on the backend
+        if (value >= currentPrice && currentPrice > 0 && printOptions) { // Ensure currentPrice > 0 before printing
+          console.log("Payment complete. Triggering print for options:", printOptions);
+          
+          // Disable further coin updates from triggering print
+          // This can be done by setting a flag or ensuring printOptions are cleared
+          // For simplicity, we assume the backend handles idempotency or the page redirects quickly.
+
           fetch("/print_document", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(printOptions), // Send the stored print options
+            body: JSON.stringify(printOptions),
           })
           .then((res) => {
               if (!res.ok) {
-                  // Handle HTTP errors for the print request
-                  console.error('Print request failed:', res.status, res.statusText);
-                  // Optionally show an error message to the user
-                  alert("Failed to send print job. Please contact support.");
-                  // Redirect or handle error appropriately
-                  window.location.href = "/"; // Example: Redirect to home on print failure
-                  throw new Error(`HTTP error! status: ${res.status}`); // Propagate error to catch block
+                  return res.json().then(errData => { // Try to parse error from backend
+                      const printErrMsg = `Print request failed. Status: ${res.status}. Backend Error: ${errData.error || 'Unknown error'}`;
+                      console.error(printErrMsg, errData);
+                      logError(printErrMsg, `PrintOptions: ${JSON.stringify(printOptions)}, BackendResponse: ${JSON.stringify(errData)}`);
+                      alert("Failed to send print job: " + (errData.error || "Please contact support."));
+                      window.location.href = "/"; // Redirect on print failure
+                      throw new Error('Print HTTP error');
+                  }).catch(() => { // Fallback if backend error isn't JSON
+                      const printErrMsg = `Print request failed. Status: ${res.status}.`;
+                      console.error(printErrMsg);
+                      logError(printErrMsg, `PrintOptions: ${JSON.stringify(printOptions)}`);
+                      alert("Failed to send print job. Please contact support.");
+                      window.location.href = "/";
+                      throw new Error('Print HTTP error');
+                  });
               }
-              return res.json(); // Parse JSON response
+              return res.json();
           })
           .then((data) => {
             if (data.success) {
               console.log("Print initiated successfully:", data.message);
-              // Show the success modal ONLY on successful print initiation
               if (modal) {
-                 modal.style.display = "flex"; // Use flex to center
+                 modal.style.display = "flex";
               }
-              // Redirect to home page after a delay
-              setTimeout(() => {
-                window.location.href = "/";
-              }, 30000); // 30 seconds delay
+              // Record successful Coinslot transaction
+              fetch('/api/record-transaction', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ method: 'Coinslot', amount: currentPrice })
+              }).then(res => res.json()).then(transData => {
+                  if(transData.success) console.log("Coinslot transaction recorded.");
+                  else logError("Failed to record Coinslot transaction", JSON.stringify(transData));
+              }).catch(err => logError("Error recording Coinslot transaction", err.stack));
+
+              setTimeout(() => { window.location.href = "/"; }, 30000);
             } else {
-              console.error("Backend reported print failure:", data.error);
-              logError("Backend reported print failure: " + data.error);
-              // Optionally show an error message from the backend
-              alert("Printing failed: " + data.error);
-              // Redirect or handle error appropriately
-              window.location.href = "/"; // Example: Redirect to home on print failure
+              const printFailMsg = `Backend reported print failure: ${data.error}`;
+              console.error(printFailMsg);
+              logError(printFailMsg, `PrintOptions: ${JSON.stringify(printOptions)}, BackendResponse: ${JSON.stringify(data)}`);
+              alert("Printing failed: " + (data.error || "Unknown issue"));
+              window.location.href = "/";
             }
           })
           .catch((error) => {
-            console.error("Error during print request:", error);
-            logError("Error during print request: " + error.message);
-            // Handle network errors or other exceptions during the fetch call
-            alert("An error occurred while trying to print. Please check connection and try again.");
-            window.location.href = "/"; // Example: Redirect to home on error
+            if (error.message !== 'Print HTTP error') { // Avoid double logging
+                const printCatchMsg = `Error during print request fetch: ${error.message}`;
+                console.error(printCatchMsg, error);
+                logError(printCatchMsg, `PrintOptions: ${JSON.stringify(printOptions)}, ErrorStack: ${error.stack}`);
+                alert("An error occurred while trying to print. Please check connection and try again.");
+                window.location.href = "/";
+            }
           });
         }
       });
 
-      // WebSocket Listener: Handle coin count reset (e.g., by backend after printing)
       socket.on("coin_count_reset", () => {
-        if (coinCountSpan) {
-            coinCountSpan.textContent = "0";
-        }
-        // Re-enable Cancel button after reset
-        if (cancelBtn) {
-            cancelBtn.disabled = false;
-        }
-        console.log("Coin count reset received.");
+        if (coinCountSpan) coinCountSpan.textContent = "0";
+        if (cancelBtn) cancelBtn.disabled = false;
+        console.log("Coin count reset received from backend.");
       });
 
-       // WebSocket Listener: Handle printer status updates
-       // Note: The original code had a 'printer_status' listener in the first script block.
-       // This consolidated version uses 'printer_status_update' from the backend monitor.
        socket.on("printer_status_update", (data) => {
-           const statusEl = document.getElementById("printerStatus"); // Get the status element
+           const statusEl = document.getElementById("printerStatus"); // You might need to add this element to your HTML
            if (statusEl) {
                statusEl.textContent = data.status;
-               console.log("Printer status updated:", data.status);
+           } else {
+               console.log("Printer status (no element to display):", data.status);
            }
        });
 
-       // WebSocket Listener: Handle change dispensed message
        socket.on("change_dispensed", data => {
-           const statusEl = document.getElementById("printerStatus"); // Get the status element
+           const statusEl = document.getElementById("printerStatus");
+           const message = `Printing… returning ₱${data.amount} change`;
            if (statusEl) {
-                statusEl.textContent = `Printing… returning ₱${data.amount} change`;
-                console.log("Change dispensed:", data.amount);
+                statusEl.textContent = message;
            }
+           console.log("Change dispensed:", data.amount);
+           // You might want to display this more prominently
        });
 
-
-      // Close modal functionality
-      // The modal should only be closable after it's shown
       if (modal) {
           document.querySelectorAll(".close").forEach((closeButton) => {
             closeButton.onclick = () => {
               modal.style.display = "none";
-              window.location.href = "/"; // Redirect to home page on modal close
+              window.location.href = "/";
             };
           });
       }
 
-
-      // Add event listener to the Cancel Payment button
       if (cancelBtn) {
         cancelBtn.addEventListener('click', function() {
             console.log("Cancel payment button clicked.");
-            // Send a POST request to the stop_coin_detection route on the backend
             fetch('/stop_coin_detection', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Coin detection stopped:', data.message);
-                // After successfully stopping detection, navigate back or to another page
-                window.history.back(); // Navigate back to the previous page
+                console.log('Coin detection stopped via backend:', data.message);
+                window.history.back();
             })
             .catch(error => {
-                console.error('Error stopping coin detection:', error);
-                logError("Error stopping coin detection: " + error.message);
-                // Still navigate back even if there's an error, to avoid getting stuck
-                window.history.back();
+                const cancelErr = 'Error stopping coin detection: ' + error.message;
+                console.error(cancelErr, error);
+                logError(cancelErr, error.stack);
+                window.history.back(); // Still navigate back
             });
         });
       }
