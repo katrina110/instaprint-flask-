@@ -645,7 +645,7 @@ def get_printer_status_wmi():
 # Routes - Admin
 @app.route("/")
 def admin_user():
-    return render_template("admin-user.html")
+    return render_template("file-upload.html")
 
 
 @app.route("/admin-dashboard")
