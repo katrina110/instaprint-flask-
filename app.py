@@ -35,6 +35,7 @@ import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
 import math
 import win32api
+import threading # hoppertrial
 
 from sqlalchemy import func
 from datetime import datetime
@@ -46,7 +47,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-hopper_balance = 50.00  # Initial balance for the hopper, can be adjusted as needed
+hopper_balance = 100.00  # Initial balance for the hopper, can be adjusted as needed
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -237,6 +238,25 @@ def update_hopper_balance(change_dispensed):
         print("[HOPPER] Not enough balance to dispense change.")
         return False
 
+# hoppertrial
+#def test_hopper_change():
+#    print(f"\n[TEST] Starting balance: ₱{hopper_balance:.2f}")
+#    test_inputs = [10, 25, 50, 20]  # simulate change to dispense
+
+#    for amount in test_inputs:
+#        print(f"\n[TEST] Request to dispense ₱{amount}")
+#        result = update_hopper_balance(amount)
+#        if not result:
+#            print("[TEST] Dispense failed: Not enough balance.")
+
+#    print(f"\n[TEST] Final balance: ₱{hopper_balance:.2f}")
+
+#if __name__ == "__main__":
+#   test_hopper_change()
+
+# hoppertrial
+
+# Simulated listener
 def serial_listener():
     global coin_slot_serial
     global hopper_balance
@@ -661,7 +681,7 @@ def admin_dashboard():
         "total_sales": total_sales,
         "printed_pages": printed_pages_today,
         "files_uploaded": files_uploaded_today,
-        "current_balance": 200,
+        "current_balance": hopper_balance,
         "sales_history": [
             {
                 "method": t.method,
@@ -678,6 +698,10 @@ def admin_dashboard():
     }
     return render_template("admin-dashboard.html", data=data)
 
+@app.route('/api/hopper-balance')
+def get_hopper_balance():
+    global hopper_balance
+    return jsonify({'hopper_balance': hopper_balance})
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
