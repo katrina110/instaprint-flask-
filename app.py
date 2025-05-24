@@ -67,6 +67,17 @@ def record_transaction(method, amount):
         'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
     })
 
+# Add this near your Transaction model
+class UploadedFile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    file_type = db.Column(db.String(50), nullable=False)
+    pages = db.Column(db.Integer, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<UploadedFile {self.filename}>'
+
 with app.app_context():
     db.create_all()  # ensures tables are created before first use
 
@@ -679,10 +690,23 @@ def admin_dashboard():
     return render_template("admin-dashboard.html", data=data)
 
 
-@app.route("/admin-files-upload")
-def admin_printed_pages():
-    # Pass the global list of uploaded files info to the template
-    return render_template("admin-files-upload.html", uploaded=uploaded_files_info)
+@app.route("/admin-files-upload") #
+def admin_printed_pages(): #
+    # Query the database for all uploaded file records, order by most recent
+    all_uploaded_files = UploadedFile.query.order_by(UploadedFile.timestamp.desc()).all() #
+    
+    # Format the data for the template
+    # The template expects 'file', 'type', 'pages', 'time'
+    formatted_files = []
+    for uploaded_file_entry in all_uploaded_files:
+        formatted_files.append({
+            'file': uploaded_file_entry.filename,
+            'type': uploaded_file_entry.file_type,
+            'pages': uploaded_file_entry.pages,
+            'time': uploaded_file_entry.timestamp.strftime('%I:%M %p') # Format time as needed
+        })
+        
+    return render_template("admin-files-upload.html", uploaded=formatted_files) #
 
 
 @app.route("/admin-activity-log")
@@ -980,12 +1004,27 @@ def upload_file():
     printed_pages_today += total_pages
 
     # Add file info to the admin view list
-    uploaded_files_info.append({
-        "file": final_filename_for_info, # Use the determined final filename
-        "type": final_file_ext_for_info, # Use the determined final extension ('pdf')
-        "pages": total_pages,
-        "time": datetime.now().strftime('%I:%M %p')
-    })
+    # uploaded_files_info.append({
+    #     "file": final_filename_for_info, # Use the determined final filename
+    #     "type": final_file_ext_for_info, # Use the determined final extension ('pdf')
+    #     "pages": total_pages,
+    #    "time": datetime.now().strftime('%I:%M %p')
+    # })
+
+    # Save uploaded file information to the database
+    try:
+        new_uploaded_file_entry = UploadedFile(
+            filename=final_filename_for_info,
+            file_type=final_file_ext_for_info,
+            pages=total_pages,
+            timestamp=datetime.now() # Or use default=datetime.utcnow in the model
+        )
+        db.session.add(new_uploaded_file_entry)
+        db.session.commit()
+        print(f"File info for {final_filename_for_info} saved to database.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving file info to database: {e}")
 
     print(f"File uploaded and processed successfully: {final_filename_for_info}")
 
