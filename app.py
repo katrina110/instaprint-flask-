@@ -128,23 +128,25 @@ expected_gcash_amount = 0.0
 gcash_print_options = None
 
 # --- Configuration for Recent Downloads ---
+TARGET_SUBFOLDER_NAME = "InstaPrintDL"
 try:
-    DOWNLOADS_DIR = Path.home() / "Downloads"
-    if not DOWNLOADS_DIR.exists() or not DOWNLOADS_DIR.is_dir():
-        # Fallback if ~/Downloads doesn't exist or isn't a directory
-        # You might want a more specific fallback for a kiosk environment
-        DOWNLOADS_DIR = Path(UPLOAD_FOLDER).parent / "User_Downloads_Fallback" # Example fallback
-        DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"Warning: Standard Downloads folder not found or invalid. Using fallback: {DOWNLOADS_DIR}")
+    documents_path = Path.home() / "OneDrive" / "Documents"
+    DOWNLOADS_DIR = documents_path / TARGET_SUBFOLDER_NAME
+    if not DOWNLOADS_DIR.exists():
+        print(f"WARNING: The target folder '{DOWNLOADS_DIR}' does not currently exist. Please create it inside your Documents folder.")
+        # You could optionally create it here if it doesn't exist, but manual creation is often safer for specific user-defined locations.
+        # Example: DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        # print(f"INFO: Created target folder: {DOWNLOADS_DIR}")
+    elif not DOWNLOADS_DIR.is_dir():
+        print(f"WARNING: The path '{DOWNLOADS_DIR}' exists but is not a folder. Please ensure it's a directory inside your Documents folder.")
+    else:
+        print(f"Target folder for downloads and clearing is set to: {DOWNLOADS_DIR}")
+
 except Exception as e:
-    print(f"Could not automatically determine Downloads folder: {e}")
-    # Consider a fixed path if auto-detection is problematic in your environment
-    DOWNLOADS_DIR = Path("KIOSK_DOWNLOADS_FOLDER_PATH_HERE") # Replace if auto-detection fails
-    if str(DOWNLOADS_DIR) == "KIOSK_DOWNLOADS_FOLDER_PATH_HERE":
-        # Create a fallback if the placeholder wasn't replaced and home detection failed
-        DOWNLOADS_DIR = Path(UPLOAD_FOLDER).parent / "User_Downloads_Fallback_Critical"
-        DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"CRITICAL: Downloads folder path not set and auto-detection failed. Using critical fallback: {DOWNLOADS_DIR}")
+    print(f"CRITICAL ERROR: Could not determine the path for '{TARGET_SUBFOLDER_NAME}' in the Documents folder: {e}")
+    print("Please ensure your environment allows access to the home directory and Documents folder.")
+    DOWNLOADS_DIR = Path("./INSTAPRINT_DOCUMENTS_FOLDER_PATH_ERROR") # Emergency fallback
+    print(f"Using an emergency fallback path due to error: {DOWNLOADS_DIR}")
 
 # --- SVG Icon Definitions (from testest.py) ---
 def create_svg_data_url(svg_xml_content):
@@ -335,10 +337,10 @@ def clear_downloads_folder_route():
     print(f"[SERVER LOG /api/clear_downloads_folder] Route called.") # New Log
     print(f"[SERVER LOG /api/clear_downloads_folder] DOWNLOADS_DIR is currently: '{DOWNLOADS_DIR}' (Type: {type(DOWNLOADS_DIR)})") # New Log
     
-    if not DOWNLOADS_DIR or not isinstance(DOWNLOADS_DIR, Path): # Ensure it's a Path object
-        error_msg = f"DOWNLOADS_DIR global variable is not a valid Path object or is not set."
-        print(f"[SERVER LOG /api/clear_downloads_folder] ERROR: {error_msg}")
-        return jsonify({"success": False, "message": error_msg}), 500
+    if not DOWNLOADS_DIR or not DOWNLOADS_DIR.exists() or not DOWNLOADS_DIR.is_dir():
+        error_msg = f"Target directory '{DOWNLOADS_DIR}' for listing is invalid, does not exist, or is not a directory." # Or similar message
+        print(f"[DEBUG /api/list_recent_downloads] ERROR: {error_msg}") # Your debug print
+        return jsonify({"error": error_msg, "files": []}), 500
 
     if not DOWNLOADS_DIR.exists() or not DOWNLOADS_DIR.is_dir():
         error_msg = f"Downloads directory ('{DOWNLOADS_DIR}') not configured, does not exist, or is not a directory."
