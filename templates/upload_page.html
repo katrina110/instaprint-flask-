@@ -798,7 +798,7 @@
               }
               
               if (filesDisplayed === 0 && !(response.error)) { 
-                recentDownloadsContainer.html("<p class='text-center w-100'>No recent downloads found matching the criteria (.pdf, .docx, .jpg, .png).</p>");
+                recentDownloadsContainer.html("<p class='text-center w-100'>No files to be printed here.</p>");
               }
 
             },
@@ -1002,22 +1002,68 @@
         // ========== CONTINUE BUTTON ==========
         $("#continueBtn").click(function () {
           const selectedPages = $("#pageSelection").val();
-           if (!selectedPages) {
-                alert("Please select at least one page to print."); // Consider non-alert notification
-                return;
-           }
+          if (!selectedPages) {
+              alert("Please select at least one page to print.");
+              return;
+          }
           const opts = {
-            pageSelection: selectedPages,
-            numCopies: $("#numCopies").val(),
-            pageSize: $("#pageSize").val(),
-            colorOption: $("#colorOption").val(),
-            orientationOption: $("#orientationOption").val() || "auto",
-            fileName: currentUploadedFileName,
-            originalDownloadName: originalSelectedDownloadName
+              pageSelection: selectedPages,
+              numCopies: $("#numCopies").val(),
+              pageSize: $("#pageSize").val(),
+              colorOption: $("#colorOption").val(),
+              orientationOption: $("#orientationOption").val() || "auto",
+              fileName: currentUploadedFileName,
+              originalDownloadName: originalSelectedDownloadName
           };
           sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(opts));
-          window.location.href = "{{ url_for('result') }}";
-        });
+
+          console.log("Continue button clicked. Attempting to clear server's downloads folder...");
+          preloader.addClass("active"); // Show preloader while this happens
+
+          $.ajax({
+              url: "{{ url_for('clear_downloads_folder_route') }}", // Matches the function name in app.py
+              method: "POST",
+              contentType: "application/json",
+              // No 'data' is sent, as the backend route knows what to do
+              success: function(response) {
+                  console.log("Server response from clearing downloads folder:", response.message);
+                  if (response.success) {
+                      console.log("Downloads folder cleared successfully by server.");
+                  } else {
+                      console.error("Server reported issues clearing downloads folder:", response.message);
+                      if (response.errors) {
+                          console.error("Specific errors:", response.errors);
+                      }
+                      // Optionally alert the user if immediate feedback is critical before redirect
+                      // alert("Notice: Could not fully clear downloads folder on server. " + response.message);
+                  }
+              },
+              error: function(xhr, status, error) {
+                  console.error("Failed to request clearing of downloads folder. Status:", status, "Error:", error);
+                  let serverErrorMsg = "Could not reach server to clear downloads folder.";
+                  if(xhr.responseJSON && xhr.responseJSON.message) {
+                      serverErrorMsg = xhr.responseJSON.message;
+                  } else if (xhr.responseText) {
+                      serverErrorMsg = xhr.responseText;
+                  }
+                  console.error("Server raw error response:", xhr.responseText);
+                  // Optionally alert critical failure
+                  // alert("Critical error: Failed to send request to clear downloads folder: " + serverErrorMsg);
+              },
+              complete: function() {
+                  // This block executes after success or error.
+                  // Now, clear the display on the frontend and then redirect.
+                  console.log("Clearing frontend display of downloads and redirecting.");
+                  $("#recentDownloadsContainer").empty().html("<p class='text-center w-100'>Recent downloads list cleared. Navigate from Step 2 to refresh if needed.</p>");
+                  $("#selectedDownloadInfo").hide();
+                  selectedDownloadNameSpan.text("N/A"); 
+                  originalSelectedDownloadName = ""; 
+
+                  preloader.removeClass("active"); // Hide preloader
+                  window.location.href = "{{ url_for('result') }}";
+              }
+          });
+      });
 
         // ========== CLOSE PRINT OPTIONS MODAL - CLEAR STATE ==========
         function resetPrintOptionsAndSelection() {

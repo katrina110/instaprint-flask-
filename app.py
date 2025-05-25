@@ -17,7 +17,7 @@ from win32com import client
 from fpdf import FPDF
 import serial
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
@@ -34,9 +34,9 @@ import re # Import regex for more robust parsing
 import math
 import win32api
 from sqlalchemy import func
-
 from pathlib import Path
 import base64
+import shutil
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
@@ -329,73 +329,155 @@ def record_transaction(method, amount):
         print(error_msg)
         log_error_to_db(error_msg, source="record_transaction", details=str(e))
 
+@app.route('/api/clear_downloads_folder', methods=['POST'])
+def clear_downloads_folder_route():
+    global DOWNLOADS_DIR
+    print(f"[SERVER LOG /api/clear_downloads_folder] Route called.") # New Log
+    print(f"[SERVER LOG /api/clear_downloads_folder] DOWNLOADS_DIR is currently: '{DOWNLOADS_DIR}' (Type: {type(DOWNLOADS_DIR)})") # New Log
+    
+    if not DOWNLOADS_DIR or not isinstance(DOWNLOADS_DIR, Path): # Ensure it's a Path object
+        error_msg = f"DOWNLOADS_DIR global variable is not a valid Path object or is not set."
+        print(f"[SERVER LOG /api/clear_downloads_folder] ERROR: {error_msg}")
+        return jsonify({"success": False, "message": error_msg}), 500
+
+    if not DOWNLOADS_DIR.exists() or not DOWNLOADS_DIR.is_dir():
+        error_msg = f"Downloads directory ('{DOWNLOADS_DIR}') not configured, does not exist, or is not a directory."
+        print(f"[SERVER LOG /api/clear_downloads_folder] ERROR: {error_msg}")
+        # log_error_to_db(error_msg, source="clear_downloads_folder_config") # Your existing log
+        return jsonify({"success": False, "message": error_msg}), 500
+
+    print(f"[SERVER LOG /api/clear_downloads_folder] Attempting to clear contents of: {DOWNLOADS_DIR}")
+    deleted_count = 0
+    error_count = 0
+    errors_list = [] # Renamed from 'errors' to avoid conflict if you have an 'errors' variable elsewhere
+
+    try: # Wrap os.listdir in a try-except
+        dir_items = os.listdir(DOWNLOADS_DIR)
+        print(f"[SERVER LOG /api/clear_downloads_folder] Items in directory: {dir_items}") # New Log
+    except Exception as e_list:
+        error_msg = f"Failed to list directory contents for '{DOWNLOADS_DIR}': {e_list}"
+        print(f"[SERVER LOG /api/clear_downloads_folder] ERROR: {error_msg}")
+        # log_error_to_db(error_msg, source="clear_downloads_folder_listdir", details=str(e_list))
+        return jsonify({"success": False, "message": error_msg}), 500
+        
+    if not dir_items:
+        print(f"[SERVER LOG /api/clear_downloads_folder] Directory '{DOWNLOADS_DIR}' is already empty.")
+        return jsonify({
+            "success": True, 
+            "message": f"Downloads folder '{DOWNLOADS_DIR}' was already empty or contained no items to delete."
+        }), 200
+
+    for item_name in dir_items:
+        item_path = DOWNLOADS_DIR / item_name
+        print(f"[SERVER LOG /api/clear_downloads_folder] Processing item: {item_path}") # New Log
+        try:
+            if item_path.is_file() or item_path.is_link():
+                os.remove(item_path)
+                print(f"[SERVER LOG /api/clear_downloads_folder]   Deleted file/link: {item_path}") # New Log
+                deleted_count += 1
+            elif item_path.is_dir():
+                shutil.rmtree(item_path)
+                print(f"[SERVER LOG /api/clear_downloads_folder]   Deleted directory: {item_path}") # New Log
+                deleted_count += 1
+            else:
+                print(f"[SERVER LOG /api/clear_downloads_folder]   Skipped (not a file, link, or dir): {item_path}") # New Log
+
+        except Exception as e_delete:
+            error_str = f"Failed to delete {item_path}: {e_delete}"
+            print(f"[SERVER LOG /api/clear_downloads_folder]   ERROR: {error_str}") # New Log
+            errors_list.append(error_str)
+            error_count += 1
+            # log_error_to_db(error_str, source="clear_downloads_folder_item_delete", details=str(item_path))
+
+    if error_count > 0:
+        print(f"[SERVER LOG /api/clear_downloads_folder] Finished with errors. Deleted: {deleted_count}, Failed: {error_count}") # New Log
+        return jsonify({
+            "success": False, 
+            "message": f"Finished clearing downloads. Deleted {deleted_count} items. Encountered {error_count} errors.",
+            "errors": errors_list
+        }), 207 
+    
+    print(f"[SERVER LOG /api/clear_downloads_folder] Successfully cleared {deleted_count} items from {DOWNLOADS_DIR}.") # New Log
+    return jsonify({
+        "success": True, 
+        "message": f"Successfully cleared {deleted_count} items from {DOWNLOADS_DIR}."
+    }), 200
+
 @app.route('/api/list_recent_downloads', methods=['GET'])
 def list_recent_downloads():
     # Ensure DOWNLOADS_DIR is defined and accessible
     try:
-        DOWNLOADS_DIR = Path(Path.home() / "Downloads") # Example
+        # Using the existing DOWNLOADS_DIR from your app context
+        # DOWNLOADS_DIR = Path(Path.home() / "Downloads") # Example, ensure this aligns with your app's DOWNLOADS_DIR
+        # Use the one defined globally in your app for consistency:
+        global DOWNLOADS_DIR # Access the global DOWNLOADS_DIR
         if not DOWNLOADS_DIR.is_dir():
              raise FileNotFoundError("Downloads directory not found or is not a directory.")
     except Exception as e:
         print(f"CRITICAL: Could not define/access DOWNLOADS_DIR: {e}")
-        # log_error_to_db(f"CRITICAL: Could not define/access DOWNLOADS_DIR: {e}", "list_recent_downloads_setup")
+        log_error_to_db(f"CRITICAL: Could not define/access DOWNLOADS_DIR: {e}", "list_recent_downloads_setup") #
         return jsonify({"error": "Server configuration error for downloads directory.", "files": []}), 500
 
     recent_files_data = []
     try:
-        all_items_in_dir = os.listdir(DOWNLOADS_DIR)
-        todays_date_for_display = datetime.now().date()
+        all_items_in_dir = os.listdir(DOWNLOADS_DIR) #
+        # todays_date_for_display = datetime.now().date() # No longer needed for primary filter
         files_to_consider = []
+        current_time = datetime.now() # Get current time once
 
         for item_name in all_items_in_dir:
-            item_path = DOWNLOADS_DIR / item_name
-            if item_path.is_file():
-                file_extension_without_dot = item_name.rsplit('.', 1)[-1].lower() if '.' in item_name else ''
+            item_path = DOWNLOADS_DIR / item_name #
+            if item_path.is_file(): #
+                file_extension_without_dot = item_name.rsplit('.', 1)[-1].lower() if '.' in item_name else '' #
                 # This 'if' condition uses the updated app.config["ALLOWED_EXTENSIONS"]
-                if file_extension_without_dot in app.config["ALLOWED_EXTENSIONS"]:
+                if file_extension_without_dot in app.config["ALLOWED_EXTENSIONS"]: #
                     try:
-                        mtime_timestamp = os.path.getmtime(item_path)
-                        mtime_datetime = datetime.fromtimestamp(mtime_timestamp)
-                        if mtime_datetime.date() == todays_date_for_display:
-                            files_to_consider.append({'path': item_path, 'name': item_name, 'mtime': mtime_timestamp})
+                        mtime_timestamp = os.path.getmtime(item_path) #
+                        mtime_datetime = datetime.fromtimestamp(mtime_timestamp) #
+
+                        # --- MODIFIED TIME FILTER: Check if modified within the last 10 seconds ---
+                        if current_time - mtime_datetime <= timedelta(seconds=10):
+                            files_to_consider.append({'path': item_path, 'name': item_name, 'mtime': mtime_timestamp}) #
+                        # --- END OF MODIFIED TIME FILTER ---
+
                     except Exception as e_stat:
-                        # log_error_to_db(f"Could not get stat for file {item_path}: {e_stat}", source="list_recent_downloads_stat")
-                        print(f"Warning: Could not get stat for file {item_path}: {e_stat}")
+                        log_error_to_db(f"Could not get stat for file {item_path}: {e_stat}", source="list_recent_downloads_stat") #
+                        print(f"Warning: Could not get stat for file {item_path}: {e_stat}") #
                         pass
 
-        sorted_files = sorted(files_to_consider, key=lambda x: x['mtime'], reverse=True)
+        sorted_files = sorted(files_to_consider, key=lambda x: x['mtime'], reverse=True) #
 
         for f_info in sorted_files:
-            item_path_obj = f_info['path']
-            original_filename = f_info['name']
-            file_ext_with_dot_for_svg = ('.' + original_filename.rsplit('.', 1)[-1].lower()) if '.' in original_filename else '.default_file'
-            file_ext_without_dot = file_ext_with_dot_for_svg.lstrip('.')
+            item_path_obj = f_info['path'] #
+            original_filename = f_info['name'] #
+            file_ext_with_dot_for_svg = ('.' + original_filename.rsplit('.', 1)[-1].lower()) if '.' in original_filename else '.default_file' #
+            file_ext_without_dot = file_ext_with_dot_for_svg.lstrip('.') #
 
-            thumb_base_name = Path(original_filename).stem
-            thumb_mtime_str = datetime.fromtimestamp(f_info['mtime']).strftime('%Y%m%d%H%M%S')
-            preview_image_filename = f"thumb_{thumb_base_name}_{thumb_mtime_str}.png" 
+            thumb_base_name = Path(original_filename).stem #
+            thumb_mtime_str = datetime.fromtimestamp(f_info['mtime']).strftime('%Y%m%d%H%M%S') #
+            preview_image_filename = f"thumb_{thumb_base_name}_{thumb_mtime_str}.png" #
 
-            preview_url = generate_thumbnail_for_file(item_path_obj, file_ext_without_dot, preview_image_filename, app.config["UPLOAD_FOLDER"])
+            # Pass app.config["UPLOAD_FOLDER"] for DOCX to PDF conversion temp location
+            preview_url = generate_thumbnail_for_file(item_path_obj, file_ext_without_dot, preview_image_filename, app.config["UPLOAD_FOLDER"]) #
 
-            if not preview_url:
-                # SVG_ICONS should be defined in your app.py
-                # SVG_ICONS = { ".pdf": "data:image/svg+xml;base64,...", ... , "default_file": "data:..."}
-                # For example, if SVG_ICONS is not fully set up, provide a generic fallback:
-                # preview_url = SVG_ICONS.get(file_ext_with_dot_for_svg, SVG_ICONS.get("default_file", "path/to/default/icon.svg"))
-                preview_url = url_for('static', filename='images/default_icon.png') # Example fallback, ensure this image exists
+            if not preview_url: #
+                # Ensure SVG_ICONS is used or a proper default.
+                # The existing logic with SVG_ICONS or fallback static image.
+                preview_url = SVG_ICONS.get(file_ext_with_dot_for_svg, SVG_ICONS.get("default_file", url_for('static', filename='images/default_icon.png'))) #
+
 
             recent_files_data.append({
-                "filename": original_filename,
-                "preview_url": preview_url,
-                "mtime_readable": datetime.fromtimestamp(f_info['mtime']).strftime('%I:%M %p, %b %d')
+                "filename": original_filename, #
+                "preview_url": preview_url, #
+                "mtime_readable": datetime.fromtimestamp(f_info['mtime']).strftime('%I:%M %p, %b %d') #
             })
 
     except Exception as e:
-        # log_error_to_db(f"Error listing recent downloads: {e}", source="list_recent_downloads_general", details=str(e))
-        print(f"ERROR listing recent downloads: {e}")
-        return jsonify({"error": "An error occurred while listing files.", "files": []}), 500
+        log_error_to_db(f"Error listing recent downloads: {e}", source="list_recent_downloads_general", details=str(e)) #
+        print(f"ERROR listing recent downloads: {e}") #
+        return jsonify({"error": "An error occurred while listing files.", "files": []}), 500 #
 
-    return jsonify({"files": recent_files_data})
+    return jsonify({"files": recent_files_data}) #
 
 @app.route("/process_downloaded_file", methods=["POST"])
 def process_downloaded_file():
