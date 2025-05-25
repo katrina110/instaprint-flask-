@@ -35,6 +35,9 @@ import math
 import win32api
 from sqlalchemy import func
 
+from pathlib import Path
+import base64
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -88,10 +91,13 @@ uploaded_files_info = []
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["STATIC_FOLDER"] = STATIC_FOLDER
-app.config["ALLOWED_EXTENSIONS"] = ALLOWED_EXTENSIONS
+app.config["ALLOWED_EXTENSIONS"] = {"pdf", "docx", "jpg", "png"}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(STATIC_FOLDER, exist_ok=True)
+
+THUMBNAIL_DIR = Path(app.static_folder) / "uploads" / "thumbnails"
+os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 # Global Variables
 uploaded_files_info = []
@@ -120,6 +126,143 @@ gsm_serial = None
 # Global variables to store GCash payment details temporarily
 expected_gcash_amount = 0.0
 gcash_print_options = None
+
+# --- Configuration for Recent Downloads ---
+try:
+    DOWNLOADS_DIR = Path.home() / "Downloads"
+    if not DOWNLOADS_DIR.exists() or not DOWNLOADS_DIR.is_dir():
+        # Fallback if ~/Downloads doesn't exist or isn't a directory
+        # You might want a more specific fallback for a kiosk environment
+        DOWNLOADS_DIR = Path(UPLOAD_FOLDER).parent / "User_Downloads_Fallback" # Example fallback
+        DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"Warning: Standard Downloads folder not found or invalid. Using fallback: {DOWNLOADS_DIR}")
+except Exception as e:
+    print(f"Could not automatically determine Downloads folder: {e}")
+    # Consider a fixed path if auto-detection is problematic in your environment
+    DOWNLOADS_DIR = Path("KIOSK_DOWNLOADS_FOLDER_PATH_HERE") # Replace if auto-detection fails
+    if str(DOWNLOADS_DIR) == "KIOSK_DOWNLOADS_FOLDER_PATH_HERE":
+        # Create a fallback if the placeholder wasn't replaced and home detection failed
+        DOWNLOADS_DIR = Path(UPLOAD_FOLDER).parent / "User_Downloads_Fallback_Critical"
+        DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"CRITICAL: Downloads folder path not set and auto-detection failed. Using critical fallback: {DOWNLOADS_DIR}")
+
+# --- SVG Icon Definitions (from testest.py) ---
+def create_svg_data_url(svg_xml_content):
+    encoded_svg = base64.b64encode(svg_xml_content.encode('utf-8')).decode('utf-8')
+    return f"data:image/svg+xml;base64,{encoded_svg}"
+
+SVG_ICONS = {
+    ".pdf": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2" width="36" height="44" rx="3" fill="#E53935"/><text x="24" y="30" font-family="sans-serif" font-weight="bold" font-size="12" fill="#FFFFFF" text-anchor="middle">PDF</text></svg>"""),
+    ".docx": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2" width="36" height="44" rx="3" fill="#1E88E5"/><line x1="12" y1="14" x2="36" y2="14" stroke="#FFFFFF" stroke-width="2"/><line x1="12" y1="22" x2="36" y2="22" stroke="#FFFFFF" stroke-width="2"/><line x1="12" y1="30" x2="28" y2="30" stroke="#FFFFFF" stroke-width="2"/></svg>"""),
+    ".doc": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2" width="36" height="44" rx="3" fill="#1E88E5"/><text x="24" y="30" font-family="sans-serif" font-weight="bold" font-size="10" fill="#FFFFFF" text-anchor="middle">DOC</text></svg>"""), # Added .doc
+    ".jpg": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="#FB8C00"/><circle cx="16" cy="16" r="4" fill="#FFFFFF"/><polygon points="14 38, 24 24, 34 30, 34 42, 6 42, 6 38" fill="#FDD835"/></svg>"""),
+    ".png": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="36" height="36" rx="3" fill="#43A047"/><path d="M16 16 L24 24 L32 16 L24 32 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1"/></svg>"""),
+    "default_file": create_svg_data_url("""<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 H28 L40 14 V42 C40 43.1 39.1 44 38 44 H12 C10.9 44 10 43.1 10 42 V6 C10 3.9 10.9 2 12 2 Z" fill="#B0BEC5"/><path d="M28 2 V14 H40" fill="#78909C"/></svg>""")
+}
+SVG_ICONS['.jpeg'] = SVG_ICONS['.jpg']
+# Ensure all ALLOWED_EXTENSIONS (dot prefixed) have an icon or will use default
+for ext in ALLOWED_EXTENSIONS: # ALLOWED_EXTENSIONS in app.py is {"pdf", "jpg", ...}
+    dot_ext = "." + ext
+    if dot_ext not in SVG_ICONS:
+        SVG_ICONS[dot_ext] = SVG_ICONS["default_file"]
+
+def generate_thumbnail_for_file(item_path_obj: Path, file_ext_without_dot: str, unique_thumb_filename: str, app_config_upload_folder: str):
+    """
+    Generates a thumbnail for a given file and saves it.
+    Returns the URL to the thumbnail or None if generation fails.
+    item_path_obj: Path object to the original file (e.g., in DOWNLOADS_DIR).
+    file_ext_without_dot: File extension like 'pdf', 'docx', 'jpg'.
+    unique_thumb_filename: The filename to save the thumbnail as (e.g., 'thumb_docname_timestamp.png').
+    app_config_upload_folder: The path to app.config["UPLOAD_FOLDER"].
+    """
+    thumbnail_save_path = THUMBNAIL_DIR / unique_thumb_filename
+    temp_pdf_path_for_docx = None # Temporary PDF for DOCX conversion
+
+    try:
+        if file_ext_without_dot == "pdf":
+            doc = None # Initialize doc
+            try:
+                doc = fitz.open(str(item_path_obj))
+                if len(doc) > 0:
+                    page = doc.load_page(0)  # First page
+                    pix = page.get_pixmap(alpha=False, dpi=50) # Experiment with DPI for size/quality
+                    pix.save(str(thumbnail_save_path)) # PyMuPDF can save directly
+            finally:
+                if doc: doc.close()
+
+        elif file_ext_without_dot in ("jpg", "png"): # Removed "jpeg" here as it's not in the new ALLOWED_EXTENSIONS
+            img = cv2.imread(str(item_path_obj))
+            if img is not None:
+                target_width = 80  # Desired thumbnail width
+                height, width = img.shape[:2]
+                if width == 0: # Avoid division by zero
+                    print(f"Warning: Image {item_path_obj.name} has zero width.")
+                    return None
+                target_height = int((target_width / width) * height)
+                if target_height > 0 and target_width > 0 : # Ensure valid dimensions
+                    resized_img = cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+                    cv2.imwrite(str(thumbnail_save_path), resized_img)
+                else: # Could not calculate valid dimensions
+                    print(f"Warning: Could not calculate valid thumbnail dimensions for {item_path_obj.name}.")
+                    return None
+            else: # cv2.imread failed
+                print(f"Warning: cv2.imread failed for {item_path_obj.name}.")
+                return None
+
+        elif file_ext_without_dot == "docx": # Removed "doc"
+            base_name_for_temp_pdf = item_path_obj.stem
+            upload_folder_path = Path(app_config_upload_folder)
+            temp_pdf_filename = f"temp_thumb_pdf_{base_name_for_temp_pdf}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}.pdf"
+            temp_pdf_path_for_docx = upload_folder_path / temp_pdf_filename
+            
+            abs_item_path = str(item_path_obj.resolve())
+            abs_temp_pdf_path = str(temp_pdf_path_for_docx.resolve())
+
+            pythoncom.CoInitialize()
+            word_app = None
+            word_doc = None
+            pdf_doc_for_thumb = None
+            try:
+                word_app = client.Dispatch("Word.Application")
+                word_app.visible = False
+                word_doc = word_app.Documents.Open(abs_item_path)
+                word_doc.SaveAs(abs_temp_pdf_path, FileFormat=17)
+            finally:
+                if word_doc: word_doc.Close(False)
+                if word_app: word_app.Quit()
+                pythoncom.CoUninitialize()
+
+            if temp_pdf_path_for_docx.exists():
+                try:
+                    pdf_doc_for_thumb = fitz.open(str(temp_pdf_path_for_docx))
+                    if len(pdf_doc_for_thumb) > 0:
+                        page = pdf_doc_for_thumb.load_page(0)
+                        pix = page.get_pixmap(alpha=False, dpi=50)
+                        pix.save(str(thumbnail_save_path))
+                finally:
+                    if pdf_doc_for_thumb: pdf_doc_for_thumb.close()
+        
+        if thumbnail_save_path.exists() and thumbnail_save_path.stat().st_size > 0:
+            return url_for('static', filename=f'uploads/thumbnails/{unique_thumb_filename}', _external=False)
+        else: 
+            if thumbnail_save_path.exists():
+                try:
+                    os.remove(str(thumbnail_save_path))
+                except Exception as e_rem:
+                    print(f"Warning: Could not remove empty/failed thumbnail {thumbnail_save_path}: {e_rem}")
+            return None
+
+    except Exception as e:
+        # log_error_to_db(f"Error generating thumbnail for {item_path_obj.name}: {e}", source="generate_thumbnail_for_file", details=str(e))
+        print(f"ERROR generating thumbnail for {item_path_obj.name}: {e}")
+        return None
+    finally:
+        if temp_pdf_path_for_docx and temp_pdf_path_for_docx.exists():
+            try:
+                os.remove(str(temp_pdf_path_for_docx))
+            except Exception as e_clean:
+                # log_error_to_db(f"Cleanup error temp PDF {temp_pdf_path_for_docx}", "generate_thumbnail_for_file_cleanup", str(e_clean))
+                print(f"ERROR cleaning up temp PDF {temp_pdf_path_for_docx} for thumbnail: {e_clean}")
 
 # --- Helper function to log errors to the database ---
 def log_error_to_db(message, source=None, details=None):
@@ -186,6 +329,217 @@ def record_transaction(method, amount):
         print(error_msg)
         log_error_to_db(error_msg, source="record_transaction", details=str(e))
 
+@app.route('/api/list_recent_downloads', methods=['GET'])
+def list_recent_downloads():
+    # Ensure DOWNLOADS_DIR is defined and accessible
+    try:
+        DOWNLOADS_DIR = Path(Path.home() / "Downloads") # Example
+        if not DOWNLOADS_DIR.is_dir():
+             raise FileNotFoundError("Downloads directory not found or is not a directory.")
+    except Exception as e:
+        print(f"CRITICAL: Could not define/access DOWNLOADS_DIR: {e}")
+        # log_error_to_db(f"CRITICAL: Could not define/access DOWNLOADS_DIR: {e}", "list_recent_downloads_setup")
+        return jsonify({"error": "Server configuration error for downloads directory.", "files": []}), 500
+
+    recent_files_data = []
+    try:
+        all_items_in_dir = os.listdir(DOWNLOADS_DIR)
+        todays_date_for_display = datetime.now().date()
+        files_to_consider = []
+
+        for item_name in all_items_in_dir:
+            item_path = DOWNLOADS_DIR / item_name
+            if item_path.is_file():
+                file_extension_without_dot = item_name.rsplit('.', 1)[-1].lower() if '.' in item_name else ''
+                # This 'if' condition uses the updated app.config["ALLOWED_EXTENSIONS"]
+                if file_extension_without_dot in app.config["ALLOWED_EXTENSIONS"]:
+                    try:
+                        mtime_timestamp = os.path.getmtime(item_path)
+                        mtime_datetime = datetime.fromtimestamp(mtime_timestamp)
+                        if mtime_datetime.date() == todays_date_for_display:
+                            files_to_consider.append({'path': item_path, 'name': item_name, 'mtime': mtime_timestamp})
+                    except Exception as e_stat:
+                        # log_error_to_db(f"Could not get stat for file {item_path}: {e_stat}", source="list_recent_downloads_stat")
+                        print(f"Warning: Could not get stat for file {item_path}: {e_stat}")
+                        pass
+
+        sorted_files = sorted(files_to_consider, key=lambda x: x['mtime'], reverse=True)
+
+        for f_info in sorted_files:
+            item_path_obj = f_info['path']
+            original_filename = f_info['name']
+            file_ext_with_dot_for_svg = ('.' + original_filename.rsplit('.', 1)[-1].lower()) if '.' in original_filename else '.default_file'
+            file_ext_without_dot = file_ext_with_dot_for_svg.lstrip('.')
+
+            thumb_base_name = Path(original_filename).stem
+            thumb_mtime_str = datetime.fromtimestamp(f_info['mtime']).strftime('%Y%m%d%H%M%S')
+            preview_image_filename = f"thumb_{thumb_base_name}_{thumb_mtime_str}.png" 
+
+            preview_url = generate_thumbnail_for_file(item_path_obj, file_ext_without_dot, preview_image_filename, app.config["UPLOAD_FOLDER"])
+
+            if not preview_url:
+                # SVG_ICONS should be defined in your app.py
+                # SVG_ICONS = { ".pdf": "data:image/svg+xml;base64,...", ... , "default_file": "data:..."}
+                # For example, if SVG_ICONS is not fully set up, provide a generic fallback:
+                # preview_url = SVG_ICONS.get(file_ext_with_dot_for_svg, SVG_ICONS.get("default_file", "path/to/default/icon.svg"))
+                preview_url = url_for('static', filename='images/default_icon.png') # Example fallback, ensure this image exists
+
+            recent_files_data.append({
+                "filename": original_filename,
+                "preview_url": preview_url,
+                "mtime_readable": datetime.fromtimestamp(f_info['mtime']).strftime('%I:%M %p, %b %d')
+            })
+
+    except Exception as e:
+        # log_error_to_db(f"Error listing recent downloads: {e}", source="list_recent_downloads_general", details=str(e))
+        print(f"ERROR listing recent downloads: {e}")
+        return jsonify({"error": "An error occurred while listing files.", "files": []}), 500
+
+    return jsonify({"files": recent_files_data})
+
+@app.route("/process_downloaded_file", methods=["POST"])
+def process_downloaded_file():
+    global images, total_pages # These are globals used by your existing logic
+    global printed_pages_today, files_uploaded_today, last_updated_date # Daily stats
+
+    data = request.get_json()
+    if not data or "selected_filename" not in data:
+        log_error_to_db("No filename provided for processing downloaded file.", source="process_downloaded_file_payload")
+        return jsonify({"error": "No filename provided."}), 400
+
+    selected_filename = data["selected_filename"]
+    
+    # Security: Construct path and ensure it's within DOWNLOADS_DIR
+    try:
+        filepath = (DOWNLOADS_DIR / selected_filename).resolve()
+        if not filepath.is_file() or not filepath.is_relative_to(DOWNLOADS_DIR.resolve()):
+            log_error_to_db(f"Forbidden access attempt for downloaded file: {selected_filename}", source="process_downloaded_file_security")
+            return jsonify({"error": "Invalid file selection or access denied."}), 403
+    except Exception as path_e:
+        log_error_to_db(f"Path resolution error for {selected_filename}: {path_e}", source="process_downloaded_file_path_resolve")
+        return jsonify({"error": "Error resolving file path."}), 500
+
+
+    original_filename = selected_filename # This is the name from DOWNLOADS_DIR
+    file_ext_without_dot = original_filename.rsplit(".", 1)[-1].lower() if '.' in original_filename else ''
+
+
+    # Reset daily stats if the day has changed (similar to /upload)
+    if datetime.now().date() != last_updated_date:
+        printed_pages_today = 0
+        files_uploaded_today = 0
+        last_updated_date = datetime.now().date()
+        # uploaded_files_info = [] # This global was in your /upload, decide if needed here
+
+    # --- File path is valid and allowed, proceed with processing ---
+    # Create a unique working filename for UPLOAD_FOLDER if conversions happen
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # This variable will hold the path to the file that is actually processed (original or converted)
+    # and its name will be used for DB records and frontend display.
+    final_filepath_for_processing = filepath # Start with the path from DOWNLOADS_DIR
+    final_filename_for_info = original_filename
+    final_file_ext_for_info = file_ext_without_dot
+
+    processed_images = []
+    calculated_total_pages = 0
+    
+    images = [] # Clear previous global images
+
+    try:
+        if file_ext_without_dot == "pdf":
+            print(f"Processing selected PDF: {original_filename}")
+            processed_images = pdf_to_images(str(final_filepath_for_processing)) # PyMuPDF needs string path
+            calculated_total_pages = len(processed_images)
+            # final_filename_for_info and final_file_ext_for_info remain correct
+
+        elif file_ext_without_dot in ("jpg", "jpeg", "png"):
+            print(f"Processing selected Image: {original_filename}")
+            # The file is already in DOWNLOADS_DIR. We need to copy it or convert it to UPLOAD_FOLDER
+            # to fit the existing pattern of image_to_pdf_fit_page saving to a *new* PDF path.
+            
+            # Create a PDF filename in UPLOAD_FOLDER
+            pdf_output_filename = f"{timestamp}_{original_filename.rsplit('.', 1)[0]}.pdf"
+            pdf_output_path = os.path.join(UPLOAD_FOLDER, pdf_output_filename)
+
+            print(f"Converting selected image {original_filename} to PDF: {pdf_output_path}")
+            image_to_pdf_fit_page(str(final_filepath_for_processing), pdf_output_path) # Needs string path
+
+            # Now read this newly created PDF to get images for preview (as per your existing flow)
+            processed_images = pdf_to_images(pdf_output_path) # This will be a list of one image typically
+            calculated_total_pages = len(processed_images)
+            
+            final_filename_for_info = pdf_output_filename
+            final_file_ext_for_info = "pdf"
+            final_filepath_for_processing = pdf_output_path # This is now the PDF in UPLOAD_FOLDER
+
+        elif file_ext_without_dot in ("doc", "docx"):
+            print(f"Processing selected Word Document: {original_filename}")
+            # docx_to_images creates a PDF in the *same directory* as the input.
+            # We want the PDF in UPLOAD_FOLDER.
+            # So, first, copy the doc/docx to a temporary location in UPLOAD_FOLDER.
+            temp_doc_path_in_uploads = os.path.join(UPLOAD_FOLDER, f"{timestamp}_{original_filename}")
+            import shutil
+            shutil.copy(str(final_filepath_for_processing), temp_doc_path_in_uploads)
+
+            processed_images, converted_pdf_path = docx_to_images(temp_doc_path_in_uploads)
+            calculated_total_pages = len(processed_images)
+
+            if converted_pdf_path and os.path.exists(converted_pdf_path):
+                final_filename_for_info = os.path.basename(converted_pdf_path)
+                final_file_ext_for_info = "pdf"
+                final_filepath_for_processing = converted_pdf_path # This PDF is in UPLOAD_FOLDER
+                os.remove(temp_doc_path_in_uploads) # Clean up temp docx
+            else:
+                if os.path.exists(temp_doc_path_in_uploads): os.remove(temp_doc_path_in_uploads)
+                raise Exception("Word to PDF conversion failed or PDF path not returned.")
+        else:
+            # Should not happen if ALLOWED_EXTENSIONS is respected by frontend display
+            raise Exception(f"Unsupported file type selected: {file_ext_without_dot}")
+
+        if not processed_images:
+            raise Exception("File processing resulted in no images.")
+
+        # --- If successful, update global state and return response ---
+        images = processed_images # Store for /generate_preview
+        total_pages = calculated_total_pages
+
+        files_uploaded_today += 1 # Count as an "upload" for stats
+        # printed_pages_today += total_pages # Or adjust this based on actual prints
+
+        try:
+            new_uploaded_file_entry = UploadedFile(
+                filename=final_filename_for_info, # This is now the (potentially new PDF) name in UPLOAD_FOLDER
+                file_type=final_file_ext_for_info, # Should be 'pdf' if conversion happened
+                pages=total_pages,
+                timestamp=datetime.now()
+            )
+            db.session.add(new_uploaded_file_entry)
+            db.session.commit()
+            print(f"File info for {final_filename_for_info} (orig: {original_filename}) saved to database.")
+        except Exception as e_db:
+            db.session.rollback()
+            log_error_to_db(f"Error saving file info to database for {final_filename_for_info}: {e_db}", source="process_downloaded_file_db")
+            # Continue to return success to user, as file processing itself was okay
+
+        print(f"Selected downloaded file processed successfully: {final_filename_for_info} (from {original_filename})")
+        return jsonify({
+            "message": "File processed successfully!",
+            "fileName": final_filename_for_info, # Name of the file in UPLOAD_FOLDER ready for printing
+            "totalPages": total_pages
+        }), 200
+
+    except Exception as e_proc:
+        log_error_to_db(f"Error processing selected downloaded file {original_filename}: {e_proc}", source="process_downloaded_file_main_try", details=str(e_proc))
+        # Clean up any intermediate files created in UPLOAD_FOLDER if error
+        if final_filename_for_info != original_filename and os.path.exists(final_filepath_for_processing):
+            try:
+                os.remove(final_filepath_for_processing)
+                print(f"Cleaned up intermediate file on error: {final_filepath_for_processing}")
+            except Exception as e_clean:
+                log_error_to_db(f"Error cleaning up intermediate file {final_filepath_for_processing}: {e_clean}", source="process_downloaded_file_cleanup")
+        return jsonify({"error": f"Failed to process selected file: {str(e_proc)}"}), 500
+    
 @app.route('/api/record-transaction', methods=['POST'])
 def api_record_transaction():
     data = request.get_json(force=True)

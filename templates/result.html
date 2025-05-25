@@ -75,9 +75,9 @@
       #printDetails {
         max-width: 100%;
         margin: 0 auto;
-        box-sizing: border-box; /* Ensures padding and border don't affect the size */
-        word-wrap: break-word; /* Prevents text from overflowing */
-        overflow-wrap: break-word; /* Ensures long words wrap properly */
+        box-sizing: border-box; 
+        word-wrap: break-word; 
+        overflow-wrap: break-word; 
       }
       h3 {
         text-align: center;
@@ -92,16 +92,15 @@
         font-size: 1rem;
         line-height: 1.5;
         color: #555;
-        word-wrap: break-word; /* Prevents long text from overflowing */
+        word-wrap: break-word; 
       }
       li strong {
         font-weight: bold;
       }
 
-      /* Responsive design */
       @media (max-width: 600px) {
         li {
-          font-size: 0.9rem; /* Smaller text on small screens */
+          font-size: 0.9rem; 
         }
         h3 {
           font-size: 1.2rem;
@@ -110,11 +109,23 @@
 
       @media (max-width: 400px) {
         li {
-          font-size: 0.8rem; /* Even smaller text on very small screens */
+          font-size: 0.8rem; 
         }
         h3 {
           font-size: 1rem;
         }
+      }
+
+      #editModal .modal-content {
+        max-height: 92vh;     
+        overflow: hidden;       
+        display: flex;          
+        flex-direction: column; 
+      }
+
+      #editModal .modal-body {
+        overflow-y: hidden; 
+        flex-grow: 1;       
       }
     </style>
   </head>
@@ -148,7 +159,7 @@
             </button>
             <button
               class="btn edit-btn mt-3"
-              onclick="window.location.href='/'"
+              onclick="window.location.href='{{ url_for('online_upload') }}'" 
             >
               Cancel
             </button>
@@ -163,13 +174,14 @@
       </div>
     </div>
 
-    <!-- Edit Print Options Modal -->
     <div
       class="modal fade"
       id="editModal"
       tabindex="-1"
       aria-labelledby="editModalLabel"
       aria-hidden="true"
+      data-backdrop="static" 
+      data-keyboard="false"
     >
       <div class="modal-dialog">
         <div class="modal-content">
@@ -213,7 +225,6 @@
               </div>
               <div class="form-group">
                 <label for="editOrientationOption">Orientation</label>
-                <!-- **Changed** id to editOrientationOption -->
                 <select
                   id="editOrientationOption"
                   name="orientationOption"
@@ -273,7 +284,6 @@
       document.addEventListener("DOMContentLoaded", () => {
         let previewsData = [];
 
-        // 0) Helper to parse comma-and-range strings into individual page numbers
         function parseSelection(str) {
           const pages = new Set();
           (str || "").split(",").forEach((token) => {
@@ -281,113 +291,111 @@
             if (!token) return;
             if (token.includes("-")) {
               let [s, e] = token.split("-").map(Number);
-              if (s > e) [s, e] = [e, s];
+              if (s > e) [s, e] = [e, s]; 
               for (let i = s; i <= e; i++) pages.add(String(i));
-            } else {
+            } else if (!isNaN(parseInt(token, 10))) { 
               pages.add(token);
             }
           });
           return pages;
         }
 
-        // Utility to map size/orientation → thumbnail class
         function thumbClass(size, orient) {
-          const o = orient === "auto" ? "portrait" : orient;
+          const o = orient === "auto" ? "portrait" : orient; 
           return `thumb-${size} ${o}`;
         }
 
-        // The main UI refresh function
         function refreshUI(options) {
-          // 1) Update the "Selected Options" sidebar
+          if (!options || !options.fileName) {
+            console.error("Print options not found in sessionStorage or fileName is missing. Key: printOptionsInstaprint", options);
+            alert("Error: Print options are missing. Please start over from the upload page.");
+            document.getElementById("printDetails").innerHTML = "<p class='text-danger'>Could not load print details.</p>";
+            document.getElementById("previewContainer").innerHTML = "";
+            document.getElementById("segmentedContainer").innerHTML = "";
+            document.getElementById("priceValue").textContent = "0.00";
+            return;
+          }
+
           document.getElementById("printDetails").innerHTML = `
-    <h3>Selected Options:</h3>
-    <ul>
-      <li><strong>File:</strong> ${options.fileName}</li>
-      <li><strong>Pages:</strong> ${options.pageSelection}</li>
-      <li><strong>Copies:</strong> ${options.numCopies}</li>
-      <li><strong>Orientation:</strong> ${options.orientationOption}</li>
-      <li><strong>Page Size:</strong> ${options.pageSize}</li>
-      <li><strong>Color:</strong> ${options.colorOption}</li>
-    </ul>
-  `;
+            <h3>Selected Options:</h3>
+            <ul>
+              <li><strong>File:</strong> ${options.fileName}</li>
+              <li><strong>Pages:</strong> ${options.pageSelection || 'All'}</li>
+              <li><strong>Copies:</strong> ${options.numCopies || 1}</li>
+              <li><strong>Orientation:</strong> ${options.orientationOption || 'auto'}</li>
+              <li><strong>Page Size:</strong> ${options.pageSize || 'A4'}</li>
+              <li><strong>Color:</strong> ${options.colorOption || 'Color'}</li>
+            </ul>
+          `;
 
-          // 2) Seed the modal form fields (including our hidden input)
-          document.getElementById("editPageSelection").value =
-            options.pageSelection || "";
-          document.getElementById("editNumCopies").value =
-            options.numCopies || 1;
-          document.getElementById("editOrientationOption").value =
-            options.orientationOption || "auto";
-          document.getElementById("editPageSize").value =
-            options.pageSize || "A4";
-          document.getElementById("editColorOption").value =
-            options.colorOption || "Color";
+          document.getElementById("editPageSelection").value = options.pageSelection || "";
+          document.getElementById("editNumCopies").value = options.numCopies || 1;
+          document.getElementById("editOrientationOption").value = options.orientationOption || "auto";
+          document.getElementById("editPageSize").value = options.pageSize || "A4";
+          document.getElementById("editColorOption").value = options.colorOption || "Color";
 
-          // 3) Fetch new previews + pricing
           fetch("/preview_with_price", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(options),
           })
-            .then((r) => r.json())
+            .then(async (response) => { 
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+                throw new Error(errorData.error || `HTTP error ${response.status}`);
+              }
+              return response.json();
+            })
             .then((data) => {
-              // Update total price
-              document.getElementById("priceValue").textContent =
-                data.totalPrice.toFixed(2);
+              if (data.error) { 
+                console.error("Error from /preview_with_price:", data.error);
+                alert("Error from server: " + data.error);
+                document.getElementById("previewContainer").innerHTML = `<p class="text-danger">${data.error}</p>`;
+                document.getElementById("segmentedContainer").innerHTML = "";
+                document.getElementById("priceValue").textContent = "0.00";
+                return;
+              }
 
-              // Clear old containers
+              document.getElementById("priceValue").textContent = data.totalPrice.toFixed(2);
+
               const pC = document.getElementById("previewContainer");
               const sC = document.getElementById("segmentedContainer");
               pC.innerHTML = "";
               sC.innerHTML = "";
 
-              // 4) Build page thumbnails
-              data.pagePrices.forEach((p) => {
-                const thumb = document.createElement("div");
-                thumb.className =
-                  "thumb-container " +
-                  thumbClass(options.pageSize, options.orientationOption);
+              if (data.pagePrices && Array.isArray(data.pagePrices)) {
+                data.pagePrices.forEach((p) => {
+                  const thumb = document.createElement("div");
+                  thumb.className = "thumb-container " + thumbClass(options.pageSize, options.orientationOption);
+                  const img = document.createElement("img");
+                  img.src = p.original;
+                  img.style.cursor = "pointer";
+                  if (options.colorOption === "Grayscale") {
+                    img.style.filter = "grayscale(100%)";
+                  }
+                  img.addEventListener("click", () => showModal(p.original));
+                  thumb.appendChild(img);
+                  pC.appendChild(thumb);
 
-                const img = document.createElement("img");
-                img.src = p.original;
-                img.style.cursor = "pointer";
+                  const seg = document.createElement("div");
+                  seg.className = "m-2 p-2 border";
+                  seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(2)}):</p>`;
+                  const segImg = document.createElement("img");
+                  segImg.src = p.highlighted;
+                  segImg.style = "max-width:200px; cursor:pointer;";
+                  segImg.addEventListener("click", () => showModal(p.highlighted));
+                  seg.appendChild(segImg);
+                  sC.appendChild(seg);
+                });
+              } else {
+                console.warn("data.pagePrices is missing or not an array", data);
+                sC.innerHTML = "<p>Could not load price breakdown.</p>";
+              }
 
-                // Apply grayscale filter if colorOption is "Grayscale"
-                if (options.colorOption === "Grayscale") {
-                  img.style.filter = "grayscale(100%)";
-                }
 
-                img.addEventListener("click", () => showModal(p.original));
-
-                thumb.appendChild(img);
-                pC.appendChild(thumb);
-
-                // Segmented image + price
-                const seg = document.createElement("div");
-                seg.className = "m-2 p-2 border";
-                seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(
-                  2
-                )}):</p>`;
-
-                const segImg = document.createElement("img");
-                segImg.src = p.highlighted;
-                segImg.style = "max-width:200px; cursor:pointer;";
-                segImg.addEventListener("click", () =>
-                  showModal(p.highlighted)
-                );
-
-                seg.appendChild(segImg);
-                sC.appendChild(seg);
-              });
-
-              // 5) Build the **full** page-button grid
-              const grid = document.getElementById(
-                "editPageSelectionContainer"
-              );
+              const grid = document.getElementById("editPageSelectionContainer");
               grid.innerHTML = "";
-
-              // Use data.previews.length to get total pages in the doc
-              const totalPages = data.totalPages;
+              const totalPages = data.totalPages; 
               const selectedPages = parseSelection(options.pageSelection);
 
               for (let i = 1; i <= totalPages; i++) {
@@ -395,111 +403,74 @@
                 btn.className = "page-button";
                 btn.textContent = i;
                 if (selectedPages.has(String(i))) btn.classList.add("selected");
-
                 btn.addEventListener("click", () => {
                   const nowSelected = btn.classList.toggle("selected");
-                  if (nowSelected) {
-                    selectedPages.add(String(i));
-                  } else {
-                    selectedPages.delete(String(i));
-                  }
-                  // Keep the hidden input updated
-                  document.getElementById("editPageSelection").value =
-                    Array.from(selectedPages)
-                      .sort((a, b) => a - b)
-                      .join(",");
+                  if (nowSelected) selectedPages.add(String(i));
+                  else selectedPages.delete(String(i));
+                  document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
                 });
-
                 grid.appendChild(btn);
               }
-
-              // Initialize hidden input one last time
-              document.getElementById("editPageSelection").value = Array.from(
-                selectedPages
-              )
-                .sort((a, b) => a - b)
-                .join(",");
-
-              function showModal(src) {
-                const img = document.getElementById("modalImage");
-
-                // Check if the grayscale option is selected
-                const isGrayscale =
-                  document.getElementById("editColorOption").value ===
-                  "Grayscale";
-
-                // Apply the grayscale filter to the image in the modal if needed
-                if (isGrayscale) {
-                  img.style.filter = "grayscale(100%)";
-                } else {
-                  img.style.filter = ""; // Reset filter if not grayscale
-                }
-
-                img.src = src;
-                $("#imageModal").modal("show");
-              }
-
-              // Store for "Proceed to Payment"
-              previewsData = data.previews;
+              document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
+              
+              previewsData = data.previews || []; 
             })
-            .catch(() =>
-              alert("Failed to load preview data. Please try again.")
-            );
+            .catch((error) => {
+              console.error("Failed to load preview data:", error);
+              alert("Failed to load preview data. Please try again. Details: " + error.message);
+              document.getElementById("previewContainer").innerHTML = `<p class="text-danger">Could not load previews. ${error.message}</p>`;
+              document.getElementById("segmentedContainer").innerHTML = "";
+              document.getElementById("priceValue").textContent = "0.00";
+            });
         }
-
-        // 6) On load, grab from sessionStorage and render
-        let opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
+        
+        let opts = JSON.parse(sessionStorage.getItem("printOptionsInstaprint")) || {};
         refreshUI(opts);
 
-        // 7) Handle “Apply Changes”
         document.getElementById("editForm").addEventListener("submit", (e) => {
           e.preventDefault();
           const updated = {
-            fileName: opts.fileName,
+            fileName: opts.fileName, 
+            originalDownloadName: opts.originalDownloadName, 
             pageSelection: document.getElementById("editPageSelection").value,
-            numCopies: parseInt(
-              document.getElementById("editNumCopies").value,
-              10
-            ),
-            orientationOption: document.getElementById("editOrientationOption")
-              .value,
+            numCopies: parseInt(document.getElementById("editNumCopies").value, 10),
+            orientationOption: document.getElementById("editOrientationOption").value,
             pageSize: document.getElementById("editPageSize").value,
             colorOption: document.getElementById("editColorOption").value,
           };
-          // **Keep opts in sync** so reopening the modal uses the latest
-          opts = updated;
-          sessionStorage.setItem("printOptions", JSON.stringify(updated));
+          opts = updated; 
+          sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(updated)); 
           refreshUI(updated);
           $("#editModal").modal("hide");
         });
 
-        // 8) Proceed to payment
-        document
-          .getElementById("printButton")
-          .addEventListener("click", (ev) => {
+        document.getElementById("printButton").addEventListener("click", (ev) => {
             ev.preventDefault();
-            if (
-              !previewsData.length ||
-              parseFloat(document.getElementById("priceValue").textContent) ===
-                0
-            ) {
-              return alert(
-                previewsData.length === 0
-                  ? "Previews not ready yet."
-                  : "Total price is ₱0. Cannot proceed."
-              );
+            const currentPrice = parseFloat(document.getElementById("priceValue").textContent);
+            if (!previewsData || previewsData.length === 0) {
+                 alert("Preview data is not available. Cannot proceed to payment.");
+                 return;
             }
-            sessionStorage.setItem(
-              "totalPrice",
-              document.getElementById("priceValue").textContent
-            );
-            sessionStorage.setItem("previews", JSON.stringify(previewsData));
-            window.location.href = "/payment-type";
-          });
+            if (currentPrice === 0) {
+                 alert("Total price is ₱0.00. Cannot proceed to payment for free items unless intended.");
+            }
+            sessionStorage.setItem("totalPrice", currentPrice.toFixed(2));
+            sessionStorage.setItem("previews", JSON.stringify(previewsData)); 
+            sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(opts)); 
+            window.location.href = "{{ url_for('payment_type') }}"; 
+        });
+
+        function showModal(src) {
+            const img = document.getElementById("modalImage");
+            const isGrayscale = document.getElementById("editColorOption").value === "Grayscale";
+            img.style.filter = isGrayscale ? "grayscale(100%)" : "";
+            img.src = src;
+            $("#imageModal").modal("show");
+        }
+
       });
     </script>
 
-    <!-- Fullscreen Image Modal -->
     <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
