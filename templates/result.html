@@ -157,12 +157,9 @@
             <button class="btn btn-success mt-3" id="printButton">
               Proceed to Payment
             </button>
-            <button
-              class="btn edit-btn mt-3"
-              onclick="window.location.href='{{ url_for('online_upload') }}'" 
-            >
-              Cancel
-            </button>
+
+            <a href="{{ url_for('online_upload') }}" class="btn edit-btn mt-3">Cancel</a>
+
           </div>
         </div>
         <div class="column right">
