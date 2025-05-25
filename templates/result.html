@@ -232,6 +232,7 @@
                   <option value="auto">Auto</option>
                 </select>
               </div>
+
               <div class="form-group">
                 <label for="editPageSize">Page Size</label>
                 <select
@@ -239,12 +240,12 @@
                   id="editPageSize"
                   name="pageSize"
                   required
+                  disabled
                 >
-                  <option value="A4">A4</option>
-                  <option value="Short">Short</option>
-                  <option value="Long">Long</option>
+                  <option value="Short" selected>Short</option>
                 </select>
               </div>
+
               <div class="form-group">
                 <label for="editColorOption">Color Option</label>
                 <select
@@ -328,7 +329,9 @@
           document.getElementById("editPageSelection").value = options.pageSelection || "";
           document.getElementById("editNumCopies").value = options.numCopies || 1;
           document.getElementById("editOrientationOption").value = options.orientationOption || "auto";
-          document.getElementById("editPageSize").value = options.pageSize || "A4";
+          document.getElementById("editPageSize").value = "Short"; // Always set to Short
+          // The 'disabled' attribute is already set in HTML, but you could also enforce it here if needed:
+          // document.getElementById("editPageSize").disabled = true;
           document.getElementById("editColorOption").value = options.colorOption || "Color";
 
           fetch("/preview_with_price", {
@@ -432,7 +435,7 @@
             pageSelection: document.getElementById("editPageSelection").value,
             numCopies: parseInt(document.getElementById("editNumCopies").value, 10),
             orientationOption: document.getElementById("editOrientationOption").value,
-            pageSize: document.getElementById("editPageSize").value,
+            pageSize: "Short", // Force pageSize to "Short" when applying changes
             colorOption: document.getElementById("editColorOption").value,
           };
           opts = updated; 
