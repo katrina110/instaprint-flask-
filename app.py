@@ -970,16 +970,21 @@ def admin_user():
 @app.route("/admin-dashboard")
 def admin_dashboard():
     transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
-    total_sales = db.session.query(db.func.sum(Transaction.amount)).scalar() or 0
+    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0
     
-    gcash_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
-    coinslot_total = db.session.query(db.func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+    gcash_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
+    coinslot_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+
+    # === New: Calculate totals from UploadedFile table ===
+    total_files_in_db = db.session.query(func.count(UploadedFile.id)).scalar() or 0
+    total_pages_in_db = db.session.query(func.sum(UploadedFile.pages)).scalar() or 0
+    # =====================================================
 
     data = {
         "total_sales": total_sales,
-        "printed_pages": printed_pages_today,
-        "files_uploaded": files_uploaded_today,
-        "current_balance": 200,
+        "printed_pages": total_pages_in_db, # Use the new database-derived total
+        "files_uploaded": total_files_in_db, # Use the new database-derived total
+        "current_balance": 200, # This is still the hardcoded value from your existing code
         "sales_history": [
             {
                 "method": t.method,
@@ -988,13 +993,13 @@ def admin_dashboard():
                 "time": t.timestamp.strftime('%H:%M:%S')
             } for t in transactions
         ],
-        "sales_chart": [500, 600, 700, 800],
+        "sales_chart": [500, 600, 700, 800], # This is still the hardcoded value from your existing code
         "transaction_method_summary": {
             "gcash": round(gcash_total),
             "coinslot": round(coinslot_total)
         }
     }
-    return render_template("admin-dashboard.html", data=data)
+    return render_template("admin-dashboard.html", data=data) #
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
@@ -1006,7 +1011,7 @@ def admin_printed_pages():
             'file': uploaded_file_entry.filename,
             'type': uploaded_file_entry.file_type,
             'pages': uploaded_file_entry.pages,
-            'time': uploaded_file_entry.timestamp.strftime('%I:%M %p')
+            'timestamp_full': uploaded_file_entry.timestamp.strftime('%b %d, %Y, %I:%M %p') 
         })
         
     return render_template("admin-files-upload.html", uploaded=formatted_files)
