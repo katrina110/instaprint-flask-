@@ -177,13 +177,13 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice"));
+        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice")) || 0.0; // Ensure totalPrice is a number
         const gcashSection = document.getElementById("gcashSection");
         const gcashLogo = document.getElementById("gcashLogo");
         const gcashButton = document.getElementById("gcashButton");
         const coinsAmountSpan = document.getElementById("coinsAmount");
         const gcashAmountSpan = document.getElementById("gcashAmount");
-        const coinsButtonElement = document.getElementById("coinsButton"); // Get the coins button element
+        const coinsButtonElement = document.getElementById("coinsButton");
 
         if (totalPrice < 20.0) {
           gcashSection.classList.add("disabled");
@@ -197,7 +197,6 @@
           gcashButton.disabled = false;
         }
 
-        // Display the total price under both sections
         if (!isNaN(totalPrice)) {
           coinsAmountSpan.textContent = "₱" + totalPrice.toFixed(2);
           gcashAmountSpan.textContent = "₱" + totalPrice.toFixed(2);
@@ -206,23 +205,61 @@
           gcashAmountSpan.textContent = "₱0.00";
         }
 
-        // Event listener for the Coins button (you can modify this as needed)
+        // ***** MODIFIED SECTION FOR COINS BUTTON *****
         coinsButtonElement.addEventListener("click", () => {
-          fetch("/record-sale", {
+          // 1. Navigate to the payment page immediately.
+          //    The /payment route in app.py expects a 'price' query parameter.
+          window.location.href = `/payment?price=${totalPrice.toFixed(2)}`;
+
+          // 2. Attempt to record the transaction in the background.
+          //    Note: The browser might cancel this fetch request if the page unloads too quickly.
+          //    Using the corrected endpoint /api/record-transaction from your app.py
+          fetch("/api/record-transaction", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ method: "Coinslot", amount: totalPrice }),
-          }).then(() => (window.location.href = "/payment"));
+          })
+          .then(response => {
+            if (!response.ok) {
+              // Log error if response is not OK, but don't block navigation
+              console.error("Background transaction record failed with status:", response.status);
+              return response.json().then(err => Promise.reject(err)); // Propagate error for catch block
+            }
+            return response.json();
+          })
+          .then(data => {
+            if (data.success) {
+              console.log("Transaction recorded successfully (background).");
+            } else {
+              console.error("Failed to record transaction (background):", data.message);
+            }
+          })
+          .catch(error => {
+            // Log any errors from the fetch request
+            console.error("Error sending transaction record (background):", error);
+          });
         });
+        // ***** END OF MODIFIED SECTION *****
 
-        // Redirect to gcash-payment.html when gcashButton is clicked
         if (!gcashButton.disabled) {
           gcashButton.addEventListener("click", () => {
-            fetch("/record-sale", {
+            // For GCash, we maintain the original sequence for now as per your specific request for coins.
+            // If you want this changed too, the logic would be similar to the coins button.
+            // Using the corrected endpoint /api/record-transaction
+            fetch("/api/record-transaction", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ method: "GCash", amount: totalPrice }),
-            }).then(() => (window.location.href = "/gcash-payment"));
+            })
+            .then(response => response.json()) // Assuming success, add error handling if needed
+            .then(() => {
+                window.location.href = "/gcash-payment";
+            })
+            .catch(error => {
+                console.error("Error recording GCash transaction or navigating:", error);
+                // Optionally, still navigate or show an error to the user
+                // window.location.href = "/gcash-payment"; // Or handle error display
+            });
           });
         }
       });
@@ -239,11 +276,12 @@
       });
 
       spinBtn.addEventListener("mouseleave", () => {
+        // Stop motor if mouse leaves button while pressed
         fetch("/spin-motor/stop", { method: "POST" });
       });
 
       spinBtn.addEventListener("touchstart", (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Prevent potential multi-touch issues or scrolling
         fetch("/spin-motor/start", { method: "POST" });
       });
 

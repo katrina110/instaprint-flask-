@@ -125,7 +125,7 @@ def send_command_to_gsm_arduino(command_to_send, timestamp_str):
     global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER
 
     # Sanitize timestamp_str to remove potential problematic characters for our command format
-    safe_timestamp_str = timestamp_str.replace(":", "-").replace("\n", " ")
+    safe_timestamp_str = timestamp_str.replace("\n", " ")
 
     # Command format: COMMAND:RECIPIENT_PHONE_NUMBER:TIMESTAMP_STRING\n
     full_command = f"{command_to_send.strip()}:{GSM_ALERT_RECIPIENT_PHONE_NUMBER}:{safe_timestamp_str}\n"
@@ -134,21 +134,17 @@ def send_command_to_gsm_arduino(command_to_send, timestamp_str):
 
     try:
         print(f"ALERT: Attempting to open port {GSM_PORT} for GSM alert command.")
-        # Open the serial port specifically for this alert
         temp_serial_for_alert = serial.Serial(GSM_PORT, BAUD_RATE, timeout=2, write_timeout=2)
 
-        # IMPORTANT: Wait for Arduino to initialize/reset after serial connection is opened.
-        # Arduinos (especially those with certain USB-to-Serial chips) often reset.
-        time.sleep(2.5) # Increased slightly to 2.5s for potentially slower Arduino setups to be safe
+        time.sleep(2.5)
 
         print(f"ALERT: Port {GSM_PORT} opened. Sending command: {full_command.strip()}")
         temp_serial_for_alert.write(full_command.encode('utf-8'))
-        temp_serial_for_alert.flush()  # Ensure all data is sent out of the buffer
+        temp_serial_for_alert.flush()
         print(f"Info: Alert command '{command_to_send.strip()}' with timestamp '{safe_timestamp_str}' sent to GSM module via {GSM_PORT}.")
 
     except serial.SerialException as se:
         print(f"CRITICAL_GSM_ALERT_FAILURE: SerialException during port open/write on {GSM_PORT} for alert: {se}")
-        # You might want to log this to a local file if database logging is also failing, to avoid error loops.
     except Exception as e:
         print(f"CRITICAL_GSM_ALERT_FAILURE: Generic Exception during port open/write for alert on {GSM_PORT}: {e}")
     finally:
@@ -298,7 +294,7 @@ def log_error_to_db(message, source=None, details=None):
     try:
         # Generate timestamp for the alert. Using local time with AM/PM for readability in SMS.
         # You can use datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC") for UTC time.
-        alert_timestamp_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p") 
+        alert_timestamp_str = datetime.now().strftime("%m-%d-%Y %I:%M:%S %p") 
 
         error_entry = ErrorLog( # Assuming ErrorLog model is defined
             message=str(message),
