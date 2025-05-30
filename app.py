@@ -17,7 +17,7 @@ from win32com import client
 from fpdf import FPDF
 import serial
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
@@ -1119,10 +1119,19 @@ def get_error_logs_data_for_admin():
         error_entries = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(200).all() #
         
         logs_data = []
+        # Define the PHT timezone (UTC+8)
+        pht = timezone(timedelta(hours=8))
+
         for entry in error_entries:
+            # entry.timestamp is a naive datetime object representing UTC
+            # Make it an aware datetime object (aware of its UTC timezone)
+            aware_utc_timestamp = entry.timestamp.replace(tzinfo=timezone.utc)
+            # Convert the UTC timestamp to PHT
+            pht_timestamp = aware_utc_timestamp.astimezone(pht)
+            
             logs_data.append({
                 'id': entry.id, #
-                'timestamp': entry.timestamp.strftime('%b %d, %Y, %I:%M %p'),
+                'timestamp': pht_timestamp.strftime('%b %d, %Y, %I:%M %p'), # Now formatted PHT
                 'source': entry.source or 'N/A', #
                 'message': entry.message, #
                 'details': entry.details or '' #
