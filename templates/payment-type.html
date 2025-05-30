@@ -93,10 +93,101 @@
         filter: grayscale(100%);
       }
       .left-section {
+        padding-top: 50px;
         padding-left: 100px; /* Add some spacing between the sections */
       }
       .right-section {
+        padding-top: 50px;
         padding-right: 100px; /* Add some spacing between the sections */
+      }
+
+      /* MODIFIED Styles for the modal for smooth FADE transition */
+      .modal {
+        visibility: hidden; /* Initially hidden */
+        opacity: 0; /* Start fully transparent */
+        /* transform: scale(0.95); REMOVED for fade-only effect */
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto; /* Allow scroll if content is too long */
+        background-color: rgba(128, 0, 0, 0.75);
+        display: flex; /* Use flexbox for centering modal content */
+        align-items: center; /* Vertically center */
+        justify-content: center; /* Horizontally center */
+        /* Transition for appearing - REMOVED transform from transition */
+        transition: opacity 0.3s ease-out, visibility 0s linear 0.3s;
+      }
+
+      .modal.modal-visible {
+        visibility: visible; /* Make it visible */
+        opacity: 1; /* Fade in */
+        /* transform: scale(1); REMOVED for fade-only effect */
+        /* Transition for disappearing - REMOVED transform from transition */
+        transition: opacity 0.3s ease-out, visibility 0s linear 0s;
+      }
+
+      .modal-content {
+        background-color: #fefefe;
+        margin: 0; /* Margin is handled by flex container */
+        padding: 30px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 500px;
+        border-radius: 10px;
+        text-align: center;
+        position: relative;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      }
+
+      .close-button-span {
+        color: #aaa;
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        font-size: 32px;
+        font-weight: bold;
+      }
+
+      .close-button-span:hover,
+      .close-button-span:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      #openFeedModalBtn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 25px;
+        font-size: 16px;
+        background-color: #500000;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        z-index: 999;
+      }
+       #openFeedModalBtn:hover {
+        background-color: #800000;
+      }
+
+      #closeModalButtonInside {
+        padding: 10px 25px;
+        font-size: 16px;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+      }
+      #closeModalButtonInside:hover {
+        background-color: #5a6268;
       }
     </style>
   </head>
@@ -110,32 +201,6 @@
       <img src="./../static/images/cpe-logo.png" alt="sample" />
     </header>
     <main>
-      <div
-        class="payment-section"
-        style="margin-bottom: 40px; text-align: center"
-      >
-        <h2>Feed Paper to Printer</h2>
-        <p style="max-width: 500px; margin: 10px auto; font-size: 1rem">
-          Before proceeding with payment, ensure the printer is loaded with
-          paper. Press and hold the button below to feed a sheet into the
-          printer.
-        </p>
-        <button
-          id="spinMotorButton"
-          style="
-            padding: 12px 30px;
-            font-size: 16px;
-            background-color: #800000;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            margin-top: 10px;
-          "
-        >
-          Feed Paper (Spin Motor)
-        </button>
-      </div>
       <div class="left-section payment-section">
         <h1>Pay with Coins</h1>
         <img
@@ -175,9 +240,55 @@
       </div>
     </main>
 
+    <div id="feedPaperModal" class="modal">
+      <div class="modal-content">
+        <h2>Feed Paper to Printer</h2>
+        <p style="max-width: 400px; margin: 20px auto; font-size: 1rem">
+          Before proceeding with payment, ensure the printer is loaded with
+          paper. Press and hold the button below to feed a sheet into the
+          printer.
+        </p>
+        <button
+          id="spinMotorButton"
+          style="
+            padding: 12px 30px;
+            font-size: 16px;
+            background-color: #800000;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+          "
+        >
+          Feed Paper
+        </button>
+        <br />
+        <button id="closeModalButtonInside">Close</button>
+      </div>
+    </div>
+
+    <button id="openFeedModalBtn">Feed Paper</button>
+
+    <div style="text-align: center; margin-bottom: 30px">
+      <button
+        onclick="history.back()"
+        style="
+          padding: 12px 30px;
+          font-size: 16px;
+          background-color: #800000;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+        "
+      >
+        Return
+      </button>
+    </div>
+
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice")) || 0.0; // Ensure totalPrice is a number
+        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice")) || 0.0;
         const gcashSection = document.getElementById("gcashSection");
         const gcashLogo = document.getElementById("gcashLogo");
         const gcashButton = document.getElementById("gcashButton");
@@ -205,15 +316,8 @@
           gcashAmountSpan.textContent = "₱0.00";
         }
 
-        // ***** MODIFIED SECTION FOR COINS BUTTON *****
         coinsButtonElement.addEventListener("click", () => {
-          // 1. Navigate to the payment page immediately.
-          //    The /payment route in app.py expects a 'price' query parameter.
           window.location.href = `/payment?price=${totalPrice.toFixed(2)}`;
-
-          // 2. Attempt to record the transaction in the background.
-          //    Note: The browser might cancel this fetch request if the page unloads too quickly.
-          //    Using the corrected endpoint /api/record-transaction from your app.py
           fetch("/api/record-transaction", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -221,9 +325,8 @@
           })
           .then(response => {
             if (!response.ok) {
-              // Log error if response is not OK, but don't block navigation
               console.error("Background transaction record failed with status:", response.status);
-              return response.json().then(err => Promise.reject(err)); // Propagate error for catch block
+              return response.json().then(err => Promise.reject(err));
             }
             return response.json();
           })
@@ -235,30 +338,23 @@
             }
           })
           .catch(error => {
-            // Log any errors from the fetch request
             console.error("Error sending transaction record (background):", error);
           });
         });
-        // ***** END OF MODIFIED SECTION *****
 
         if (!gcashButton.disabled) {
           gcashButton.addEventListener("click", () => {
-            // For GCash, we maintain the original sequence for now as per your specific request for coins.
-            // If you want this changed too, the logic would be similar to the coins button.
-            // Using the corrected endpoint /api/record-transaction
             fetch("/api/record-transaction", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ method: "GCash", amount: totalPrice }),
             })
-            .then(response => response.json()) // Assuming success, add error handling if needed
+            .then(response => response.json())
             .then(() => {
                 window.location.href = "/gcash-payment";
             })
             .catch(error => {
                 console.error("Error recording GCash transaction or navigating:", error);
-                // Optionally, still navigate or show an error to the user
-                // window.location.href = "/gcash-payment"; // Or handle error display
             });
           });
         }
@@ -267,46 +363,72 @@
     <script>
       const spinBtn = document.getElementById("spinMotorButton");
 
-      spinBtn.addEventListener("mousedown", () => {
-        fetch("/spin-motor/start", { method: "POST" });
-      });
-
-      spinBtn.addEventListener("mouseup", () => {
-        fetch("/spin-motor/stop", { method: "POST" });
-      });
-
-      spinBtn.addEventListener("mouseleave", () => {
-        // Stop motor if mouse leaves button while pressed
-        fetch("/spin-motor/stop", { method: "POST" });
-      });
-
-      spinBtn.addEventListener("touchstart", (e) => {
-        e.preventDefault(); // Prevent potential multi-touch issues or scrolling
-        fetch("/spin-motor/start", { method: "POST" });
-      });
-
-      spinBtn.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        fetch("/spin-motor/stop", { method: "POST" });
-      });
+      if (spinBtn) {
+        spinBtn.addEventListener("mousedown", () => {
+          fetch("/spin-motor/start", { method: "POST" });
+        });
+        spinBtn.addEventListener("mouseup", () => {
+          fetch("/spin-motor/stop", { method: "POST" });
+        });
+        spinBtn.addEventListener("mouseleave", () => {
+          fetch("/spin-motor/stop", { method: "POST" });
+        });
+        spinBtn.addEventListener("touchstart", (e) => {
+          e.preventDefault();
+          fetch("/spin-motor/start", { method: "POST" });
+        });
+        spinBtn.addEventListener("touchend", (e) => {
+          e.preventDefault();
+          fetch("/spin-motor/stop", { method: "POST" });
+        });
+      } else {
+        console.error("Button with ID 'spinMotorButton' not found.");
+      }
     </script>
+    <script>
+      // JavaScript for Modal Interactions with smooth transitions
+      var feedModal = document.getElementById("feedPaperModal");
+      var openModalBtn = document.getElementById("openFeedModalBtn");
+      var closeModalSpan = document.querySelector("#feedPaperModal .close-button-span");
+      var closeModalButtonInside = document.getElementById("closeModalButtonInside");
 
-    <div style="text-align: center; margin-bottom: 30px">
-      <button
-        onclick="history.back()"
-        style="
-          margin-bottom: 20px;
-          padding: 10px 20px;
-          font-size: 16px;
-          background-color: #800000;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-        "
-      >
-        Return
-      </button>
-    </div>
+      function showModal() {
+        if (feedModal) {
+          feedModal.classList.add("modal-visible");
+        }
+      }
+
+      function hideModal() {
+        if (feedModal) {
+          feedModal.classList.remove("modal-visible");
+          fetch("/spin-motor/stop", { method: "POST" }); // Stop motor on close
+        }
+      }
+
+      if (feedModal) {
+        requestAnimationFrame(showModal);
+
+        if (closeModalSpan) {
+          closeModalSpan.onclick = hideModal;
+        }
+
+        if (closeModalButtonInside) {
+          closeModalButtonInside.onclick = hideModal;
+        }
+
+        window.onclick = function(event) {
+          if (event.target == feedModal) {
+            hideModal();
+          }
+        }
+
+        if (openModalBtn) {
+          openModalBtn.onclick = showModal;
+        }
+
+      } else {
+        console.error("Modal element with ID 'feedPaperModal' not found.");
+      }
+    </script>
   </body>
 </html>
