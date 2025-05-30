@@ -45,8 +45,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-hopper_balance = 50.00
-
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
@@ -63,7 +61,6 @@ class UploadedFile(db.Model):
     def __repr__(self):
         return f'<UploadedFile {self.filename}>'
 
-# New Model for Error Logging
 class ErrorLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -74,9 +71,24 @@ class ErrorLog(db.Model):
     def __repr__(self):
         return f'<ErrorLog {self.timestamp} - {self.source}: {self.message[:50]}>'
 
+class HopperStatus(db.Model):
+    id = db.Column(db.Integer, primary_key=True) # Should only ever be one row
+    balance = db.Column(db.Float, nullable=False, default=200.00)
+
+    def __repr__(self):
+        return f'<HopperStatus balance: {self.balance}>'
 
 with app.app_context():
-    db.create_all()  # ensures tables are created before first use, including ErrorLog
+    db.create_all()  # ensures tables are created before first use
+    # Initialize Hopper Balance if it doesn't exist
+    if HopperStatus.query.first() is None:
+        initial_hopper_status = HopperStatus(balance=200.00)
+        db.session.add(initial_hopper_status)
+        db.session.commit()
+        print("Initialized hopper balance to 200.00 in the database.")
+    else:
+        current_db_balance = HopperStatus.query.first().balance
+        print(f"Hopper balance already exists in DB: ₱{current_db_balance:.2f}")
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static", "uploads")
@@ -99,7 +111,6 @@ THUMBNAIL_DIR = Path(app.static_folder) / "uploads" / "thumbnails"
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 # Global Variables
-uploaded_files_info = []
 printed_pages_today = 0
 files_uploaded_today = 0
 last_updated_date = datetime.now().date()
@@ -136,7 +147,7 @@ def send_command_to_gsm_arduino(command_to_send, timestamp_str):
         print(f"ALERT: Attempting to open port {GSM_PORT} for GSM alert command.")
         temp_serial_for_alert = serial.Serial(GSM_PORT, BAUD_RATE, timeout=2, write_timeout=2)
 
-        time.sleep(2.5)
+        time.sleep(2.5) # Allow port to open and Arduino to initialize
 
         print(f"ALERT: Port {GSM_PORT} opened. Sending command: {full_command.strip()}")
         temp_serial_for_alert.write(full_command.encode('utf-8'))
@@ -288,76 +299,195 @@ def generate_thumbnail_for_file(item_path_obj: Path, file_ext_without_dot: str, 
             except Exception as e_clean:
                 print(f"ERROR cleaning up temp PDF {temp_pdf_path_for_docx} for thumbnail: {e_clean}")
 
-# from datetime import datetime # Should be at the top of app.py
-
 def log_error_to_db(message, source=None, details=None):
-    try:
-        # Generate timestamp for the alert. Using local time with AM/PM for readability in SMS.
-        # You can use datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC") for UTC time.
-        alert_timestamp_str = datetime.now().strftime("%m-%d-%Y %I:%M:%S %p") 
+    with app.app_context(): # <--- ADD THIS WRAPPER
+        try:
+            alert_timestamp_str = datetime.now().strftime("%m-%d-%Y %I:%M:%S %p")
 
-        error_entry = ErrorLog( # Assuming ErrorLog model is defined
-            message=str(message),
-            source=str(source) if source else None,
-            details=str(details) if details else None,
-            timestamp=datetime.utcnow() # Database timestamp typically stored in UTC
-        )
-        db.session.add(error_entry) # Assuming db and SQLAlchemy setup
-        db.session.commit()
-        print(f"DB_ERROR_LOGGED: [{source or 'GENERAL'}] {message}")
+            error_entry = ErrorLog(
+                message=str(message),
+                source=str(source) if source else "Unknown",
+                details=str(details) if details else None,
+                timestamp=datetime.utcnow() 
+            )
+            db.session.add(error_entry)
+            db.session.commit()
+            print(f"DB_ERROR_LOGGED: [{source or 'GENERAL'}] {message}")
 
-        # After successfully logging to DB, try to send SMS alert
-        send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_str)
+            # send_command_to_gsm_arduino does not use app context directly, so it's fine here.
+            send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_str)
 
-    except Exception as e:
-        db.session.rollback()
-        # Generate a timestamp for this specific failure as well
-        alert_timestamp_db_fail_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
-        print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{source}] {message}")
-        # Still attempt to send an SMS alert even if DB logging failed, as this is critical
-        send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_db_fail_str)
+        except Exception as e:
+            # If we are here, db.session.commit() or add() likely failed.
+            # We need to ensure rollback happens if possible, or handle the inability to log to DB.
+            try:
+                db.session.rollback() 
+            except Exception as rb_e:
+                print(f"CRITICAL_ERROR: Failed to rollback DB session during log_error_to_db failure: {rb_e}")
+
+            alert_timestamp_db_fail_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+            print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{source}] {message}")
+            # Still attempt to send an SMS alert
+            send_command_to_gsm_arduino("SEND_DB_LOG_FAIL_SMS", alert_timestamp_db_fail_str)
 
 @socketio.on("connect")
 def send_initial_coin_count():
-    global coin_value_sum
+    global coin_value_sum # This is for the current transaction's coin sum
     print(
-        f"WebSocket client connected. Emitting initial coin count: {coin_value_sum}"
+        f"WebSocket client connected. Emitting initial transaction coin count: {coin_value_sum}"
     )
-    emit("update_coin_count", {"count": coin_value_sum})
+    emit("update_coin_count", {"count": coin_value_sum}) # For current transaction
+    
+    # Also emit initial hopper balance
+    hopper_status = HopperStatus.query.first()
+    if hopper_status:
+        emit("hopper_balance_update", {"balance": hopper_status.balance})
 
-def update_coin_count(count):
+def update_coin_count(count): # This count is for current transaction coins
     socketio.emit("update_coin_count", {"count": count})
 
 @socketio.on("confirm_gcash_payment")
 def handle_confirm_gcash_payment(data):
-    global expected_gcash_amount, gcash_print_options
+    global expected_gcash_amount, gcash_print_options, gsm_active
     try:
         expected_gcash_amount = float(data.get('totalPrice', 0.0))
-        gcash_print_options = data.get('printOptions', None)
-        print(f"GCash payment details received via SocketIO. Expected amount: ₱{expected_gcash_amount}. Print options received: {'Yes' if gcash_print_options else 'No'}")
-        emit("gcash_payment_initiated", {"success": True, "message": "Waiting for payment confirmation via SMS."})
+        gcash_print_options = data.get('printOptions', None) # This should contain filename, copies, etc.
+        
+        if expected_gcash_amount > 0 and gcash_print_options:
+            gsm_active = True # Activate GSM listening for this payment
+            print(f"GCash payment details received. Expected amount: ₱{expected_gcash_amount:.2f}. Print options captured. GSM listening activated.")
+            emit("gcash_payment_initiated", {"success": True, "message": "Waiting for GCash payment confirmation via SMS."})
+        else:
+            error_msg = "Invalid data for GCash payment initiation (amount or options missing)."
+            print(f"GCash SocketIO Error: {error_msg} - Data: {data}")
+            log_error_to_db(error_msg, source="confirm_gcash_payment_socket_invalid_data", details=str(data))
+            emit("gcash_payment_initiated", {"success": False, "message": error_msg})
+            
+    except ValueError as ve:
+        error_msg = f"Invalid total price format for GCash: {data.get('totalPrice')}"
+        print(error_msg)
+        log_error_to_db(error_msg, source="confirm_gcash_payment_socket_value_error", details=str(ve))
+        emit("gcash_payment_initiated", {"success": False, "message": error_msg})
     except Exception as e:
         error_msg = f"Error receiving GCash payment details via SocketIO: {e}"
         print(error_msg)
-        log_error_to_db(error_msg, source="confirm_gcash_payment_socket", details=str(e))
-        emit("gcash_payment_initiated", {"success": False, "message": error_msg})
+        log_error_to_db(error_msg, source="confirm_gcash_payment_socket_exception", details=str(e))
+        emit("gcash_payment_initiated", {"success": False, "message": "Server error during GCash setup."})
 
 def record_transaction(method, amount):
     try:
-        transaction = Transaction(method=method, amount=amount)
+        transaction = Transaction(method=method, amount=amount, timestamp=datetime.utcnow()) # Use UTC now
         db.session.add(transaction)
         db.session.commit()
+        # Emit to update admin dashboard or transaction logs in real-time
         socketio.emit('new_transaction', {
             'method': method,
             'amount': amount,
-            'timestamp': transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': transaction.timestamp.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %I:%M:%S %p') # Convert to PHT for display
         })
+        print(f"Transaction Recorded: {method} - ₱{amount:.2f}")
     except Exception as e:
         db.session.rollback()
         error_msg = f"Failed to record transaction: {e}"
         print(error_msg)
         log_error_to_db(error_msg, source="record_transaction", details=str(e))
 
+def update_hopper_balance_in_db(change_dispensed_float):
+    """
+    Updates the hopper balance in the database.
+    Returns a tuple (success_boolean, new_balance_float).
+    """
+    with app.app_context(): # <--- ADD THIS WRAPPER
+        try:
+            hopper_status = HopperStatus.query.first()
+            if not hopper_status:
+                print("[HOPPER_DB_ERROR] HopperStatus entry not found in database. Re-initializing.")
+                # Log this critical error. Since we are already in app_context, log_error_to_db should work.
+                # However, if log_error_to_db itself causes issues, this needs careful handling.
+                # For now, we assume log_error_to_db will also be context-aware or wrapped.
+
+                # Fallback: Create if missing (though this points to an earlier init problem)
+                hopper_status = HopperStatus(balance=200.00 - change_dispensed_float) # Start from initial if it was lost
+                db.session.add(hopper_status)
+                # No need to call log_error_to_db here for "not found" if we're creating it.
+                # But it's good to log that this fallback was triggered.
+                print("INFO: HopperStatus was re-initialized in update_hopper_balance_in_db.")
+
+
+            current_balance = hopper_status.balance
+            if current_balance >= change_dispensed_float:
+                hopper_status.balance -= change_dispensed_float
+                db.session.commit()
+                new_balance = hopper_status.balance
+                print(f"[HOPPER_DB] Dispensed ₱{change_dispensed_float:.2f}. DB Remaining balance: ₱{new_balance:.2f}")
+                # SocketIO emits should generally be fine outside, but if they use app context, they also need it.
+                # For Flask-SocketIO, emit() itself often handles context for socket operations.
+                socketio.emit("hopper_balance_update", {"balance": new_balance})
+                return True, new_balance
+            else:
+                print(f"[HOPPER_DB] Insufficient balance (₱{current_balance:.2f}) to dispense ₱{change_dispensed_float:.2f}.")
+                socketio.emit("hopper_balance_update", {"balance": current_balance})
+                socketio.emit("change_error", {"message": f"Insufficient change in hopper. Available: ₱{current_balance:.2f}"})
+                return False, current_balance
+        except Exception as e:
+            db.session.rollback()
+            error_msg = f"Error updating hopper balance in DB: {e}"
+            print(error_msg)
+            # log_error_to_db will be called by the main loop if this exception propagates
+            # or handle logging directly if preferred and ensure it's context-aware
+            # For now, let the exception propagate to be caught by read_coin_slot_data's handler
+            # which will then call log_error_to_db (which also needs context)
+
+            # Try to emit the last known balance or a zero balance on error
+            last_known_balance = 0.0
+            hs_check = HopperStatus.query.first() # This query also needs context
+            if hs_check:
+                last_known_balance = hs_check.balance
+            socketio.emit("hopper_balance_update", {"balance": last_known_balance})
+            # Re-raise the exception so it's caught by the caller, which will log it.
+            raise 
+
+# Add this route to your app.py
+
+@app.route('/api/set_hopper_balance', methods=['POST'])
+def set_hopper_balance_api(): # Renamed to avoid conflict if you have set_hopper_balance elsewhere
+    data = request.get_json()
+    if data is None or 'new_balance' not in data:
+        return jsonify({"success": False, "message": "Invalid request. 'new_balance' is required."}), 400
+
+    try:
+        new_balance_val = float(data['new_balance'])
+        if new_balance_val < 0: # Basic validation
+            return jsonify({"success": False, "message": "Balance cannot be negative."}), 400
+
+        hopper_status = HopperStatus.query.first()
+        if not hopper_status:
+            # This is a fallback, ideally, the status should always exist after app startup.
+            hopper_status = HopperStatus(balance=new_balance_val)
+            db.session.add(hopper_status)
+            log_error_to_db("HopperStatus entry not found during manual set, created new one.", 
+                            source="set_hopper_balance_api", 
+                            details=f"Set to {new_balance_val}")
+        else:
+            hopper_status.balance = new_balance_val
+
+        db.session.commit()
+        print(f"[HOPPER_DB_ADMIN] Hopper balance manually set to: ₱{new_balance_val:.2f}")
+        
+        # Emit update to all connected clients so their dashboards reflect the change
+        socketio.emit("hopper_balance_update", {"balance": new_balance_val})
+        
+        return jsonify({"success": True, "message": "Hopper balance updated successfully.", "new_balance": new_balance_val}), 200
+
+    except ValueError:
+        return jsonify({"success": False, "message": "Invalid balance format. Must be a number."}), 400
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f"Error updating hopper balance in DB via API: {e}"
+        print(error_msg)
+        log_error_to_db(error_msg, source="set_hopper_balance_api_exception", details=str(e))
+        return jsonify({"success": False, "message": "Server error while updating balance."}), 500
+    
 @app.route('/api/clear_downloads_folder', methods=['POST'])
 def clear_downloads_folder_route():
     global DOWNLOADS_DIR
@@ -836,7 +966,6 @@ def docx_to_images(file_path):
         pythoncom.CoUninitialize()
 
 def parse_page_selection(selection, total_pages):
-    import re
     pages = set()
     if not selection:
         return list(range(total_pages))
@@ -1021,16 +1150,26 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all() #
-    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0 #
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
+    total_sales_query = db.session.query(func.sum(Transaction.amount)).scalar()
+    total_sales = total_sales_query or 0.0
 
-    gcash_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0 #
-    coinslot_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0 #
+    gcash_total_query = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar()
+    gcash_total = gcash_total_query or 0.0
 
-    total_files_in_db = db.session.query(func.count(UploadedFile.id)).scalar() or 0 #
-    total_pages_in_db = db.session.query(func.sum(UploadedFile.pages)).scalar() or 0 #
+    coinslot_total_query = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar()
+    coinslot_total = coinslot_total_query or 0.0
 
-    # --- New: Fetch and prepare sales data for the "Sales in Year" bar chart ---
+    total_files_in_db_query = db.session.query(func.count(UploadedFile.id)).scalar()
+    total_files_in_db = total_files_in_db_query or 0
+
+    total_pages_in_db_query = db.session.query(func.sum(UploadedFile.pages)).scalar()
+    total_pages_in_db = total_pages_in_db_query or 0
+
+    # Fetch current hopper balance from DB
+    hopper_status_entry = HopperStatus.query.first()
+    current_hopper_balance_val = hopper_status_entry.balance if hopper_status_entry else 0.0
+
     current_year = datetime.now().year
     monthly_sales_data = db.session.query(
         extract('month', Transaction.timestamp).label('sales_month'),
@@ -1041,33 +1180,37 @@ def admin_dashboard():
      .all()
 
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    sales_chart_values = [0.0] * 12 # Initialize with zeros for all 12 months
+    sales_chart_values = [0.0] * 12 
 
     for sale in monthly_sales_data:
-        month_index = int(sale.sales_month) - 1 # Month is 1-indexed from query
-        if 0 <= month_index < 12: # Ensure month_index is valid
-            sales_chart_values[month_index] = round(float(sale.monthly_total), 2)
-    # --- End of new sales data preparation ---
+        month_index = int(sale.sales_month) - 1 
+        if 0 <= month_index < 12: 
+            sales_chart_values[month_index] = round(float(sale.monthly_total or 0.0), 2)
+    
+    pht = timezone(timedelta(hours=8))
+    sales_history_formatted = []
+    for t in transactions:
+        aware_utc_timestamp = t.timestamp.replace(tzinfo=timezone.utc)
+        pht_timestamp = aware_utc_timestamp.astimezone(pht)
+        sales_history_formatted.append({
+            "method": t.method,
+            "amount": t.amount,
+            "date": pht_timestamp.strftime('%Y-%m-%d'),
+            "time": pht_timestamp.strftime('%I:%M %p') # Using AM/PM
+        })
+
 
     data = {
-        "total_sales": total_sales, #
-        "printed_pages": total_pages_in_db, #
-        "files_uploaded": total_files_in_db, #
-        "current_balance": 200, # This is still the hardcoded value from your existing code
-        "sales_history": [ #
-            {
-                "method": t.method,
-                "amount": t.amount,
-                "date": t.timestamp.strftime('%Y-%m-%d'),
-                "time": t.timestamp.strftime('%H:%M:%S')
-            } for t in transactions
-        ],
-        # MODIFIED: Use new dynamic sales data for the chart
+        "total_sales": round(total_sales, 2),
+        "printed_pages": total_pages_in_db,
+        "files_uploaded": total_files_in_db,
+        "current_balance": round(current_hopper_balance_val, 2), # Use DB value
+        "sales_history": sales_history_formatted,
         "sales_chart_labels": month_names,
         "sales_chart_values": sales_chart_values,
-        "transaction_method_summary": { #
-            "gcash": round(gcash_total),
-            "coinslot": round(coinslot_total)
+        "transaction_method_summary": {
+            "gcash": round(gcash_total, 2),
+            "coinslot": round(coinslot_total, 2)
         }
     }
     return render_template("admin-dashboard.html", data=data)
@@ -1158,7 +1301,10 @@ def printer_status_api():
 
 @app.route("/admin-balance")
 def admin_balance():
-    return render_template("admin-balance.html")
+    hopper_status = HopperStatus.query.first()
+    current_hopper_balance = hopper_status.balance if hopper_status else 0.0
+    # You might want to pass other balance-related info if available
+    return render_template("admin-balance.html", current_hopper_balance=round(current_hopper_balance, 2))
 
 @app.route("/admin-feedbacks")
 def admin_feedbacks():
@@ -1236,44 +1382,57 @@ def online_upload():
 @app.route("/payment")
 def payment_page():
     global coin_detection_active, coin_slot_serial, coin_value_sum
-    coin_value_sum = 0
-    socketio.emit('update_coin_count', {'count': coin_value_sum})
-    coin_detection_active = True
-    print("Coin detection activated for payment. Reset and fresh cycle.")
+    
+    coin_value_sum = 0  # Reset for the new transaction payment attempt
+    socketio.emit('update_coin_count', {'count': coin_value_sum}) # Update UI to show 0 for this transaction
+    coin_detection_active = True # Activate detection for this payment attempt
+    print(f"Payment page loaded. Transaction coin sum reset. Coin detection activated for {COIN_SLOT_PORT}.")
 
-    try:
-        if coin_slot_serial and coin_slot_serial.is_open:
+    # Ensure serial port is fresh for this payment attempt
+    if coin_slot_serial and coin_slot_serial.is_open:
+        try:
             coin_slot_serial.close()
-            print("Closed stale coin-serial port for fresh open.")
-    except Exception as e:
-        print(f"Warning closing stale serial port for payment page: {e}")
+            print(f"Closed existing serial port {COIN_SLOT_PORT} before reopening for payment page.")
+        except Exception as e:
+            print(f"Warning: Error closing serial port {COIN_SLOT_PORT} on payment page load: {e}")
+        coin_slot_serial = None # Ensure it attempts to reopen
 
-    try:
-        coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-        time.sleep(2)
-        print(f"Re-opened serial port {COIN_SLOT_PORT} for new payment cycle.")
-    except Exception as e:
-        error_msg = f"Error reopening serial port {COIN_SLOT_PORT} for payment: {e}"
-        print(error_msg)
-        log_error_to_db(error_msg, source="payment_page_serial_reopen", details=str(e))
+    # The read_coin_slot_data thread will attempt to reopen it since coin_detection_active is true.
+    # However, for sending the price immediately, we might want to open it here.
+    # Let's rely on the background thread for now to avoid contention,
+    # or ensure that opening here is safe.
+    # For now, we assume read_coin_slot_data will handle the re-opening.
+    # If price needs to be sent *before* read_coin_slot_data reopens, it might fail.
 
     price_to_send_str = request.args.get('price')
-    if price_to_send_str and coin_slot_serial and coin_slot_serial.is_open:
+    if price_to_send_str:
         try:
-            price_to_send = int(price_to_send_str)
-            coin_slot_serial.write(f"{price_to_send}\n".encode())
-            print(f"Price {price_to_send} sent to Arduino from /payment route.")
+            price_to_send = int(float(price_to_send_str)) # Ensure it's an int
+            # Attempt to send price - this requires coin_slot_serial to be open
+            # This part might be tricky if the port isn't guaranteed to be open by read_coin_slot_data yet.
+            # A robust way is to queue this command or ensure port is open.
+            # For simplicity now, we'll try, but it might need refinement.
+            if coin_slot_serial and coin_slot_serial.is_open: # Check again
+                 coin_slot_serial.write(f"{price_to_send}\n".encode('utf-8'))
+                 print(f"Price ₱{price_to_send} sent to Arduino from /payment route.")
+            else:
+                print(f"Serial port {COIN_SLOT_PORT} not immediately available to send price. Background task should open it.")
+                # Optionally, store price_to_send and let read_coin_slot_data send it once port opens.
+        except ValueError:
+            print(f"Invalid price format received in /payment URL: {price_to_send_str}")
+            log_error_to_db(f"Invalid price in /payment URL: {price_to_send_str}", "payment_page_price_format")
         except Exception as e:
-            error_msg = f"Error sending price to Arduino in /payment fresh cycle: {e}"
+            error_msg = f"Error sending price to Arduino in /payment route: {e}"
             print(error_msg)
             log_error_to_db(error_msg, source="payment_page_send_price", details=str(e))
-    elif not price_to_send_str:
-        print("No price parameter received in /payment URL.")
-        log_error_to_db("No price parameter in /payment URL.", source="payment_page_no_price")
-    elif not (coin_slot_serial and coin_slot_serial.is_open):
-        print(f"Cannot send price, serial port {COIN_SLOT_PORT} is not open.")
+    else:
+        print("No 'price' parameter in /payment URL, or price is zero.")
+        # log_error_to_db("No price parameter in /payment URL.", source="payment_page_no_price") # Can be spammy
 
-    return render_template("payment.html")
+    # Pass current hopper balance to payment page if needed
+    hopper_status_db = HopperStatus.query.first()
+    current_hopper_bal = hopper_status_db.balance if hopper_status_db else 0.0
+    return render_template("payment.html", total_price_to_pay=request.args.get('price', '0'), current_hopper_balance=f"{current_hopper_bal:.2f}")
 
 @app.route("/stop_coin_detection", methods=["POST"])
 def stop_coin_detection():
@@ -1599,73 +1758,129 @@ def determine_orientation(image, user_orientation):
 
 
 def read_coin_slot_data():
-    global coin_value_sum, coin_detection_active, coin_slot_serial
+    global coin_value_sum, coin_detection_active, coin_slot_serial 
 
     while True:
-        if not coin_detection_active:
+        if not coin_detection_active: 
             if coin_slot_serial and coin_slot_serial.is_open:
                 try:
                     coin_slot_serial.close()
-                    print(f"Closed serial port {COIN_SLOT_PORT} for coin slot.")
                 except Exception as e:
-                    print(f"Error closing serial port {COIN_SLOT_PORT}: {e}")
+                    print(f"Error closing serial port {COIN_SLOT_PORT} (inactive): {e}")
                 coin_slot_serial = None
-            time.sleep(1)
+            time.sleep(1) 
             continue
 
         if coin_slot_serial is None or not coin_slot_serial.is_open:
-            try:
-                coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
-                print(f"Successfully opened serial port {COIN_SLOT_PORT} for coin slot.")
-                time.sleep(2)
-            except serial.SerialException as e:
-                print(f"Error opening serial port {COIN_SLOT_PORT} for coin slot: {e}")
-                coin_slot_serial = None
-                time.sleep(5)
-                continue
-
+            if coin_detection_active: 
+                try:
+                    print(f"Attempting to open serial port {COIN_SLOT_PORT} for coin slot...")
+                    coin_slot_serial = serial.Serial(COIN_SLOT_PORT, BAUD_RATE, timeout=1)
+                    print(f"Successfully opened serial port {COIN_SLOT_PORT} for coin slot.")
+                    time.sleep(2) 
+                except serial.SerialException as e:
+                    # Log this error less frequently if it becomes spammy
+                    # print(f"Error opening/re-opening serial port {COIN_SLOT_PORT} for coin slot: {e}. Will retry.")
+                    coin_slot_serial = None 
+                    time.sleep(5) 
+                except Exception as e_gen:
+                    print(f"Generic error opening serial port {COIN_SLOT_PORT}: {e_gen}")
+                    log_error_to_db(f"Generic error opening {COIN_SLOT_PORT}: {e_gen}", "read_coin_slot_data_serial_generic_open", str(e_gen))
+                    coin_slot_serial = None
+                    time.sleep(5)
+            continue 
 
         if coin_slot_serial and coin_slot_serial.is_open and coin_slot_serial.in_waiting > 0:
             try:
-                message = coin_slot_serial.readline().decode('utf-8').strip()
+                message = coin_slot_serial.readline().decode('utf-8', errors='ignore').strip()
                 if message:
-                    print(f"Received from Arduino (COM6): {message}")
-                    if message.startswith("Detected coin worth ₱"):
+                    print(f"Received from Arduino ({COIN_SLOT_PORT}): {message}") # Log the raw message
+
+                    # Handle the new "Payment complete. Change to dispense: ₱X" message
+                    if "Payment complete. Change to dispense: ₱" in message:
                         try:
-                            match = re.search(r"Detected coin worth ₱(\d+)", message)
+                            match = re.search(r"Change to dispense: ₱(\d+\.?\d*)", message)
                             if match:
-                                value = int(match.group(1))
-                                coin_value_sum += value
-                                print(f"Coin inserted: ₱{value}, Total coins inserted: ₱{coin_value_sum}")
-                                socketio.emit('update_coin_count', {'count': coin_value_sum})
+                                change_amount_str = match.group(1)
+                                change_amount_val = float(change_amount_str)
+                                
+                                print(f"Parsed change amount: ₱{change_amount_val:.2f} from message: '{message}'")
+                                
+                                if change_amount_val >= 0: # Allow 0 change, though typically > 0 for actual dispensing
+                                    # If change_amount_val is 0, update_hopper_balance_in_db will do nothing to the balance
+                                    # but it's good to log and emit state if necessary.
+                                    success, new_balance = update_hopper_balance_in_db(change_amount_val)
+                                    if success: # True if balance was sufficient (even for 0 change) or updated
+                                        socketio.emit("change_dispensed", {"amount": change_amount_val, "new_hopper_balance": new_balance})
+                                        print(f"Hopper balance process initiated for dispensing ₱{change_amount_val:.2f}. New DB balance: ₱{new_balance:.2f}")
+                                    # else: update_hopper_balance_in_db handles insufficient balance logging and socket emission
+                                else:
+                                    print(f"Received negative change amount from message: '{message}'. Not processing.")
+                                    log_error_to_db(f"Negative change amount: {message}", "read_coin_slot_data_neg_change")
+                            else:
+                                print(f"Could not parse change amount from payment complete message: '{message}'")
+                                log_error_to_db(f"Could not parse change from payment complete msg: {message}", "read_coin_slot_data_change_parse_new_fmt")
+                        except ValueError as ve:
+                            print(f"ValueError parsing change amount from message '{message}': {ve}")
+                            log_error_to_db(f"ValueError parsing change: {message}", "read_coin_slot_data_change_value_error_new_fmt", str(ve))
+                        except Exception as e_change_proc:
+                            print(f"Error processing 'Payment complete' message '{message}': {e_change_proc}")
+                            log_error_to_db(f"Error processing 'Payment complete' msg: {message}", "read_coin_slot_data_change_processing_new_fmt", str(e_change_proc))
+                    
+                    # Handle coin insertion
+                    elif message.startswith("Detected coin worth ₱"):
+                        try:
+                            match_coin = re.search(r"₱(\d+)", message) # Assumes whole number coin values
+                            if match_coin:
+                                value = int(match_coin.group(1))
+                                coin_value_sum += value # This is for the current transaction's coin sum
+                                print(f"Coin inserted: ₱{value}, Current Transaction Total: ₱{coin_value_sum}")
+                                socketio.emit('update_coin_count', {'count': coin_value_sum}) 
                             else:
                                 print(f"Could not parse coin value from serial message: {message}")
-
                         except ValueError:
-                            print(f"Error: Could not convert extracted coin value to integer from COM6 message: {message}.")
-                    elif message.startswith("Unknown coin"):
-                        print(f"Warning from COM6: {message}")
-                    elif message == "PRINTING":
-                         socketio.emit("printer_status", {"status": "Printing"})
-                    elif message.startswith("CHANGE:"):
+                            print(f"Error: Could not convert extracted coin value from '{message}'.")
+                            log_error_to_db(f"Coin value conversion error: {message}", "read_coin_slot_data_coin_value")
+                    
+                    # Optional: Handle old "CHANGE:" format if still needed (can be removed if fully deprecated)
+                    elif message.startswith("CHANGE:"): 
                          try:
-                              amt = int(message.split(":")[1])
-                              socketio.emit("change_dispensed", {"amount": amt})
-                         except ValueError:
-                              print(f"Could not parse change amount from serial: {message}")
+                              change_amount_str = message.split(":")[1].strip()
+                              change_amount_val = float(change_amount_str)
+                              if change_amount_val > 0:
+                                  print(f"Arduino signaled dispensing change (OLD FORMAT) of: ₱{change_amount_val:.2f}")
+                                  success, new_balance = update_hopper_balance_in_db(change_amount_val)
+                                  if success:
+                                      socketio.emit("change_dispensed", {"amount": change_amount_val, "new_hopper_balance": new_balance})
+                              else:
+                                  print(f"Received non-positive change amount (OLD FORMAT): {change_amount_val}")
+                         except (IndexError, ValueError) as e_parse_old:
+                              print(f"Could not parse change amount from serial message (OLD FORMAT) '{message}': {e_parse_old}")
+                              log_error_to_db(f"Could not parse change (OLD FORMAT): {message}", "read_coin_slot_data_change_parse_old", str(e_parse_old))
+                    
+                    elif message.startswith("Unknown coin"):
+                        print(f"Warning from Arduino ({COIN_SLOT_PORT}): {message}")
+                    
+                    elif message == "PRINTING": # Assuming Arduino might send this, or printer monitor handles it
+                         socketio.emit("printer_status", {"status": "Printing"}) 
+                    
+                    # Add other specific message handlings here if needed
 
             except UnicodeDecodeError:
-                print("Error decoding serial data from COM6.")
+                print(f"Error decoding serial data from {COIN_SLOT_PORT}.")
+                log_error_to_db(f"UnicodeDecodeError on {COIN_SLOT_PORT}", "read_coin_slot_data_unicode")
             except serial.SerialException as e:
-                print(f"Serial error on {COIN_SLOT_PORT}: {e}")
+                print(f"Serial error on {COIN_SLOT_PORT}: {e}. Closing port.")
+                log_error_to_db(f"Serial error on {COIN_SLOT_PORT}: {e}", "read_coin_slot_data_serial_exception", details=str(e))
                 if coin_slot_serial and coin_slot_serial.is_open:
-                    try:
-                        coin_slot_serial.close()
-                        print(f"Closed serial port {COIN_SLOT_PORT} due to error.")
-                    except Exception as close_e:
-                         print(f"Error closing serial port {COIN_SLOT_PORT}: {close_e}")
-                coin_slot_serial = None
-                time.sleep(5)
+                    try: coin_slot_serial.close()
+                    except: pass 
+                coin_slot_serial = None 
+                time.sleep(5) 
+            except Exception as e_read_loop:
+                print(f"Unexpected error in read_coin_slot_data loop: {e_read_loop}")
+                log_error_to_db(f"Unexpected error in coin slot reader: {e_read_loop}", "read_coin_slot_data_loop_exc", details=str(e_read_loop))
+                time.sleep(1) # Brief pause before continuing loop
 
         time.sleep(0.05)
 
@@ -2079,10 +2294,9 @@ if __name__ == "__main__":
         printer_name = win32print.GetDefaultPrinter()
         print(f"Default printer set to: {printer_name}")
     except Exception as e:
-        print(f"Error getting default printer: {e}. Printer status monitoring may not work.")
+        print(f"CRITICAL: Error getting default printer: {e}. Printer status monitoring WILL NOT WORK.")
+        log_error_to_db(f"Failed to get default printer: {e}", "main_get_printer", critical=True)
         printer_name = None
-
-    # activity_log = [] # This global is not used effectively if ErrorLog is the main log.
 
     upload_folder = app.config['UPLOAD_FOLDER']
 
