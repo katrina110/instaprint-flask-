@@ -1015,7 +1015,7 @@
               fileName: currentUploadedFileName,
               originalDownloadName: originalSelectedDownloadName
           };
-          sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(opts));
+          sessionStorage.setItem("printOptions", JSON.stringify(opts));
 
           console.log("Continue button clicked. Attempting to clear server's downloads folder...");
           preloader.addClass("active"); // Show preloader while this happens

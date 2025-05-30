@@ -305,7 +305,8 @@
 
         function refreshUI(options) {
           if (!options || !options.fileName) {
-            console.error("Print options not found in sessionStorage or fileName is missing. Key: printOptionsInstaprint", options);
+            // MODIFIED: Changed key in console error message
+            console.error("Print options not found in sessionStorage or fileName is missing. Key: printOptions", options);
             alert("Error: Print options are missing. Please start over from the upload page.");
             document.getElementById("printDetails").innerHTML = "<p class='text-danger'>Could not load print details.</p>";
             document.getElementById("previewContainer").innerHTML = "";
@@ -330,8 +331,6 @@
           document.getElementById("editNumCopies").value = options.numCopies || 1;
           document.getElementById("editOrientationOption").value = options.orientationOption || "auto";
           document.getElementById("editPageSize").value = "Short"; // Always set to Short
-          // The 'disabled' attribute is already set in HTML, but you could also enforce it here if needed:
-          // document.getElementById("editPageSize").disabled = true;
           document.getElementById("editColorOption").value = options.colorOption || "Color";
 
           fetch("/preview_with_price", {
@@ -424,7 +423,8 @@
             });
         }
         
-        let opts = JSON.parse(sessionStorage.getItem("printOptionsInstaprint")) || {};
+        // MODIFIED: Changed key for getItem
+        let opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
         refreshUI(opts);
 
         document.getElementById("editForm").addEventListener("submit", (e) => {
@@ -439,7 +439,8 @@
             colorOption: document.getElementById("editColorOption").value,
           };
           opts = updated; 
-          sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(updated)); 
+          // MODIFIED: Changed key for setItem
+          sessionStorage.setItem("printOptions", JSON.stringify(updated)); 
           refreshUI(updated);
           $("#editModal").modal("hide");
         });
@@ -456,7 +457,8 @@
             }
             sessionStorage.setItem("totalPrice", currentPrice.toFixed(2));
             sessionStorage.setItem("previews", JSON.stringify(previewsData)); 
-            sessionStorage.setItem("printOptionsInstaprint", JSON.stringify(opts)); 
+            // MODIFIED: Changed key for setItem
+            sessionStorage.setItem("printOptions", JSON.stringify(opts)); 
             window.location.href = "{{ url_for('payment_type') }}"; 
         });
 

@@ -1721,12 +1721,18 @@ def get_coin_count():
 
 @app.route('/gcash-payment')
 def gcash_payment():
-    global gsm_active, expected_gcash_amount, gcash_print_options
+    global gsm_active, expected_gcash_amount, gcash_print_options # Ensure globals are referenced
     try:
         gsm_active = True
         print("GSM detection activated for GCash payment page.")
-        expected_gcash_amount = 0.0
-        gcash_print_options = None
+        
+        # REMOVE OR COMMENT OUT THE FOLLOWING TWO LINES:
+        # expected_gcash_amount = 0.0  # This line resets the amount
+        # gcash_print_options = None # This line resets the print options, causing the error
+
+        # Add a log to check the status of these variables when the page loads
+        print(f"GCash payment page loaded. Current expected amount: {expected_gcash_amount}, Print Options Set: {'Yes' if gcash_print_options else 'No'}")
+
         return render_template('gcash-payment.html')
     except Exception as e:
         error_msg = f"Error in /gcash-payment route: {e}"
