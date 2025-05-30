@@ -114,8 +114,50 @@ gsm_active = False # Flag to control GSM detection for COM12
 # Define COM ports and baud rate for both Arduinos
 COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM12'
+gsm_active = True
 MOTOR_PORT = 'COM15'
 BAUD_RATE = 9600
+GSM_ALERT_RECIPIENT_PHONE_NUMBER = "+639276784465"
+
+def send_command_to_gsm_arduino(command_to_send, timestamp_str):
+    # This function no longer uses global gsm_serial or gsm_active for its operation,
+    # as it manages the port independently for sending alerts.
+    global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER
+
+    # Sanitize timestamp_str to remove potential problematic characters for our command format
+    safe_timestamp_str = timestamp_str.replace(":", "-").replace("\n", " ")
+
+    # Command format: COMMAND:RECIPIENT_PHONE_NUMBER:TIMESTAMP_STRING\n
+    full_command = f"{command_to_send.strip()}:{GSM_ALERT_RECIPIENT_PHONE_NUMBER}:{safe_timestamp_str}\n"
+
+    temp_serial_for_alert = None  # Initialize to ensure it's defined for the finally block
+
+    try:
+        print(f"ALERT: Attempting to open port {GSM_PORT} for GSM alert command.")
+        # Open the serial port specifically for this alert
+        temp_serial_for_alert = serial.Serial(GSM_PORT, BAUD_RATE, timeout=2, write_timeout=2)
+
+        # IMPORTANT: Wait for Arduino to initialize/reset after serial connection is opened.
+        # Arduinos (especially those with certain USB-to-Serial chips) often reset.
+        time.sleep(2.5) # Increased slightly to 2.5s for potentially slower Arduino setups to be safe
+
+        print(f"ALERT: Port {GSM_PORT} opened. Sending command: {full_command.strip()}")
+        temp_serial_for_alert.write(full_command.encode('utf-8'))
+        temp_serial_for_alert.flush()  # Ensure all data is sent out of the buffer
+        print(f"Info: Alert command '{command_to_send.strip()}' with timestamp '{safe_timestamp_str}' sent to GSM module via {GSM_PORT}.")
+
+    except serial.SerialException as se:
+        print(f"CRITICAL_GSM_ALERT_FAILURE: SerialException during port open/write on {GSM_PORT} for alert: {se}")
+        # You might want to log this to a local file if database logging is also failing, to avoid error loops.
+    except Exception as e:
+        print(f"CRITICAL_GSM_ALERT_FAILURE: Generic Exception during port open/write for alert on {GSM_PORT}: {e}")
+    finally:
+        if temp_serial_for_alert and temp_serial_for_alert.is_open:
+            try:
+                temp_serial_for_alert.close()
+                print(f"ALERT: Port {GSM_PORT} used for alert command is now closed.")
+            except Exception as e_close:
+                print(f"Warning: Error closing port {GSM_PORT} after alert attempt: {e_close}")
 
 # Global variables to hold serial port objects
 coin_slot_serial = None
@@ -250,20 +292,34 @@ def generate_thumbnail_for_file(item_path_obj: Path, file_ext_without_dot: str, 
             except Exception as e_clean:
                 print(f"ERROR cleaning up temp PDF {temp_pdf_path_for_docx} for thumbnail: {e_clean}")
 
+# from datetime import datetime # Should be at the top of app.py
+
 def log_error_to_db(message, source=None, details=None):
     try:
-        error_entry = ErrorLog(
+        # Generate timestamp for the alert. Using local time with AM/PM for readability in SMS.
+        # You can use datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC") for UTC time.
+        alert_timestamp_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p") 
+
+        error_entry = ErrorLog( # Assuming ErrorLog model is defined
             message=str(message),
             source=str(source) if source else None,
             details=str(details) if details else None,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow() # Database timestamp typically stored in UTC
         )
-        db.session.add(error_entry)
+        db.session.add(error_entry) # Assuming db and SQLAlchemy setup
         db.session.commit()
         print(f"DB_ERROR_LOGGED: [{source or 'GENERAL'}] {message}")
+
+        # After successfully logging to DB, try to send SMS alert
+        send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_str)
+
     except Exception as e:
         db.session.rollback()
+        # Generate a timestamp for this specific failure as well
+        alert_timestamp_db_fail_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
         print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{source}] {message}")
+        # Still attempt to send an SMS alert even if DB logging failed, as this is critical
+        send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_db_fail_str)
 
 @socketio.on("connect")
 def send_initial_coin_count():
