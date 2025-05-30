@@ -350,3 +350,23 @@ h1 {
 .star.filled {
   color: #FFD700; /* gold */
 }
+
+::-webkit-scrollbar {
+    width: 12px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #202020;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #555555;
+    border-radius: 10px;
+    border: 2px solid #202020;
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: #6b6b6b;
+}

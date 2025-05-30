@@ -1045,20 +1045,21 @@ def log_activity_from_frontend_route():
 @app.route('/admin_activity_data')
 def get_error_logs_data_for_admin():
     try:
-        error_entries = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(200).all()
+        error_entries = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(200).all() #
         
         logs_data = []
         for entry in error_entries:
             logs_data.append({
-                'id': entry.id,
-                'timestamp': entry.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC'),
-                'source': entry.source or 'N/A',
-                'message': entry.message,
-                'details': entry.details or ''
+                'id': entry.id, #
+                'timestamp': entry.timestamp.strftime('%b %d, %Y, %I:%M %p'),
+                'source': entry.source or 'N/A', #
+                'message': entry.message, #
+                'details': entry.details or '' #
             })
         return jsonify(logs_data)
     except Exception as e:
         print(f"CRITICAL_ADMIN_ERROR: Failed to fetch error logs for admin display: {e}")
+        log_error_to_db(f"Failed to fetch error logs for admin display: {e}", "get_error_logs_data_for_admin", str(e))
         return jsonify({"error": "Failed to retrieve error logs from database.", "details": str(e)}), 500
 
 @app.route('/api/printer-status')
