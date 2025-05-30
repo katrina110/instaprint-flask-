@@ -51,14 +51,13 @@
                     <div class="files-file">File</div>
                     <div class="files-type">Type</div>
                     <div class="files-pages">Pages</div>
-                    <div class="files-time">Time</div>
-                </div>
+                    <div class="files-time">Timestamp</div> </div>
                 {% for files in uploaded %}
                 <div class="files-entry">
                     <div class="files-file">{{ files.file }}</div>
                     <div class="files-type">{{ files.type }}</div>
                     <div class="files-pages">{{ files.pages }}</div>
-                    <div class="files-time">{{ files.time }}</div>
+                    <div class="files-time">{{ files.timestamp_full }}</div> 
                 </div>
                 {% endfor %}
             </div>

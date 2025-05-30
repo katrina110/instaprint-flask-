@@ -1003,18 +1003,18 @@ def admin_dashboard():
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
-    all_uploaded_files = UploadedFile.query.order_by(UploadedFile.timestamp.desc()).all()
+    all_uploaded_files = UploadedFile.query.order_by(UploadedFile.timestamp.desc()).all() #
     
     formatted_files = []
     for uploaded_file_entry in all_uploaded_files:
         formatted_files.append({
-            'file': uploaded_file_entry.filename,
-            'type': uploaded_file_entry.file_type,
-            'pages': uploaded_file_entry.pages,
-            'timestamp_full': uploaded_file_entry.timestamp.strftime('%b %d, %Y, %I:%M %p') 
+            'file': uploaded_file_entry.filename, #
+            'type': uploaded_file_entry.file_type, #
+            'pages': uploaded_file_entry.pages, #
+            'timestamp_full': uploaded_file_entry.timestamp.strftime('%b %d, %Y, %I:%M %p')  #
         })
         
-    return render_template("admin-files-upload.html", uploaded=formatted_files)
+    return render_template("admin-files-upload.html", uploaded=formatted_files) #
 
 @app.route("/admin-activity-log")
 def admin_activity_log():
