@@ -25,61 +25,60 @@
       }
       .menu {
         flex-shrink: 0; /* Prevents the menu from shrinking */
-        /* Detailed menu styles like width, background-color, text styles, etc.,
-           are assumed to be in the shared /static/css/admin-dashboard.css */
       }
       .contents {
         flex-grow: 1; /* Allows the content area to take up the remaining space */
         padding: 20px;
       }
       .log-table {
-        margin-top: 0; /* Moved up by removing top margin */
+        margin-top: 0; 
         background-color: #fff;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        overflow: hidden; /* Ensures box-shadow is visible around rounded corners */
+        overflow: hidden; 
       }
-      .log-header, /* Added a header style in case you want to add a static one via JS */
+      .log-header,
       .log-entry {
         display: flex;
         border-bottom: 1px solid #eee;
       }
-      .log-header { /* Style for a potential static header row if you add one */
+      .log-header { 
         background-color: #f8f9fa; 
-        font-weight: bold;
-        color: #333;
+        font-weight: bold; /* This already makes header text bold */
+        color: black; /* Changed header text color to black */
       }
       .log-header > div,
       .log-entry > div {
         padding: 12px 15px;
-        text-align: left;
-        word-break: break-word; /* To prevent long unbroken strings from breaking layout */
+        text-align: left; /* Alignment is already left */
+        word-break: break-word; 
       }
       .log-entry:last-child {
         border-bottom: none;
       }
-      .log-date { /* Corresponds to Timestamp column */
+      .log-date { 
         flex: 0 0 200px; 
-        color: #555;
+        color: black; /* Changed to black */
       }
-      .log-source { /* Added for consistency if you wish to display it like other tables */
+      .log-source { 
           flex: 0 0 180px;
-          color: #555;
+          color: black; /* Changed to black */
       }
-      .log-event { /* Corresponds to Message column */
+      .log-event { 
         flex-grow: 1; 
-        color: #444;
-        cursor: pointer; /* Indicate it's clickable if details exist */
+        color: black; /* Changed to black */
+        cursor: pointer; 
       }
-      .log-details { /* Details column, initially hidden by JS */
-          flex-basis: 100%; /* Take full width when shown */
-          padding: 10px 15px 10px 30px; /* Indent details slightly */
+      .log-details { 
+          flex-basis: 100%; 
+          padding: 10px 15px 10px 30px; 
           background-color: #f9f9f9;
           border-top: 1px dashed #ddd;
-          margin-top: -1px; /* Align with bottom border of the main part of entry */
+          margin-top: -1px; 
           font-family: monospace;
-          white-space: pre-wrap; /* Preserve formatting of details */
-          display: none; /* Initially hidden */
+          white-space: pre-wrap; 
+          display: none; 
+          color: #333; /* Details can remain a slightly different color or also be black */
       }
       .no-logs {
           padding: 20px;
@@ -130,7 +129,7 @@
       <content class="contents">
         <div class="log-table" id="activityLogContainer">
             <div class="log-header" role="row">
-                <div class="log-date" role="columnheader">Timestamp</div>
+                <div class="log-date" role="columnheader"><b>Date/Time</b></div>
                 <div class="log-source" role="columnheader">Source</div>
                 <div class="log-event" role="columnheader">Message</div>
             </div>

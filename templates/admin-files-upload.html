@@ -15,13 +15,15 @@
             display: flex;
         }
         .menu {
-            flex-shrink: 0; /* Prevents the menu from shrinking if content is too wide */
-            /* Detailed menu styles like width, background-color, text styles, etc.,
-               are assumed to be in the shared /static/css/admin-dashboard.css */
+            flex-shrink: 0; 
         }
         .contents {
-            flex-grow: 1; /* Allows the content area to take up the remaining space */
-            padding: 20px; /* Adds padding to the content area */
+            flex-grow: 1; 
+            padding: 20px; 
+        }
+        /* Added style for files-header text */
+        .files-header > div {
+            font-weight: bold;
         }
     </style>
 </head>
@@ -50,7 +52,7 @@
                     <div class="files-file">File</div>
                     <div class="files-type">Type</div>
                     <div class="files-pages">Pages</div>
-                    <div class="files-time">Timestamp</div> </div>
+                    <div class="files-time">Date/Time</div> </div>
                 {% for files in uploaded %}
                 <div class="files-entry">
                     <div class="files-file">{{ files.file }}</div>

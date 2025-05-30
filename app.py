@@ -33,7 +33,7 @@ import json # Import json for parsing printOptions
 import re # Import regex for more robust parsing
 import math
 import win32api
-from sqlalchemy import func
+from sqlalchemy import extract, func
 from pathlib import Path
 import base64
 import shutil
@@ -969,23 +969,40 @@ def admin_user():
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
-    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0
-    
-    gcash_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0
-    coinslot_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0
+    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all() #
+    total_sales = db.session.query(func.sum(Transaction.amount)).scalar() or 0 #
 
-    # === New: Calculate totals from UploadedFile table ===
-    total_files_in_db = db.session.query(func.count(UploadedFile.id)).scalar() or 0
-    total_pages_in_db = db.session.query(func.sum(UploadedFile.pages)).scalar() or 0
-    # =====================================================
+    gcash_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar() or 0 #
+    coinslot_total = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar() or 0 #
+
+    total_files_in_db = db.session.query(func.count(UploadedFile.id)).scalar() or 0 #
+    total_pages_in_db = db.session.query(func.sum(UploadedFile.pages)).scalar() or 0 #
+
+    # --- New: Fetch and prepare sales data for the "Sales in Year" bar chart ---
+    current_year = datetime.now().year
+    monthly_sales_data = db.session.query(
+        extract('month', Transaction.timestamp).label('sales_month'),
+        func.sum(Transaction.amount).label('monthly_total')
+    ).filter(extract('year', Transaction.timestamp) == current_year)\
+     .group_by(extract('month', Transaction.timestamp))\
+     .order_by(extract('month', Transaction.timestamp))\
+     .all()
+
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    sales_chart_values = [0.0] * 12 # Initialize with zeros for all 12 months
+
+    for sale in monthly_sales_data:
+        month_index = int(sale.sales_month) - 1 # Month is 1-indexed from query
+        if 0 <= month_index < 12: # Ensure month_index is valid
+            sales_chart_values[month_index] = round(float(sale.monthly_total), 2)
+    # --- End of new sales data preparation ---
 
     data = {
-        "total_sales": total_sales,
-        "printed_pages": total_pages_in_db, # Use the new database-derived total
-        "files_uploaded": total_files_in_db, # Use the new database-derived total
+        "total_sales": total_sales, #
+        "printed_pages": total_pages_in_db, #
+        "files_uploaded": total_files_in_db, #
         "current_balance": 200, # This is still the hardcoded value from your existing code
-        "sales_history": [
+        "sales_history": [ #
             {
                 "method": t.method,
                 "amount": t.amount,
@@ -993,13 +1010,15 @@ def admin_dashboard():
                 "time": t.timestamp.strftime('%H:%M:%S')
             } for t in transactions
         ],
-        "sales_chart": [500, 600, 700, 800], # This is still the hardcoded value from your existing code
-        "transaction_method_summary": {
+        # MODIFIED: Use new dynamic sales data for the chart
+        "sales_chart_labels": month_names,
+        "sales_chart_values": sales_chart_values,
+        "transaction_method_summary": { #
             "gcash": round(gcash_total),
             "coinslot": round(coinslot_total)
         }
     }
-    return render_template("admin-dashboard.html", data=data) #
+    return render_template("admin-dashboard.html", data=data)
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
