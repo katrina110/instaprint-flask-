@@ -1,3 +1,256 @@
+// NEW CODE
+
+#include <SoftwareSerial.h>
+
+// Define the pins for SoftwareSerial (RX, TX)
+SoftwareSerial sim800(10, 11); // Arduino D10 (RX) -> SIM800L TX, Arduino D11 (TX) -> SIM800L RX
+
+// Buffers for incoming data - using char arrays instead of String
+const int CMD_BUFFER_SIZE = 100; // Max length for commands from Python
+char incomingPythonCmd[CMD_BUFFER_SIZE];
+int pythonCmdIdx = 0;
+
+const int SIM_RESPONSE_BUFFER_SIZE = 128; // Max length for lines from SIM800L
+char incomingSimDataLine[SIM_RESPONSE_BUFFER_SIZE];
+int simDataIdx = 0;
+
+bool waitingForGCRFSMSLine = false;
+
+void setup() {
+  Serial.begin(9600);
+  sim800.begin(9600);
+
+  Serial.println(F("Arduino Kiosk Controller Initializing (Memory Optimized)..."));
+  Serial.println(F("Initializing SIM800L... Please wait longer."));
+  delay(5000);
+
+  bool simReady = false;
+  char simResponseBuffer[SIM_RESPONSE_BUFFER_SIZE]; // Local buffer for AT responses
+
+  for (int i = 0; i < 5; i++) {
+    Serial.print(F("Attempting AT command (try ")); Serial.print(i + 1); Serial.println(F(")..."));
+    sim800.println(F("AT"));
+    delay(200);
+    readSimResponse(simResponseBuffer, SIM_RESPONSE_BUFFER_SIZE, 1500);
+    Serial.print(F("Response to AT: ")); Serial.println(simResponseBuffer);
+    if (strstr(simResponseBuffer, "OK") != NULL) {
+      simReady = true;
+      Serial.println(F("SIM800L responded OK to AT."));
+      break;
+    }
+    Serial.println(F("No OK from SIM800L, retrying..."));
+    delay(1500);
+  }
+
+  if (!simReady) {
+    Serial.println(F("CRITICAL: SIM800L did not respond correctly. Check power/wiring. Halting."));
+    while (true);
+  }
+
+  sendSimCommandAndCheck("ATE0", 1000, "OK");
+  sendSimCommandAndCheck("AT+CMGF=1", 1000, "OK");       // Set SMS mode to text
+  sendSimCommandAndCheck("AT+CNMI=2,2,0,0,0", 1000, "OK"); // Configure new SMS indications
+  sendSimCommandAndCheck("AT+CREG?", 2000, "+CREG: 0,1"); // Or check for "0,5" if roaming
+  sendSimCommandAndCheck("AT+CSQ", 1000, "+CSQ:");
+
+  Serial.println(F("SIM800L Initialized. Ready."));
+  Serial.println(F("----------------------------------------------------"));
+}
+
+void loop() {
+  // Listener 1: Commands from Python
+  if (Serial.available() > 0) {
+    char inChar = Serial.read();
+    if (inChar == '\n') {
+      incomingPythonCmd[pythonCmdIdx] = '\0'; // Null-terminate
+      Serial.print(F("PY->ARD: Received: \"")); Serial.print(incomingPythonCmd); Serial.println(F("\""));
+      processPythonCommand(incomingPythonCmd);
+      pythonCmdIdx = 0; // Reset for next command
+      memset(incomingPythonCmd, 0, CMD_BUFFER_SIZE); // Clear buffer
+    } else if (inChar != '\r') {
+      if (pythonCmdIdx < CMD_BUFFER_SIZE - 1) {
+        incomingPythonCmd[pythonCmdIdx++] = inChar;
+      } else {
+        Serial.println(F("ERR: Python cmd buffer overflow!"));
+        pythonCmdIdx = 0; // Reset
+        memset(incomingPythonCmd, 0, CMD_BUFFER_SIZE);
+      }
+    }
+  }
+
+  // Listener 2: Data from SIM800L
+  if (sim800.available() > 0) {
+    char inChar = sim800.read();
+    if (inChar == '\n') {
+      incomingSimDataLine[simDataIdx] = '\0'; // Null-terminate
+      if (simDataIdx > 0) { // Process if not empty
+        // Serial.print(F("SIM->ARD: ")); Serial.println(incomingSimDataLine); // Debug
+        if (strstr(incomingSimDataLine, "+CMT:") != NULL) {
+          waitingForGCRFSMSLine = true;
+          Serial.println(incomingSimDataLine); // Forward header to Python
+        } else if (waitingForGCRFSMSLine) {
+          Serial.println(incomingSimDataLine); // Forward SMS content to Python
+          waitingForGCRFSMSLine = false;
+        }
+      }
+      simDataIdx = 0; // Reset for next line
+      memset(incomingSimDataLine, 0, SIM_RESPONSE_BUFFER_SIZE);
+    } else if (inChar != '\r') {
+      if (simDataIdx < SIM_RESPONSE_BUFFER_SIZE - 1) {
+        incomingSimDataLine[simDataIdx++] = inChar;
+      }
+    }
+  }
+}
+
+void processPythonCommand(char* command) {
+  char* part1 = strtok(command, ":");
+  char* part2 = strtok(NULL, ":");
+  char* part3 = strtok(NULL, ":");
+
+  if (part1 == NULL || part2 == NULL || part3 == NULL) {
+    Serial.println(F("ARD ERR: Invalid command format. Expected CMD:RECIPIENT:PAYLOAD."));
+    return;
+  }
+
+  // Trim (basic version, more robust might be needed if spaces are an issue)
+  // For now, assuming Python sends trimmed data or AT commands are tolerant.
+  
+  if (strcmp(part1, "SEND_ERROR_SMS") == 0) {
+    sendErrorAlertSMS(part2, part3); // part2 is recipient, part3 is timestamp
+  } else if (strcmp(part1, "SEND_LOW_BALANCE_SMS") == 0) {
+    sendLowBalanceAlertSMS(part2, part3); // part2 is recipient, part3 is "LOW" placeholder
+  } else {
+    Serial.print(F("ARD WARN: Unknown command type: ")); Serial.println(part1);
+  }
+}
+
+void sendErrorAlertSMS(const char* recipientNumber, const char* eventTimestamp) {
+  Serial.print(F("ARD: Sending ERROR alert to: ")); Serial.println(recipientNumber);
+  char messageBody[160]; // SMS message buffer
+  strcpy(messageBody, "InstaPrint Alert\n\nThere has been an error with the kiosk. Please attend to it immediately.\n\nTimestamp: ");
+  strcat(messageBody, eventTimestamp);
+  sendSmsViaSim800L(recipientNumber, messageBody);
+}
+
+void sendLowBalanceAlertSMS(const char* recipientNumber, const char* placeholderPayload) {
+  Serial.print(F("ARD: Sending LOW BALANCE alert to: ")); Serial.println(recipientNumber);
+  Serial.print(F("ARD: Placeholder payload: ")); Serial.println(placeholderPayload);
+  // Fixed message, placeholderPayload is not used in the body
+  sendSmsViaSim800L(recipientNumber, "InstaPrint Alert\n\nThe balance of the coin hopper is low. Please refill its balance soon.");
+}
+
+void sendSmsViaSim800L(const char* recipientNumber, const char* messageBody) {
+  Serial.print(F("ARD: SMS Prep to ")); Serial.print(recipientNumber); Serial.println(F("..."));
+  
+  sim800.print(F("AT+CMGS=\""));
+  sim800.print(recipientNumber);
+  sim800.println(F("\""));
+
+  char simResponseBuffer[SIM_RESPONSE_BUFFER_SIZE];
+  readSimResponse(simResponseBuffer, SIM_RESPONSE_BUFFER_SIZE, 5000); // Wait for '>'
+
+  if (strchr(simResponseBuffer, '>') != NULL) {
+    Serial.println(F("ARD: Got '>' prompt. Sending SMS body..."));
+    sim800.print(messageBody);
+    delay(100);
+    sim800.write(26); // Ctrl+Z
+    delay(500);
+
+    Serial.println(F("ARD: SMS body sent. Waiting for +CMGS confirmation..."));
+    readSimResponse(simResponseBuffer, SIM_RESPONSE_BUFFER_SIZE, 20000); // Wait for +CMGS or ERROR
+    Serial.print(F("ARD: SMS Send Response: ")); Serial.println(simResponseBuffer);
+
+    if (strstr(simResponseBuffer, "+CMGS:") != NULL) {
+      Serial.println(F("ARD: SMS Sent Successfully!"));
+    } else {
+      Serial.println(F("ARD WARN: SMS Send Failed/Timed Out."));
+    }
+  } else {
+    Serial.print(F("ARD ERR: No '>' prompt. Response: ")); Serial.println(simResponseBuffer);
+  }
+  delay(500);
+  while (sim800.available()) sim800.read(); // Clear buffer
+}
+
+// Helper to read a response line from SIM800L into a buffer
+// Returns true if a line was read, false on timeout with no data
+bool readSimResponse(char* buffer, int bufferSize, unsigned long timeout) {
+  unsigned long startTime = millis();
+  int idx = 0;
+  memset(buffer, 0, bufferSize); // Clear buffer
+  while (millis() - startTime < timeout) {
+    if (sim800.available()) {
+      char c = sim800.read();
+      if (c == '\r') continue; // Ignore CR
+      if (c == '\n') {
+        if (idx > 0) { // If we have some data before newline
+            buffer[idx] = '\0'; // Null terminate
+            return true; // Line complete
+        }
+        // If it's just an empty line, continue waiting or timeout
+      } else if (idx < bufferSize - 1) {
+        buffer[idx++] = c;
+      }
+    }
+  }
+  buffer[idx] = '\0'; // Null terminate in case of timeout
+  return (idx > 0); // Return true if any data was read
+}
+
+// Helper function to send AT command and check for expected part in response
+bool sendSimCommandAndCheck(const char* cmd, unsigned long waitTime, const char* expectedResponsePart) {
+  Serial.print(F("ARD CMD -> SIM: ")); Serial.println(cmd);
+  sim800.println(cmd);
+  delay(200); // Give SIM800L a moment
+
+  char responseBuffer[SIM_RESPONSE_BUFFER_SIZE];
+  bool gotLine = false;
+  unsigned long overallStartTime = millis();
+  
+  // Try to read multiple lines if needed for the response, up to waitTime
+  while(millis() - overallStartTime < waitTime) {
+      if (readSimResponse(responseBuffer, SIM_RESPONSE_BUFFER_SIZE, 500)) { // Read one line with 500ms timeout
+          gotLine = true;
+          Serial.print(F("ARD RSP <- SIM: ")); Serial.println(responseBuffer);
+          if (strstr(responseBuffer, expectedResponsePart) != NULL) {
+              Serial.println(F(">>> Expected response part FOUND"));
+              Serial.println(F("----------------------------------------------------"));
+              return true;
+          }
+          if (strstr(responseBuffer, "ERROR") != NULL) {
+              Serial.println(F(">>> ERROR response received"));
+              break; // Stop if an error is clearly received
+          }
+      }
+      if (!sim800.available() && gotLine) break; // No more data and we got at least one line
+      if (!sim800.available() && !gotLine && (millis() - overallStartTime > 500) ) break; // No data at all for a while
+  }
+
+  Serial.println(F(">>> Expected response part NOT found or timeout."));
+  Serial.println(F("----------------------------------------------------"));
+  return false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// OLD CODE
 #include <SoftwareSerial.h>
 
 SoftwareSerial sim800(10, 11); // RX, TX
