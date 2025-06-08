@@ -383,12 +383,12 @@ input[type="text"] {
 }
 
 #exitButton {
-  background-color: #d9534f; /* Red for Exit */
+  background-color: #700000; /* Red for Exit */
   color: white;
 }
 
 #exitButton:hover {
-  background-color: #c9302c;
+  background-color: #8f231f;
 }
 
 #continueButton {
@@ -602,7 +602,7 @@ input[type="text"] {
   width: 100%;
   height: 100%;
   overflow: auto;
-  background-color: rgba(128, 0, 0, 0.5); /* Red with 50% transparency */
+  background-color: #700000; /* Red with 50% transparency */
   overflow: hidden;
 }
 
@@ -663,7 +663,7 @@ input[type="text"] {
   font-size: 20px; /* Increased font size */
   font-family: Arial, Helvetica, sans-serif;
   color: white;
-  background-color: #c15051;
+  background-color: #700000;
   border-radius: 25px; /* Increased border radius */
   cursor: pointer;
   border: none;
@@ -675,7 +675,7 @@ input[type="text"] {
   font-size: 20px; /* Increased font size */
   font-family: Arial, Helvetica, sans-serif;
   color: white;
-  background-color: #c15051;
+  background-color: #700000;
   border-radius: 25px; /* Increased border radius */
   cursor: pointer;
   border: none;
@@ -898,7 +898,7 @@ input[type="text"] {
 }
 
 #m3ExitButton {
-  background-color: #d9534f; /* Red for Exit */
+  background-color: #700000; /* Red for Exit */
   color: white;
 }
 
