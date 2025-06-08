@@ -47,4 +47,5 @@ html, body {
 .edit-btn {
     color: white;
     background-color: #700000;
+    border-radius: 25px;
 }

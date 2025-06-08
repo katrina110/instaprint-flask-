@@ -18,10 +18,15 @@
     font-size: 1rem;
     padding: 10px 15px;
   }
+
+  .btn {
+    border-radius: 25px;
+  }
   
   .btn-primary {
     background-color: #700000;
     border: none;
+    border-radius: 25px;
   }
   
   .btn-primary:hover {
@@ -32,7 +37,7 @@
     padding: 15px 20px;
     margin-bottom: 20px;
     background: #fff;
-    border-radius: 5px;
+    border-radius: 25px;
   }
   
   .step img {
@@ -41,13 +46,13 @@
   }
   
   .modal-content {
-    border-radius: 10px;
+    border-radius: 25px;
   }
   
   .modal-header {
     color: #fff;
-    border-top-left-radius: 10px;
-    border-top-right-radius: 10px;
+    border-top-left-radius: 25px;
+    border-top-right-radius: 25px;
   }
   
   .modal-body {
@@ -62,7 +67,7 @@
     border: 2px solid #007bff;
     padding: 10px;
     background: #fff;
-    border-radius: 5px;
+    border-radius: 25px;
   }
   
   .preview-page {
@@ -114,7 +119,7 @@
   align-items: center;
   padding: 10px 15px;
   border: 2px dashed #6c757d;
-  border-radius: 5px;
+  border-radius: 25px;
   background-color: #f8f9fa;
   color: #6c757d;
   cursor: pointer;
@@ -135,7 +140,7 @@
   background-color: #007bff;
   color: #ffffff;
   padding: 5px 10px;
-  border-radius: 3px;
+  border-radius: 25px;
   font-size: 14px;
   cursor: pointer;
   transition: background-color 0.3s;
