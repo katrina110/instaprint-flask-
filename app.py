@@ -126,9 +126,17 @@ gsm_active = False # Flag to control GSM detection for COM12
 COIN_SLOT_PORT = 'COM6'
 GSM_PORT = 'COM12'
 gsm_active = True
-MOTOR_PORT = 'COM15'
+MOTOR_PORT = 'COM4'
 BAUD_RATE = 9600
 GSM_ALERT_RECIPIENT_PHONE_NUMBER = "+639276784465"
+
+try:
+    arduino = serial.Serial(MOTOR_PORT, BAUD_RATE, timeout=1)
+    time.sleep(2)
+except Exception as e:
+    print(f"Motor Arduino error: {e}")
+    arduino = None
+
 
 def send_command_to_gsm_arduino(command_to_send, timestamp_str):
     # This function no longer uses global gsm_serial or gsm_active for its operation,
@@ -2121,24 +2129,25 @@ def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
             gray_doc.close()
 
 @app.route('/spin-motor/start', methods=['POST'])
-def spin_motor_start():
-    try:
-        # Assuming MOTOR_PORT is a serial object initialized elsewhere
-        MOTOR_PORT.write(b's')
-        print("[MOTOR] Start signal sent.")
-    except Exception as e:
-        print(f"[MOTOR ERROR] Failed to start motor: {e}")
-    return '', 204
+def start_motor():
+    if arduino and arduino.is_open:
+        try:
+            arduino.write(b's')
+            return '', 204
+        except Exception as e:
+            return f"Failed to start motor: {e}", 500
+    return "Arduino not available", 503
 
 @app.route('/spin-motor/stop', methods=['POST'])
-def spin_motor_stop():
-    try:
-        # Assuming MOTOR_PORT is a serial object initialized elsewhere
-        MOTOR_PORT.write(b'x')
-        print("[MOTOR] Stop signal sent.")
-    except Exception as e:
-        print(f"[MOTOR ERROR] Failed to stop motor: {e}")
-    return '', 204
+def stop_motor():
+    if arduino and arduino.is_open:
+        try:
+            arduino.write(b'x')
+            return '', 204
+        except Exception as e:
+            return f"Failed to stop motor: {e}", 500
+    return "Arduino not available", 503
+
 
 @app.route('/print_document', methods=['POST'])
 def print_document_route():

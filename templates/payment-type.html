@@ -139,7 +139,7 @@
         border-radius: 25px;
         text-align: center;
         position: relative;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
       }
 
       .close-button-span {
@@ -169,10 +169,10 @@
         border: none;
         border-radius: 25px;
         cursor: pointer;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         z-index: 999;
       }
-       #openFeedModalBtn:hover {
+      #openFeedModalBtn:hover {
         background-color: #700000;
       }
 
@@ -288,7 +288,8 @@
 
     <script>
       document.addEventListener("DOMContentLoaded", function () {
-        const totalPrice = parseFloat(sessionStorage.getItem("totalPrice")) || 0.0;
+        const totalPrice =
+          parseFloat(sessionStorage.getItem("totalPrice")) || 0.0;
         const gcashSection = document.getElementById("gcashSection");
         const gcashLogo = document.getElementById("gcashLogo");
         const gcashButton = document.getElementById("gcashButton");
@@ -323,23 +324,32 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ method: "Coinslot", amount: totalPrice }),
           })
-          .then(response => {
-            if (!response.ok) {
-              console.error("Background transaction record failed with status:", response.status);
-              return response.json().then(err => Promise.reject(err));
-            }
-            return response.json();
-          })
-          .then(data => {
-            if (data.success) {
-              console.log("Transaction recorded successfully (background).");
-            } else {
-              console.error("Failed to record transaction (background):", data.message);
-            }
-          })
-          .catch(error => {
-            console.error("Error sending transaction record (background):", error);
-          });
+            .then((response) => {
+              if (!response.ok) {
+                console.error(
+                  "Background transaction record failed with status:",
+                  response.status
+                );
+                return response.json().then((err) => Promise.reject(err));
+              }
+              return response.json();
+            })
+            .then((data) => {
+              if (data.success) {
+                console.log("Transaction recorded successfully (background).");
+              } else {
+                console.error(
+                  "Failed to record transaction (background):",
+                  data.message
+                );
+              }
+            })
+            .catch((error) => {
+              console.error(
+                "Error sending transaction record (background):",
+                error
+              );
+            });
         });
 
         if (!gcashButton.disabled) {
@@ -349,13 +359,16 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ method: "GCash", amount: totalPrice }),
             })
-            .then(response => response.json())
-            .then(() => {
+              .then((response) => response.json())
+              .then(() => {
                 window.location.href = "/gcash-payment";
-            })
-            .catch(error => {
-                console.error("Error recording GCash transaction or navigating:", error);
-            });
+              })
+              .catch((error) => {
+                console.error(
+                  "Error recording GCash transaction or navigating:",
+                  error
+                );
+              });
           });
         }
       });
@@ -389,8 +402,12 @@
       // JavaScript for Modal Interactions with smooth transitions
       var feedModal = document.getElementById("feedPaperModal");
       var openModalBtn = document.getElementById("openFeedModalBtn");
-      var closeModalSpan = document.querySelector("#feedPaperModal .close-button-span");
-      var closeModalButtonInside = document.getElementById("closeModalButtonInside");
+      var closeModalSpan = document.querySelector(
+        "#feedPaperModal .close-button-span"
+      );
+      var closeModalButtonInside = document.getElementById(
+        "closeModalButtonInside"
+      );
 
       function showModal() {
         if (feedModal) {
@@ -416,16 +433,15 @@
           closeModalButtonInside.onclick = hideModal;
         }
 
-        window.onclick = function(event) {
+        window.onclick = function (event) {
           if (event.target == feedModal) {
             hideModal();
           }
-        }
+        };
 
         if (openModalBtn) {
           openModalBtn.onclick = showModal;
         }
-
       } else {
         console.error("Modal element with ID 'feedPaperModal' not found.");
       }
