@@ -70,7 +70,13 @@
                     <div id="registerMessage" class="mt-2"></div>
                 </form>
 
-                <h4 class="mb-3">Existing Users</h4>
+                <h4 class="mb-3 d-flex align-items-center justify-content-between">
+                    <span>Existing Users</span>
+                    <select id="sortOrder" class="form-select form-select-sm w-auto ms-3">
+                        <option value="oldest" selected>Oldest to Latest</option>
+                        <option value="latest">Latest to Oldest</option>
+                    </select>
+                </h4>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead>
@@ -108,37 +114,13 @@
                     const userTableBody = document.getElementById('userTableBody');
                     const registerUserForm = document.getElementById('registerUserForm');
                     const registerMessage = document.getElementById('registerMessage');
+                    const sortOrderSelect = document.getElementById('sortOrder');
 
-
-                    // --- User Management Functions ---
-                    // This function is initially handled by Jinja2, but this JS version
-                    // allows dynamic updates if users are added/removed
-                    function renderUsers(users) {
-                        userTableBody.innerHTML = ''; // Clear existing rows
-                        if (users.length === 0) {
-                            userTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No users registered yet.</td></tr>';
-                            return;
-                        }
-                        users.forEach(user => {
-                            const row = userTableBody.insertRow();
-                            row.innerHTML = `
-                                <td>${user.id}</td>
-                                <td>${user.username}</td>
-                                <td>${user.email}</td>
-                                <td>${user.registration_date}</td>
-                                <td>
-                                    <button class="btn btn-danger btn-sm delete-user-btn" data-id="${user.id}">Delete</button>
-                                </td>
-                            `;
-                        });
-                        attachDeleteListeners();
-                    }
-
+                    // Attach delete button listeners
                     function attachDeleteListeners() {
                         document.querySelectorAll('.delete-user-btn').forEach(button => {
-                            button.onclick = function() {
+                            button.onclick = function () {
                                 const userId = this.dataset.id;
-                                // In a production app, replace `confirm` with a custom modal UI.
                                 if (confirm('Are you sure you want to delete this user?')) {
                                     fetch('/delete_user', {
                                         method: 'POST',
@@ -149,10 +131,9 @@
                                     })
                                     .then(response => response.json())
                                     .then(data => {
-                                        // In a production app, replace `alert` with a custom modal UI.
                                         if (data.success) {
-                                            alert(data.message); 
-                                            // User list will be refreshed by Socket.IO 'user_deleted' event
+                                            alert(data.message);
+                                            // User list will update via Socket.IO
                                         } else {
                                             alert('Error: ' + data.message);
                                         }
@@ -166,27 +147,64 @@
                         });
                     }
 
-                    // Function to fetch users from backend and re-render the table
+                    // Render users based on sort order
+                    function renderUsers(users) {
+                        const sortOrder = sortOrderSelect?.value || 'oldest';
+
+                        users.sort((a, b) => {
+                            const dateA = new Date(a.registration_date);
+                            const dateB = new Date(b.registration_date);
+                            return sortOrder === 'latest' ? dateB - dateA : dateA - dateB;
+                        });
+
+                        userTableBody.innerHTML = '';
+                        if (users.length === 0) {
+                            userTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No users registered yet.</td></tr>';
+                            return;
+                        }
+
+                        users.forEach(user => {
+                            const row = userTableBody.insertRow();
+                            row.innerHTML = `
+                                <td>${user.id}</td>
+                                <td>${user.username}</td>
+                                <td>${user.email}</td>
+                                <td>${user.registration_date}</td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm delete-user-btn" data-id="${user.id}">Delete</button>
+                                </td>
+                            `;
+                        });
+
+                        attachDeleteListeners();
+                    }
+
+                    // Fetch latest users list from backend and re-render
                     async function fetchUsers() {
                         try {
-                            // Fetch content from the admin_dashboard route and parse out the user table body
-                            const response = await fetch('/admin-dashboard'); 
+                            const response = await fetch('/admin-dashboard');
                             const text = await response.text();
                             const parser = new DOMParser();
                             const doc = parser.parseFromString(text, 'text/html');
                             const newTableBody = doc.getElementById('userTableBody');
                             if (newTableBody) {
-                                userTableBody.innerHTML = newTableBody.innerHTML;
-                                attachDeleteListeners(); // Re-attach listeners to new buttons
+                                const rows = Array.from(newTableBody.rows);
+                                const users = rows.map(row => ({
+                                    id: row.cells[0].innerText,
+                                    username: row.cells[1].innerText,
+                                    email: row.cells[2].innerText,
+                                    registration_date: row.cells[3].innerText
+                                }));
+                                renderUsers(users);
                             } else {
-                                console.error('Could not find #userTableBody in fetched content for user refresh.');
+                                console.error('Could not find #userTableBody in fetched content.');
                             }
                         } catch (error) {
-                            console.error('Error fetching users for refresh:', error);
+                            console.error('Error fetching users:', error);
                         }
                     }
 
-                    // Attach listener for the register user form
+                    // Submit new user registration
                     if (registerUserForm) {
                         registerUserForm.addEventListener('submit', function(event) {
                             event.preventDefault();
@@ -198,7 +216,7 @@
                                 headers: {
                                     'Content-Type': 'application/json'
                                 },
-                                body: JSON.stringify({ username: username, email: email })
+                                body: JSON.stringify({ username, email })
                             })
                             .then(response => response.json())
                             .then(data => {
@@ -206,7 +224,7 @@
                                 registerMessage.className = data.success ? 'text-success' : 'text-danger';
                                 if (data.success) {
                                     registerUserForm.reset();
-                                    // User list will be refreshed by Socket.IO 'new_user' event
+                                    // user list will update via Socket.IO
                                 }
                             })
                             .catch(error => {
@@ -217,32 +235,32 @@
                         });
                     }
 
-                    // Initial attachment of delete listeners to users loaded via Jinja2
-                    attachDeleteListeners();
+                    // Sort users when dropdown changes
+                    if (sortOrderSelect) {
+                        sortOrderSelect.addEventListener('change', fetchUsers);
+                    }
 
-                    // --- Socket.IO Event Listeners ---
+                    // Socket.IO event handlers
                     socket.on('connect', function() {
                         console.log('Socket.IO connected!');
                     });
 
-                    // Handler for new user registration updates
                     socket.on('new_user', function(user) {
                         console.log('New user added via Socket.IO:', user);
-                        fetchUsers(); // Re-fetch and render the entire user list
+                        fetchUsers();
                     });
 
-                    // Handler for user deletion updates
                     socket.on('user_deleted', function(userId) {
                         console.log('User deleted via Socket.IO:', userId);
-                        fetchUsers(); // Re-fetch and render the entire user list
+                        fetchUsers();
                     });
 
-                    // Handler for new transactions (kept for potential future use or other dashboard parts)
                     socket.on('new_transaction', function(data) {
-                        console.log('New transaction via Socket.IO:', data);
-                        // This event is primarily for the sales dashboard, but can be logged here if needed
+                        console.log('New transaction:', data);
                     });
 
+                    // Initial setup
+                    attachDeleteListeners();
                 });
             </script>
         </content>
