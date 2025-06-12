@@ -37,6 +37,12 @@ from sqlalchemy import extract, func
 from pathlib import Path
 import base64
 import shutil
+import pytz
+
+PH_TZ = pytz.timezone('Asia/Manila')
+
+def current_ph_time():
+    return datetime.now(PH_TZ)
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instaprint.db'
@@ -84,7 +90,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    registration_date = db.Column(db.DateTime, default=datetime.utcnow)
+    registration_date = db.Column(db.DateTime, default=current_ph_time)
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -1195,6 +1201,9 @@ def admin_dashboard():
         })
     return render_template("admin-dashboard.html", users=user_data)
 
+from flask import request, jsonify
+from datetime import datetime
+
 @app.route("/register_user", methods=["POST"])
 def register_user():
     data = request.get_json()
@@ -1217,21 +1226,36 @@ def register_user():
         db.session.add(new_user)
         db.session.commit()
 
+        # Convert datetime to local time if needed
+        local_time = new_user.registration_date
+        formatted_time = local_time.strftime('%m-%d-%Y %I:%M:%S %p')  # 12-hour with AM/PM
+
         user_data = {
             "id": new_user.id,
             "username": new_user.username,
             "email": new_user.email,
-            "registration_date": new_user.registration_date.strftime('%Y-%m-%d %H:%M:%S')
+            "registration_date": formatted_time
         }
+
         socketio.emit('new_user', user_data)
 
-        return jsonify({"success": True, "message": "User registered successfully!", "user": user_data}), 201
+        return jsonify({
+            "success": True,
+            "message": "User registered successfully!",
+            "user": user_data
+        }), 201
 
     except Exception as e:
         db.session.rollback()
-        log_error_to_db(f"Error registering user: {e}", source="register_user_route", details=str(e))
-        return jsonify({"success": False, "message": "An error occurred during registration."}), 500
-
+        log_error_to_db(
+            f"Error registering user: {e}",
+            source="register_user_route",
+            details=str(e)
+        )
+        return jsonify({
+            "success": False,
+            "message": "An error occurred during registration."
+        }), 500
 
 @app.route("/delete_user", methods=["POST"])
 def delete_user():

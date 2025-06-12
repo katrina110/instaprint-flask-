@@ -108,7 +108,7 @@
             <!-- JavaScript for dynamic content and interactions -->
             <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
             <script>
-                document.addEventListener('DOMContentLoaded', function() {
+                document.addEventListener('DOMContentLoaded', function () {
                     const socket = io();
 
                     const userTableBody = document.getElementById('userTableBody');
@@ -116,38 +116,62 @@
                     const registerMessage = document.getElementById('registerMessage');
                     const sortOrderSelect = document.getElementById('sortOrder');
 
-                    // Attach delete button listeners
-                    function attachDeleteListeners() {
-                        document.querySelectorAll('.delete-user-btn').forEach(button => {
-                            button.onclick = function () {
-                                const userId = this.dataset.id;
-                                if (confirm('Are you sure you want to delete this user?')) {
-                                    fetch('/delete_user', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({ id: userId })
-                                    })
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        if (data.success) {
-                                            alert(data.message);
-                                            // User list will update via Socket.IO
-                                        } else {
-                                            alert('Error: ' + data.message);
-                                        }
-                                    })
-                                    .catch(error => {
-                                        console.error('Error deleting user:', error);
-                                        alert('An error occurred while deleting the user.');
-                                    });
-                                }
-                            };
-                        });
+                    // Helper to format date to MM-DD-YYYY HH:MM:SS AM/PM
+                    function formatAMPM(dateString) {
+                        const date = new Date(dateString);
+                        if (isNaN(date)) return dateString;
+
+                        let hours = date.getHours();
+                        let minutes = date.getMinutes();
+                        let seconds = date.getSeconds();
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        hours = hours % 12 || 12;
+                        minutes = minutes < 10 ? '0' + minutes : minutes;
+                        seconds = seconds < 10 ? '0' + seconds : seconds;
+
+                        return `${date.getMonth() + 1}-${date.getDate()}-${date.getFullYear()} ${hours}:${minutes}:${seconds} ${ampm}`;
                     }
 
-                    // Render users based on sort order
+                    function attachDeleteListeners() {
+                        let selectedUserId = null;
+                        const confirmDeleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+                        const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+
+                        document.querySelectorAll('.delete-user-btn').forEach(button => {
+                            button.onclick = function () {
+                                selectedUserId = this.dataset.id;
+                                confirmDeleteModal.show();
+                            };
+                        });
+
+                        confirmDeleteBtn.onclick = function () {
+                            if (!selectedUserId) return;
+
+                            fetch('/delete_user', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ id: selectedUserId })
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        confirmDeleteModal.hide();
+                                        const userRow = document.querySelector(`.delete-user-btn[data-id="${selectedUserId}"]`)?.closest('tr');
+                                        if (userRow) userRow.remove();
+                                        selectedUserId = null;
+                                    } else {
+                                        alert('Error: ' + data.message);
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error deleting user:', error);
+                                    alert('An error occurred while deleting the user.');
+                                });
+                        };
+                    }
+
                     function renderUsers(users) {
                         const sortOrder = sortOrderSelect?.value || 'oldest';
 
@@ -169,7 +193,7 @@
                                 <td>${user.id}</td>
                                 <td>${user.username}</td>
                                 <td>${user.email}</td>
-                                <td>${user.registration_date}</td>
+                                <td>${formatAMPM(user.registration_date)}</td>
                                 <td>
                                     <button class="btn btn-danger btn-sm delete-user-btn" data-id="${user.id}">Delete</button>
                                 </td>
@@ -179,7 +203,6 @@
                         attachDeleteListeners();
                     }
 
-                    // Fetch latest users list from backend and re-render
                     async function fetchUsers() {
                         try {
                             const response = await fetch('/admin-dashboard');
@@ -204,9 +227,8 @@
                         }
                     }
 
-                    // Submit new user registration
                     if (registerUserForm) {
-                        registerUserForm.addEventListener('submit', function(event) {
+                        registerUserForm.addEventListener('submit', function (event) {
                             event.preventDefault();
                             const username = document.getElementById('username').value;
                             const email = document.getElementById('email').value;
@@ -218,54 +240,72 @@
                                 },
                                 body: JSON.stringify({ username, email })
                             })
-                            .then(response => response.json())
-                            .then(data => {
-                                registerMessage.textContent = data.message;
-                                registerMessage.className = data.success ? 'text-success' : 'text-danger';
-                                if (data.success) {
-                                    registerUserForm.reset();
-                                    // user list will update via Socket.IO
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error:', error);
-                                registerMessage.textContent = 'An error occurred during registration.';
-                                registerMessage.className = 'text-danger';
-                            });
+                                .then(response => response.json())
+                                .then(data => {
+                                    registerMessage.textContent = data.message;
+                                    registerMessage.className = data.success ? 'text-success' : 'text-danger';
+                                    if (data.success) {
+                                        registerUserForm.reset();
+                                        // user list will update via Socket.IO
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    registerMessage.textContent = 'An error occurred during registration.';
+                                    registerMessage.className = 'text-danger';
+                                });
                         });
                     }
 
-                    // Sort users when dropdown changes
                     if (sortOrderSelect) {
                         sortOrderSelect.addEventListener('change', fetchUsers);
                     }
 
-                    // Socket.IO event handlers
-                    socket.on('connect', function() {
+                    socket.on('connect', function () {
                         console.log('Socket.IO connected!');
                     });
 
-                    socket.on('new_user', function(user) {
+                    socket.on('new_user', function (user) {
                         console.log('New user added via Socket.IO:', user);
                         fetchUsers();
                     });
 
-                    socket.on('user_deleted', function(userId) {
+                    socket.on('user_deleted', function (userId) {
                         console.log('User deleted via Socket.IO:', userId);
                         fetchUsers();
                     });
 
-                    socket.on('new_transaction', function(data) {
+                    socket.on('new_transaction', function (data) {
                         console.log('New transaction:', data);
                     });
 
-                    // Initial setup
-                    attachDeleteListeners();
+                    fetchUsers();
                 });
             </script>
+
+
         </content>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="./../static/js/main.js"></script>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title" id="confirmDeleteModalLabel">Confirm Deletion</h5>
+        </div>
+        <div class="modal-body">
+            Are you sure you want to delete this user?
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Delete</button>
+        </div>
+        </div>
+    </div>
+    </div>
+
 </body>
 </html>
