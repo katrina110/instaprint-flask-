@@ -45,6 +45,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# --- Database Models ---
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(50), nullable=False)  # 'GCash' or 'Coinslot'
@@ -77,6 +78,16 @@ class HopperStatus(db.Model):
 
     def __repr__(self):
         return f'<HopperStatus balance: {self.balance}>'
+
+# NEW: User model for registration
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    registration_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 with app.app_context():
     db.create_all()  # ensures tables are created before first use
@@ -732,7 +743,7 @@ def process_downloaded_file():
             raise Exception("File processing resulted in no images.")
 
         images = processed_images
-        total_pages = calculated_total_pages
+        total_pages = calculated_total_pages;
 
         files_uploaded_today += 1
 
@@ -1166,74 +1177,82 @@ def get_printer_status_wmi():
 
 @app.route("/")
 def admin_user():
+    # This line was changed to open file-upload.html as the default page
     return render_template("file-upload.html")
 
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    transactions = Transaction.query.order_by(Transaction.timestamp.desc()).limit(10).all()
-    total_sales_query = db.session.query(func.sum(Transaction.amount)).scalar()
-    total_sales = total_sales_query or 0.0
-
-    gcash_total_query = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'GCash').scalar()
-    gcash_total = gcash_total_query or 0.0
-
-    coinslot_total_query = db.session.query(func.sum(Transaction.amount)).filter(Transaction.method == 'Coinslot').scalar()
-    coinslot_total = coinslot_total_query or 0.0
-
-    total_files_in_db_query = db.session.query(func.count(UploadedFile.id)).scalar()
-    total_files_in_db = total_files_in_db_query or 0
-
-    total_pages_in_db_query = db.session.query(func.sum(UploadedFile.pages)).scalar()
-    total_pages_in_db = total_pages_in_db_query or 0
-
-    # Fetch current hopper balance from DB
-    hopper_status_entry = HopperStatus.query.first()
-    current_hopper_balance_val = hopper_status_entry.balance if hopper_status_entry else 0.0
-
-    current_year = datetime.now().year
-    monthly_sales_data = db.session.query(
-        extract('month', Transaction.timestamp).label('sales_month'),
-        func.sum(Transaction.amount).label('monthly_total')
-    ).filter(extract('year', Transaction.timestamp) == current_year)\
-     .group_by(extract('month', Transaction.timestamp))\
-     .order_by(extract('month', Transaction.timestamp))\
-     .all()
-
-    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    sales_chart_values = [0.0] * 12 
-
-    for sale in monthly_sales_data:
-        month_index = int(sale.sales_month) - 1 
-        if 0 <= month_index < 12: 
-            sales_chart_values[month_index] = round(float(sale.monthly_total or 0.0), 2)
-    
-    pht = timezone(timedelta(hours=8))
-    sales_history_formatted = []
-    for t in transactions:
-        aware_utc_timestamp = t.timestamp.replace(tzinfo=timezone.utc)
-        pht_timestamp = aware_utc_timestamp.astimezone(pht)
-        sales_history_formatted.append({
-            "method": t.method,
-            "amount": t.amount,
-            "date": pht_timestamp.strftime('%Y-%m-%d'),
-            "time": pht_timestamp.strftime('%I:%M %p') # Using AM/PM
+    # Fetch all users from the database to display
+    users = User.query.order_by(User.registration_date.desc()).all()
+    # Prepare data for rendering
+    user_data = []
+    for user in users:
+        user_data.append({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'registration_date': user.registration_date.strftime('%Y-%m-%d %H:%M:%S')
         })
+    return render_template("admin-dashboard.html", users=user_data)
 
+@app.route("/register_user", methods=["POST"])
+def register_user():
+    data = request.get_json()
+    username = data.get("username")
+    email = data.get("email")
 
-    data = {
-        "total_sales": round(total_sales, 2),
-        "printed_pages": total_pages_in_db,
-        "files_uploaded": total_files_in_db,
-        "current_balance": round(current_hopper_balance_val, 2), # Use DB value
-        "sales_history": sales_history_formatted,
-        "sales_chart_labels": month_names,
-        "sales_chart_values": sales_chart_values,
-        "transaction_method_summary": {
-            "gcash": round(gcash_total, 2),
-            "coinslot": round(coinslot_total, 2)
+    if not username or not email:
+        return jsonify({"success": False, "message": "Username and email are required."}), 400
+
+    existing_user_username = User.query.filter_by(username=username).first()
+    existing_user_email = User.query.filter_by(email=email).first()
+
+    if existing_user_username:
+        return jsonify({"success": False, "message": "Username already exists."}), 409
+    if existing_user_email:
+        return jsonify({"success": False, "message": "Email already exists."}), 409
+
+    try:
+        new_user = User(username=username, email=email)
+        db.session.add(new_user)
+        db.session.commit()
+
+        user_data = {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "registration_date": new_user.registration_date.strftime('%Y-%m-%d %H:%M:%S')
         }
-    }
-    return render_template("admin-dashboard.html", data=data)
+        socketio.emit('new_user', user_data)
+
+        return jsonify({"success": True, "message": "User registered successfully!", "user": user_data}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        log_error_to_db(f"Error registering user: {e}", source="register_user_route", details=str(e))
+        return jsonify({"success": False, "message": "An error occurred during registration."}), 500
+
+
+@app.route("/delete_user", methods=["POST"])
+def delete_user():
+    data = request.get_json()
+    user_id = data.get("id")
+
+    if not user_id:
+        return jsonify({"success": False, "message": "User ID is required."}), 400
+
+    try:
+        user_to_delete = User.query.get(user_id)
+        if user_to_delete:
+            db.session.delete(user_to_delete)
+            db.session.commit()
+            return jsonify({"success": True, "message": "User deleted successfully."}), 200
+        else:
+            return jsonify({"success": False, "message": "User not found."}), 404
+    except Exception as e:
+        db.session.rollback()
+        log_error_to_db(f"Error deleting user with ID {user_id}: {e}", source="delete_user_route", details=str(e))
+        return jsonify({"success": False, "message": "An error occurred during deletion."}), 500
 
 @app.route("/admin-files-upload")
 def admin_printed_pages():
