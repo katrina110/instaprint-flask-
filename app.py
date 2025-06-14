@@ -39,6 +39,9 @@ import base64
 import shutil
 import pytz
 
+import smtplib
+from email.mime.text import MIMEText
+
 PH_TZ = pytz.timezone('Asia/Manila')
 
 def current_ph_time():
@@ -146,6 +149,71 @@ gsm_active = True
 MOTOR_PORT = 'COM4'
 BAUD_RATE = 9600
 GSM_ALERT_RECIPIENT_PHONE_NUMBER = "+639276784465"
+
+# --- Email Configuration ---
+# IMPORTANT: Replace with your actual SMTP server details and credentials
+SMTP_SERVER = 'smtp.gmail.com'  # e.g., 'smtp.gmail.com'
+SMTP_PORT = 587  # or 465 for SSL (check your SMTP provider's settings)
+SMTP_USERNAME = 'instaprint.kiosk2025@gmail.com'
+SMTP_PASSWORD = 'cduu biru upqc mmqh'
+SENDER_EMAIL = 'instaprint.kiosk2025@gmail.com' # The email address from which the alerts will be sent
+
+# Global variable to track the last time an error email was sent
+last_error_email_sent_time = None
+ERROR_EMAIL_COOLDOWN_SECONDS = 60 # 1 minute cooldown period for sending error emails
+
+def send_error_email_notification(error_message):
+    global last_error_email_sent_time
+    current_time = datetime.now(PH_TZ)
+
+    # Check cooldown period to avoid flooding emails
+    if last_error_email_sent_time and (current_time - last_error_email_sent_time).total_seconds() < ERROR_EMAIL_COOLDOWN_SECONDS:
+        print("Skipping error email: within cooldown period.")
+        return
+
+    with app.app_context():
+        try:
+            users = User.query.all()
+            if not users:
+                print("No registered users found to send error email to.")
+                return
+
+            # Collect all unique valid email addresses from registered users
+            recipient_emails = [user.email for user in users if user.email]
+            if not recipient_emails:
+                print("No valid email addresses found for registered users.")
+                return
+
+            # Construct the email content
+            subject = "InstaPrint Kiosk Error"
+            body = f"""Dear Admin,
+
+There has been an error with the InstaPrint Kiosk. Please attend to it immediately.
+
+Error Details:
+{error_message}
+
+Timestamp (PH Time): {current_time.strftime('%Y-%m-%d %I:%M:%S %p %Z%z')}
+"""
+
+            msg = MIMEText(body)
+            msg['Subject'] = subject
+            msg['From'] = SENDER_EMAIL
+            msg['To'] = ", ".join(recipient_emails) # Join all recipient emails with a comma
+
+            # Send the email using SMTP
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()  # Start TLS encryption for secure communication
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
+
+            last_error_email_sent_time = current_time # Update the last sent time after successful sending
+            print(f"Error email sent successfully to: {', '.join(recipient_emails)}")
+
+        except Exception as e:
+            print(f"CRITICAL ERROR: Failed to send error email: {e}")
+            # You might want to log this critical failure to a file or another system
+            # as the email sending itself failed. Avoid recursive calls to log_error_to_db here.
 
 try:
     arduino = serial.Serial(MOTOR_PORT, BAUD_RATE, timeout=1)
@@ -325,7 +393,7 @@ def generate_thumbnail_for_file(item_path_obj: Path, file_ext_without_dot: str, 
                 print(f"ERROR cleaning up temp PDF {temp_pdf_path_for_docx} for thumbnail: {e_clean}")
 
 def log_error_to_db(message, source=None, details=None):
-    with app.app_context(): # <--- ADD THIS WRAPPER
+    with app.app_context():
         try:
             alert_timestamp_str = datetime.now().strftime("%m-%d-%Y %I:%M:%S %p")
 
@@ -333,26 +401,34 @@ def log_error_to_db(message, source=None, details=None):
                 message=str(message),
                 source=str(source) if source else "Unknown",
                 details=str(details) if details else None,
-                timestamp=datetime.utcnow() 
+                timestamp=datetime.utcnow()
             )
             db.session.add(error_entry)
             db.session.commit()
             print(f"DB_ERROR_LOGGED: [{source or 'GENERAL'}] {message}")
 
+            # Attempt to send SMS alert (existing functionality)
             send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_str)
 
+            # NEW: Send email notification
+            # Pass a concise error message to the email function
+            email_detail_message = f"Source: {source or 'Unknown'}\nMessage: {message}\nDetails: {details or 'No additional details.'}"
+            send_error_email_notification(email_detail_message)
+
         except Exception as e:
-            # If we are here, db.session.commit() or add() likely failed.
-            # We need to ensure rollback happens if possible, or handle the inability to log to DB.
+            # Existing error handling for DB logging failure
             try:
-                db.session.rollback() 
+                db.session.rollback()
             except Exception as rb_e:
                 print(f"CRITICAL_ERROR: Failed to rollback DB session during log_error_to_db failure: {rb_e}")
 
             alert_timestamp_db_fail_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
             print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{source}] {message}")
-            # Still attempt to send an SMS alert
             send_command_to_gsm_arduino("SEND_DB_LOG_FAIL_SMS", alert_timestamp_db_fail_str)
+            # If DB logging fails, also try to send an email as a fallback, but be careful not to loop
+            email_detail_message_fallback = f"CRITICAL DB LOGGING FAILED. Original Error: Source: {source or 'Unknown'}, Message: {message}, DB Error: {e}"
+            # This call will also respect the cooldown, preventing floods if both DB and email setup is problematic
+            send_error_email_notification(email_detail_message_fallback)
 
 @socketio.on("connect")
 def send_initial_coin_count():
