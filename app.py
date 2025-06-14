@@ -162,6 +162,9 @@ SENDER_EMAIL = 'instaprint.kiosk2025@gmail.com' # The email address from which t
 last_error_email_sent_time = None
 ERROR_EMAIL_COOLDOWN_SECONDS = 60 # 1 minute cooldown period for sending error emails
 
+last_alert_attempt_time = 0
+ALERT_COOLDOWN_SECONDS = 300 # 5 minutes (adjust as needed)
+
 def send_error_email_notification(error_message):
     global last_error_email_sent_time
     current_time = datetime.now(PH_TZ)
@@ -224,9 +227,16 @@ except Exception as e:
 
 
 def send_command_to_gsm_arduino(command_to_send, timestamp_str):
-    # This function no longer uses global gsm_serial or gsm_active for its operation,
-    # as it manages the port independently for sending alerts.
-    global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER
+    global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER, last_alert_attempt_time, ALERT_COOLDOWN_SECONDS
+
+    current_time = time.time()
+    if (current_time - last_alert_attempt_time) < ALERT_COOLDOWN_SECONDS:
+        # If still within the cooldown period, skip the attempt and print a concise message
+        print(f"ALERT_SKIP: Skipping GSM alert command '{command_to_send.strip()}' due to cooldown.")
+        return
+
+    # Update the last attempt time only if we proceed with the attempt
+    last_alert_attempt_time = current_time
 
     # Sanitize timestamp_str to remove potential problematic characters for our command format
     safe_timestamp_str = timestamp_str.replace("\n", " ")
@@ -2015,6 +2025,10 @@ def read_coin_slot_data():
 def read_gsm_data():
     global gsm_active, gsm_serial, expected_gcash_amount, gcash_print_options
 
+    # Variables to manage logging cooldown for serial port errors
+    last_serial_open_error_log_time = 0
+    serial_open_error_log_cooldown = 60 # Log serial open errors every 60 seconds
+
     while True:
         if not gsm_active:
             if gsm_serial and gsm_serial.is_open:
@@ -2023,7 +2037,6 @@ def read_gsm_data():
                     print(f"Closed serial port {GSM_PORT} for GSM module.")
                 except Exception as e:
                     error_msg = f"Error closing serial port {GSM_PORT} in read_gsm_data (inactive): {e}"
-                    print(error_msg)
                     log_error_to_db(error_msg, source="read_gsm_data_close_inactive", details=str(e))
                 gsm_serial = None
             time.sleep(1)
@@ -2033,22 +2046,29 @@ def read_gsm_data():
             try:
                 gsm_serial = serial.Serial(GSM_PORT, BAUD_RATE, timeout=1)
                 print(f"Successfully opened serial port {GSM_PORT} for GSM module.")
-                time.sleep(2) 
+                time.sleep(2)
+                # Reset cooldown timer if successful
+                last_serial_open_error_log_time = 0
             except serial.SerialException as e:
-                error_msg = f"Error opening serial port {GSM_PORT} for GSM module: {e}"
-                print(error_msg)
-                log_error_to_db(error_msg, source="read_gsm_data_serial_open", details=str(e))
+                current_time = time.time()
+                if (current_time - last_serial_open_error_log_time) > serial_open_error_log_cooldown:
+                    error_msg = f"Error opening serial port {GSM_PORT} for GSM module: {e}"
+                    log_error_to_db(error_msg, source="read_gsm_data_serial_open", details=str(e))
+                    last_serial_open_error_log_time = current_time # Update log time
+
                 gsm_serial = None
-                time.sleep(5) 
+                time.sleep(5) # Still wait, but don't log every time
                 continue
             except Exception as e:
-                error_msg = f"Unexpected error opening serial port {GSM_PORT} for GSM: {e}"
-                print(error_msg)
-                log_error_to_db(error_msg, source="read_gsm_data_serial_open_unexpected", details=str(e))
-                gsm_serial = None
-                time.sleep(5)
-                continue
+                current_time = time.time()
+                if (current_time - last_serial_open_error_log_time) > serial_open_error_log_cooldown:
+                    error_msg = f"Unexpected error opening serial port {GSM_PORT} for GSM: {e}"
+                    log_error_to_db(error_msg, source="read_gsm_data_serial_open_unexpected", details=str(e))
+                    last_serial_open_error_log_time = current_time # Update log time
 
+                gsm_serial = None
+                time.sleep(5) # Still wait, but don't log every time
+                continue
 
         if gsm_serial and gsm_serial.is_open and gsm_serial.in_waiting > 0:
             try:
@@ -2071,51 +2091,45 @@ def read_gsm_data():
                                 else:
                                     print(f"Failed to initiate printing for GCash payment (handled by print_document_logic): {print_message}")
                                     socketio.emit("gcash_payment_failed", {"success": False, "message": f"Payment confirmed, but printing failed: {print_message}"})
-                                
+
                                 gsm_active = False
                                 print("GSM detection deactivated after GCash payment attempt.")
                                 expected_gcash_amount = 0.0
                                 gcash_print_options = None
-                            
+
                             elif gcash_print_options is None:
                                 print(f"Received GCash SMS (₱{extracted_amount}) but no print options are set. Ignoring.")
                             else:
                                 print(f"Received amount ₱{extracted_amount} does not match expected ₱{expected_gcash_amount}.")
                                 socketio.emit("gcash_payment_failed", {"success": False, "message": f"Received incorrect payment amount: ₱{extracted_amount}. Expected: ₱{expected_gcash_amount}"})
 
-
                         except ValueError as e:
                             error_msg = f"Error: Could not convert extracted amount to float from GSM message on {GSM_PORT}: '{match.group(1)}'"
-                            print(error_msg)
                             log_error_to_db(error_msg, source="read_gsm_data_value_error", details=f"Original message: {message}, Exception: {str(e)}")
                             socketio.emit("gcash_payment_failed", {"success": False, "message": "Could not convert received amount to number."})
 
             except UnicodeDecodeError as e:
                 error_msg = f"Error decoding serial data from {GSM_PORT} (GSM): {e}"
-                print(error_msg)
                 log_error_to_db(error_msg, source="read_gsm_data_unicode_error", details=str(e))
                 socketio.emit("gcash_payment_failed", {"success": False, "message": "Error decoding SMS data."})
             except serial.SerialException as e:
                 error_msg = f"Serial error on {GSM_PORT} (GSM) during read: {e}"
-                print(error_msg)
                 log_error_to_db(error_msg, source="read_gsm_data_serial_read_error", details=str(e))
                 if gsm_serial and gsm_serial.is_open:
                     try:
                         gsm_serial.close()
                     except Exception as close_e:
-                        print(f"Error closing GSM serial port after read error: {close_e}")
-                        log_error_to_db(f"Error closing GSM serial port after read error: {close_e}", source="read_gsm_data_serial_close_after_error", details=str(close_e))
-                gsm_serial = None 
+                        error_msg_close = f"Error closing GSM serial port after read error: {close_e}"
+                        log_error_to_db(error_msg_close, source="read_gsm_data_serial_close_after_error", details=str(close_e))
+                gsm_serial = None
                 time.sleep(5)
                 socketio.emit("gcash_payment_failed", {"success": False, "message": f"GSM Serial communication error: {e}"})
             except Exception as e:
                 error_msg = f"An unexpected error occurred in read_gsm_data: {e}"
-                print(error_msg)
                 log_error_to_db(error_msg, source="read_gsm_data_unexpected_error", details=str(e))
                 socketio.emit("gcash_payment_failed", {"success": False, "message": f"An internal error occurred processing GSM data: {e}"})
 
         time.sleep(0.1)
-
 
 @app.route('/coin_count')
 def get_coin_count():
