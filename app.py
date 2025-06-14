@@ -224,9 +224,8 @@ except Exception as e:
 
 
 def send_command_to_gsm_arduino(command_to_send, timestamp_str):
-    # This function no longer uses global gsm_serial or gsm_active for its operation,
-    # as it manages the port independently for sending alerts.
-    global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER
+    # ... (rest of your function, global variables, etc.) ...
+    global GSM_PORT, BAUD_RATE, GSM_ALERT_RECIPIENT_PHONE_NUMBER, logged_errors
 
     # Sanitize timestamp_str to remove potential problematic characters for our command format
     safe_timestamp_str = timestamp_str.replace("\n", " ")
@@ -237,10 +236,23 @@ def send_command_to_gsm_arduino(command_to_send, timestamp_str):
     temp_serial_for_alert = None  # Initialize to ensure it's defined for the finally block
 
     try:
-        print(f"ALERT: Attempting to open port {GSM_PORT} for GSM alert command.")
+        # Create a unique ID for the 'attempting to open' message
+        attempt_open_log_id = f"ALERT_ATTEMPT_OPEN_PORT|{GSM_PORT}"
+        
+        # Only print the "Attempting to open" message if it hasn't been printed recently
+        if attempt_open_log_id not in logged_errors:
+            print(f"ALERT: Attempting to open port {GSM_PORT} for GSM alert command.")
+            logged_errors.add(attempt_open_log_id)
+
         temp_serial_for_alert = serial.Serial(GSM_PORT, BAUD_RATE, timeout=2, write_timeout=2)
 
         time.sleep(2.5) # Allow port to open and Arduino to initialize
+
+        # If opening was successful, remove the 'attempt_open_log_id'
+        # This ensures that if the port closes later, the "attempting to open"
+        # message will be printed again when a new attempt is made.
+        if attempt_open_log_id in logged_errors:
+            logged_errors.remove(attempt_open_log_id)
 
         print(f"ALERT: Port {GSM_PORT} opened. Sending command: {full_command.strip()}")
         temp_serial_for_alert.write(full_command.encode('utf-8'))
@@ -248,9 +260,20 @@ def send_command_to_gsm_arduino(command_to_send, timestamp_str):
         print(f"Info: Alert command '{command_to_send.strip()}' with timestamp '{safe_timestamp_str}' sent to GSM module via {GSM_PORT}.")
 
     except serial.SerialException as se:
-        print(f"CRITICAL_GSM_ALERT_FAILURE: SerialException during port open/write on {GSM_PORT} for alert: {se}")
+        error_msg = f"CRITICAL_GSM_ALERT_FAILURE: SerialException during port open/write on {GSM_PORT} for alert: {se}"
+        error_id = f"GSM_SERIAL_ERROR_SEND_ALERT|{se}" # Unique ID for this specific error
+        if error_id not in logged_errors:
+            print(error_msg)
+            logged_errors.add(error_id)
+        # Log to DB (already handled by your existing code after this `print`)
+
     except Exception as e:
-        print(f"CRITICAL_GSM_ALERT_FAILURE: Generic Exception during port open/write for alert on {GSM_PORT}: {e}")
+        error_msg = f"CRITICAL_GSM_ALERT_FAILURE: Generic Exception during port open/write for alert on {GSM_PORT}: {e}"
+        error_id = f"GSM_GENERIC_ERROR_SEND_ALERT|{e}" # Unique ID for this specific error
+        if error_id not in logged_errors:
+            print(error_msg)
+            logged_errors.add(error_id)
+        # Log to DB (already handled by your existing code after this `print`)
     finally:
         if temp_serial_for_alert and temp_serial_for_alert.is_open:
             try:
@@ -393,41 +416,74 @@ def generate_thumbnail_for_file(item_path_obj: Path, file_ext_without_dot: str, 
                 print(f"ERROR cleaning up temp PDF {temp_pdf_path_for_docx} for thumbnail: {e_clean}")
 
 def log_error_to_db(message, source=None, details=None):
+    str_message = str(message)
+    str_source = str(source) if source else "Unknown"
+    str_details = str(details) if details else "" # Ensure details is treated as string
+
+    # Attempt to extract a stable exception type from the details string
+    exception_type_for_id = "UnknownErrorType"
+    if str_details:
+        # Regex to find a word followed by an opening parenthesis, common for exception names
+        match = re.match(r'([a-zA-Z_][a-zA-Z0-9_]*)\(', str_details)
+        if match:
+            exception_type_for_id = match.group(1)
+        # Add fallbacks for common non-parenthesized errors if needed, e.g.:
+        elif "SerialException" in str_details and "SerialException" not in exception_type_for_id:
+            exception_type_for_id = "SerialException"
+        elif "UnicodeDecodeError" in str_details and "UnicodeDecodeError" not in exception_type_for_id:
+            exception_type_for_id = "UnicodeDecodeError"
+        elif "OSError" in str_details and "OSError" not in exception_type_for_id:
+            exception_type_for_id = "OSError"
+
+
+    # Construct a unique ID for console logging based on source and stable error type
+    # This ID will be consistent for the same type of error from the same source
+    unique_error_id_for_console = f"DB_LOG_{str_source}_TYPE_{exception_type_for_id}"
+
+    # If the message specifically mentions a COM port, you might want to include that in the ID
+    # to differentiate errors for different ports if you have multiple.
+    # For instance, if str_message contains "COM12"
+    com_port_match = re.search(r'(COM\d+)', str_message)
+    if com_port_match:
+        unique_error_id_for_console += f"_{com_port_match.group(1)}"
+
+
     with app.app_context():
         try:
             alert_timestamp_str = datetime.now().strftime("%m-%d-%Y %I:%M:%S %p")
 
             error_entry = ErrorLog(
-                message=str(message),
-                source=str(source) if source else "Unknown",
-                details=str(details) if details else None,
+                message=str_message,
+                source=str_source,
+                details=str_details if str_details else None, # Use str_details here for DB
                 timestamp=datetime.utcnow()
             )
             db.session.add(error_entry)
             db.session.commit()
-            print(f"DB_ERROR_LOGGED: [{source or 'GENERAL'}] {message}")
+            
+            # Print to console only if this specific error (based on its ID) hasn't been logged before
+            if unique_error_id_for_console not in logged_errors:
+                print(f"DB_ERROR_LOGGED: [{str_source}] {str_message}")
+                logged_errors.add(unique_error_id_for_console)
 
-            # Attempt to send SMS alert (existing functionality)
             send_command_to_gsm_arduino("SEND_ERROR_SMS", alert_timestamp_str)
-
-            # NEW: Send email notification
-            # Pass a concise error message to the email function
-            email_detail_message = f"Source: {source or 'Unknown'}\nMessage: {message}\nDetails: {details or 'No additional details.'}"
+            email_detail_message = f"Source: {str_source}\nMessage: {str_message}\nDetails: {details or 'No additional details.'}"
             send_error_email_notification(email_detail_message)
 
         except Exception as e:
-            # Existing error handling for DB logging failure
             try:
                 db.session.rollback()
             except Exception as rb_e:
                 print(f"CRITICAL_ERROR: Failed to rollback DB session during log_error_to_db failure: {rb_e}")
 
             alert_timestamp_db_fail_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
-            print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{source}] {message}")
+            
+            # This critical error for DB logging failure itself should ideally always be printed.
+            # We don't add this to `logged_errors` because it indicates a fundamental system issue.
+            print(f"CRITICAL_ERROR: Failed to log error to DB: {e}. Original error: [{str_source}] {str_message}")
+            
             send_command_to_gsm_arduino("SEND_DB_LOG_FAIL_SMS", alert_timestamp_db_fail_str)
-            # If DB logging fails, also try to send an email as a fallback, but be careful not to loop
-            email_detail_message_fallback = f"CRITICAL DB LOGGING FAILED. Original Error: Source: {source or 'Unknown'}, Message: {message}, DB Error: {e}"
-            # This call will also respect the cooldown, preventing floods if both DB and email setup is problematic
+            email_detail_message_fallback = f"CRITICAL DB LOGGING FAILED. Original Error: Source: {str_source}, Message: {str_message}, DB Error: {e}"
             send_error_email_notification(email_detail_message_fallback)
 
 @socketio.on("connect")
@@ -2036,14 +2092,22 @@ def read_gsm_data():
                 time.sleep(2) 
             except serial.SerialException as e:
                 error_msg = f"Error opening serial port {GSM_PORT} for GSM module: {e}"
-                print(error_msg)
+                # Create a unique ID for this specific error to track it
+                error_id = f"GSM_SERIAL_READ_ERROR|{GSM_PORT}|{e}" 
+                if error_id not in logged_errors: # Check if this error has already been printed
+                    print(error_msg) # Print only if it hasn't
+                    logged_errors.add(error_id) # Add to the set to prevent future prints
                 log_error_to_db(error_msg, source="read_gsm_data_serial_open", details=str(e))
                 gsm_serial = None
                 time.sleep(5) 
                 continue
             except Exception as e:
                 error_msg = f"Unexpected error opening serial port {GSM_PORT} for GSM: {e}"
-                print(error_msg)
+                # Create a unique ID for this specific error to track it
+                error_id = f"GSM_SERIAL_READ_UNEXPECTED_ERROR|{GSM_PORT}|{e}" 
+                if error_id not in logged_errors: # Check if this error has already been printed
+                    print(error_msg) # Print only if it hasn't
+                    logged_errors.add(error_id) # Add to the set to prevent future prints
                 log_error_to_db(error_msg, source="read_gsm_data_serial_open_unexpected", details=str(e))
                 gsm_serial = None
                 time.sleep(5)
