@@ -441,14 +441,36 @@ def print_document():
         printer_name = win32print.GetDefaultPrinter()
 
         if file_path.lower().endswith(".pdf"):
+            page_selection = opts.get("pageSelection")
+            temp_print_path = file_path  # Default: print original file
+            if page_selection:
+                try:
+                    page_indexes = parse_page_selection(page_selection, total_pages=9999)  # Adjust total_pages as needed
+
+                    selected_doc = fitz.open(file_path)
+                    new_doc = fitz.open()
+
+                    for i in page_indexes:
+                        if i < len(selected_doc):
+                            new_doc.insert_pdf(selected_doc, from_page=i, to_page=i)
+                    temp_print_path = file_path.replace(".pdf", f"_selectedpages.pdf")
+                    new_doc.save(temp_print_path)
+                    selected_doc.close()
+                    new_doc.close()
+                    print(f"Created selected-pages PDF at: {temp_print_path}")
+                except Exception as e:
+                    log_error_to_db(f"Error creating selected-pages PDF: {e}", source="/print_document")
+                    return jsonify({"error": f"Failed to process selected pages: {e}"}), 500
+
             sumatra_path = r"C:\\Users\\CCC\\AppData\\Local\\SumatraPDF\\SumatraPDF.exe"
             cmd = [
                 sumatra_path,
                 "-print-to", printer_name,
                 "-silent",
                 "-print-settings", f"copies={num_copies}",
-                file_path
+                temp_print_path
             ]
+
             try:
                 print("File to be printed exists:", os.path.exists(file_path))
                 print("File path:", file_path)
