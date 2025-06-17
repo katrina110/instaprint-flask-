@@ -15,7 +15,7 @@
     />
     <link href="./../static/css/result.css" rel="stylesheet" />
     <link href="./../static/css/header.css" rel="stylesheet" />
-    <style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> <style>
       /* define thumbnail dimensions for each size/orientation */
       .thumb-A4.portrait {
         width: 150px;
@@ -127,6 +127,97 @@
         overflow-y: hidden; 
         flex-grow: 1;       
       }
+
+      /* Modal Styling from payment.html */
+      .modal {
+        /* Initially hide the modal */
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.6); /* Darker overlay */
+        /* Use flexbox to center modal content when displayed */
+        justify-content: center;
+        align-items: center;
+        padding: 20px; /* Add padding for smaller screens */
+      }
+      .modal-content {
+        background-color: #fefefe;
+        padding: 30px; /* More padding */
+        border: 1px solid #b0b0b0; /* Slightly darker border */
+        width: 90%; /* Make modal responsive */
+        max-width: 400px; /* Max width for larger screens */
+        border-radius: 25px;
+        text-align: center; /* Center content inside modal */
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* More prominent shadow */
+        position: relative; /* Needed for absolute positioning of close button */
+      }
+      .close {
+        color: #aaa;
+        /* float: right;  Removed float */
+        font-size: 32px; /* Larger close button */
+        font-weight: bold;
+        position: absolute; /* Position absolute relative to modal-content */
+        top: 10px;
+        right: 15px;
+      }
+      .close:hover, .close:focus {
+        color: #777; /* Darker gray on hover */
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      /* Star Rating Styling from payment.html */
+      .star-rating {
+        direction: rtl;
+        display: inline-flex;
+        margin-bottom: 20px; /* More space below stars */
+        gap: 5px; /* Add space between stars */
+      }
+      .star-rating input {
+        display: none;
+      }
+      .star-rating label {
+        font-size: 2.5rem; /* Larger stars */
+        color: #ddd;
+        cursor: pointer;
+        transition: color 0.2s ease; /* Smooth color transition */
+      }
+      .star-rating input:checked ~ label,
+      .star-rating label:hover,
+      .star-rating label:hover ~ label {
+        color: gold;
+      }
+
+      /* Feedback QR Code and Text from payment.html */
+      .modal-content img {
+          margin-top: 15px;
+          width: 180px; /* Slightly larger QR code */
+          height: 180px;
+          border: 1px solid #eee; /* Subtle border around QR */
+          border-radius: 25px; /* Rounded corners for QR */
+      }
+      .amount {
+        font-size: 14px; /* Slightly smaller font */
+        margin-top: 20px;
+        color: #555; /* Darker gray */
+        text-align: center;
+        opacity: 0.9; /* Less transparent */
+      }
+
+      @media (max-width: 600px) {
+        .modal-content {
+          width: 95%;
+          padding: 20px;
+        }
+        .star-rating label {
+            font-size: 2rem; /* Smaller stars on small screens */
+        }
+      }
     </style>
   </head>
   <body>
@@ -155,7 +246,7 @@
               Total Price: ₱<span id="priceValue">0.00</span>
             </h3>
             <button class="btn btn-success mt-3" id="printButton" style="border-radius: 25px;">
-              Proceed to Payment
+              Start Printing
             </button>
 
             <a href="{{ url_for('online_upload') }}" class="btn edit-btn mt-3">Cancel</a>
@@ -276,11 +367,45 @@
       </div>
     </div>
 
+    <div id="myModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Thank You for Using InstaPrint!</h2>
+        <p>Your document is now being processed and will start to print soon.</p>
+        <h3>Rate Your Experience:</h3>
+        <div class="star-rating">
+          <input type="radio" id="star5" name="rating" value="5"><label for="star5" title="5 stars">☆</label>
+          <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars">☆</label>
+          <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars">☆</label>
+          <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars">☆</label>
+          <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star">☆</label>
+        </div>
+        <br>
+        <h4>Give Us Your Feedback</h4>
+        <img src="{{ url_for('static', filename='images/feedback_qr.png') }}" alt="Feedback QR Code" />
+        <p class="amount"><i>Redirecting to home page after 30 seconds.</i></p>
+      </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         let previewsData = [];
+
+        // Log Error function
+        function logError(message, details) {
+          console.error("Client-side error:", message, details);
+          fetch('/log_activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                message: String(message),
+                source: 'result.html',
+                details: details ? String(details) : null
+            })
+          }).catch(err => console.error("Failed to send client-side error to backend:", err));
+        }
 
         function parseSelection(str) {
           const pages = new Set();
@@ -449,17 +574,71 @@
             ev.preventDefault();
             const currentPrice = parseFloat(document.getElementById("priceValue").textContent);
             if (!previewsData || previewsData.length === 0) {
-                 alert("Preview data is not available. Cannot proceed to payment.");
+                 alert("Preview data is not available. Cannot proceed to printing.");
                  return;
             }
-            if (currentPrice === 0) {
-                 alert("Total price is ₱0.00. Cannot proceed to payment for free items unless intended.");
-            }
-            sessionStorage.setItem("totalPrice", currentPrice.toFixed(2));
-            sessionStorage.setItem("previews", JSON.stringify(previewsData)); 
-            // MODIFIED: Changed key for setItem
-            sessionStorage.setItem("printOptions", JSON.stringify(opts)); 
-            window.location.href = "{{ url_for('payment_type') }}"; 
+            // MODIFIED: Directly trigger print and show modal
+            const modal = document.getElementById("myModal");
+
+            fetch("/print_document", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(opts), // Use current opts for printing
+            })
+            .then((res) => {
+                if (!res.ok) {
+                    return res.json().then(errData => {
+                        const printErrMsg = `Print request failed. Status: ${res.status}. Backend Error: ${errData.error || 'Unknown error'}`;
+                        console.error(printErrMsg, errData);
+                        logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(errData)}`);
+                        alert("Failed to send print job: " + (errData.error || "Please contact support."));
+                        window.location.href = "/";
+                        throw new Error('Print HTTP error');
+                    }).catch(() => {
+                        const printErrMsg = `Print request failed. Status: ${res.status}.`;
+                        console.error(printErrMsg);
+                        logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}`);
+                        alert("Failed to send print job. Please contact support.");
+                        window.location.href = "/";
+                        throw new Error('Print HTTP error');
+                    });
+                }
+                return res.json();
+            })
+            .then((data) => {
+              if (data.success) {
+                console.log("Print initiated successfully:", data.message);
+                if (modal) {
+                   modal.style.display = "flex";
+                }
+                // Record successful transaction (assuming it's 'Free' or directly processed)
+                fetch('/api/record-transaction', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ method: 'Direct Print (Free/No Payment)', amount: currentPrice }) // Indicate no payment
+                }).then(res => res.json()).then(transData => {
+                    if(transData.success) console.log("Direct print transaction recorded.");
+                    else logError("Failed to record direct print transaction", JSON.stringify(transData));
+                }).catch(err => logError("Error recording direct print transaction", err.stack));
+
+                setTimeout(() => { window.location.href = "/"; }, 30000);
+              } else {
+                const printFailMsg = `Backend reported print failure: ${data.error}`;
+                console.error(printFailMsg);
+                logError(printFailMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(data)}`);
+                alert("Printing failed: " + (data.error || "Unknown issue"));
+                window.location.href = "/";
+              }
+            })
+            .catch((error) => {
+              if (error.message !== 'Print HTTP error') {
+                  const printCatchMsg = `Error during print request fetch: ${error.message}`;
+                  console.error(printCatchMsg, error);
+                  logError(printCatchMsg, `PrintOptions: ${JSON.stringify(opts)}, ErrorStack: ${error.stack}`);
+                  alert("An error occurred while trying to print. Please check connection and try again.");
+                  window.location.href = "/";
+              }
+            });
         });
 
         function showModal(src) {
@@ -468,6 +647,17 @@
             img.style.filter = isGrayscale ? "grayscale(100%)" : "";
             img.src = src;
             $("#imageModal").modal("show");
+        }
+
+        // MODIFIED: Close button functionality for the new modal
+        const myModalElement = document.getElementById("myModal");
+        if (myModalElement) {
+            document.querySelectorAll("#myModal .close").forEach((closeButton) => {
+                closeButton.onclick = () => {
+                    myModalElement.style.display = "none";
+                    window.location.href = "/"; // Redirect to home on close
+                };
+            });
         }
 
       });
