@@ -22,6 +22,7 @@ from PyPDF2 import PdfReader # Keep for potential future PDF manipulation
 import threading
 from flask_socketio import SocketIO, emit
 import win32print
+import win32con # Make sure this import is present at the top of your app.py
 from flask_sqlalchemy import SQLAlchemy
 import csv
 import requests
@@ -38,8 +39,8 @@ from pathlib import Path
 import base64
 import shutil
 import pytz
-import subprocess
-from flask import request, jsonify
+import subprocess # Already here
+# from flask import request, jsonify # Already imported at the top
 
 import smtplib
 from email.mime.text import MIMEText
@@ -425,102 +426,339 @@ def clear_downloads_folder_route():
         "message": f"Successfully cleared {deleted_count} items from {DOWNLOADS_DIR}."
     }), 200
 
+# Placeholder for check_printer_status and parse_page_selection
+def check_printer_status(printer_name):
+    # Implement your printer status checking logic here
+    # This is a placeholder; you'll need to use win32print functions
+    # or other methods to get the actual printer status.
+    # For example, it might involve getting printer status flags:
+    # printer_handle = win32print.OpenPrinter(printer_name)
+    # status_flags = win32print.GetPrinter(printer_handle, 2)['Status']
+    # win32print.ClosePrinter(printer_handle)
+    # if status_flags == win32con.PRINTER_STATUS_IDLE: return "Idle"
+    # return "Busy" or other status
+    print(f"Checking printer status for {printer_name} (placeholder)...")
+    return "Idle" # Assume idle for now
+
+def parse_page_selection(page_selection, total_pages):
+    # Implement your page parsing logic here
+    # This is a placeholder for your existing function.
+    # Example: "1-3, 5, 7-9" -> [0,1,2,4,6,7,8] (0-indexed)
+    print(f"Parsing page selection '{page_selection}' (placeholder)...")
+    if page_selection == "all" or not page_selection:
+        return list(range(total_pages))
+    
+    selected_pages = set()
+    parts = page_selection.split(',')
+    for part in parts:
+        part = part.strip()
+        if '-' in part:
+            start_str, end_str = part.split('-')
+            start = int(start_str)
+            end = int(end_str)
+            selected_pages.update(range(start - 1, end)) # Convert to 0-indexed
+        else:
+            selected_pages.add(int(part) - 1) # Convert to 0-indexed
+    
+    # Filter out pages beyond total_pages and sort
+    return sorted([p for p in selected_pages if p < total_pages])
+
+def pdf_to_images(pdf_path):
+    # This is a placeholder for your existing function
+    # that converts PDF pages to images for preview.
+    # It should return a list of image paths or base64 encoded images.
+    print(f"Converting PDF {pdf_path} to images for preview (placeholder)...")
+    images = []
+    doc = None
+    try:
+        doc = fitz.open(pdf_path)
+        for i in range(len(doc)):
+            page = doc.load_page(i)
+            pix = page.get_pixmap()
+            # For simplicity, returning a dummy URL or actual base64 if needed for frontend
+            # For this context, it's just about getting the page count
+            images.append(f"data:image/png;base64,...") # Placeholder
+    finally:
+        if doc: doc.close()
+    return images
+
+def image_to_pdf_fit_page(image_path, output_pdf_path):
+    # This is a placeholder for your existing function
+    # that converts an image to a PDF fitting the page.
+    print(f"Converting image {image_path} to PDF (placeholder)...")
+    pdf = FPDF(unit="pt", format="A4") # Assuming A4
+    pdf.add_page()
+    pdf.image(image_path, x=0, y=0, w=pdf.w, h=pdf.h)
+    pdf.output(output_pdf_path)
+
+def docx_to_images(docx_path):
+    # This is a placeholder for your existing function
+    # that converts a DOCX to images (via PDF conversion).
+    # It should return a list of images and the path to the converted PDF.
+    print(f"Converting DOCX {docx_path} to images (placeholder)...")
+    converted_pdf_path = docx_path.replace('.docx', '.pdf').replace('.doc', '.pdf')
+    
+    pythoncom.CoInitialize()
+    word_app = None
+    word_doc = None
+    try:
+        word_app = client.Dispatch("Word.Application")
+        word_app.visible = False
+        word_doc = word_app.Documents.Open(docx_path)
+        word_doc.SaveAs(converted_pdf_path, FileFormat=17) # 17 is wdFormatPDF
+    finally:
+        if word_doc: word_doc.Close(False)
+        if word_app: word_app.Quit()
+        pythoncom.CoUninitialize()
+
+    images_from_pdf = []
+    if os.path.exists(converted_pdf_path):
+        images_from_pdf = pdf_to_images(converted_pdf_path)
+    
+    return images_from_pdf, converted_pdf_path
+
+
 @app.route("/print_document", methods=["POST"])
 def print_document():
+    # Store the path to any temporary grayscale PDF created
+    temp_grayscale_pdf_path = None 
+    # Store the path to any temporary selected-pages PDF created
+    temp_selected_pages_pdf_path = None
+
     try:
         opts = request.get_json()
         if not opts or "fileName" not in opts:
             return jsonify({"error": "Missing file name for printing."}), 400
 
-        file_path = os.path.join(UPLOAD_FOLDER, opts["fileName"])
-        if not os.path.exists(file_path):
-            return jsonify({"error": f"Requested file '{file_path}' not found."}), 404
+        file_name_from_opts = opts["fileName"]
+        original_file_path = os.path.join(UPLOAD_FOLDER, file_name_from_opts)
+        
+        if not os.path.exists(original_file_path):
+            return jsonify({"error": f"Requested file '{original_file_path}' not found."}), 404
 
         num_copies = int(opts.get("numCopies", 1))
-        color_option = opts.get("colorOption", "Color")
+        color_option = opts.get("colorOption", "Color") # "Color" or "Grayscale"
         printer_name = win32print.GetDefaultPrinter()
 
-        if file_path.lower().endswith(".pdf"):
+        # Determine the file to actually print
+        file_to_print_path = original_file_path
+        
+        # --- Handle PDF Grayscale Conversion BEFORE Page Selection/Sumatra ---
+        if original_file_path.lower().endswith(".pdf") and color_option == "Grayscale":
+            try:
+                # Generate a unique temporary filename for the grayscale PDF
+                timestamp_str = datetime.now().strftime('%Y%m%d%H%M%S%f')
+                temp_grayscale_pdf_name = f"gs_{Path(file_name_from_opts).stem}_{timestamp_str}.pdf"
+                temp_grayscale_pdf_path = os.path.join(UPLOAD_FOLDER, temp_grayscale_pdf_name)
+                
+                print(f"Converting original PDF {original_file_path} to grayscale: {temp_grayscale_pdf_path}")
+                convert_pdf_to_grayscale(original_file_path, temp_grayscale_pdf_path)
+                file_to_print_path = temp_grayscale_pdf_path # Now print this grayscale PDF
+                print(f"Set file to print to grayscale version: {file_to_print_path}")
+
+            except Exception as e:
+                log_error_to_db(f"Failed to convert PDF to grayscale before printing: {e}", source="/print_document_grayscale_conv")
+                print(f"Warning: PDF grayscale conversion failed. Printing original file instead. Error: {e}")
+                file_to_print_path = original_file_path # Fallback to original
+                temp_grayscale_pdf_path = None # Ensure it's not deleted if conversion failed
+
+
+        # --- PDF Printing (using SumatraPDF) ---
+        if file_to_print_path.lower().endswith(".pdf"):
             page_selection = opts.get("pageSelection")
-            temp_print_path = file_path  # Default: print original file
+            
+            # Use the (potentially grayscale) PDF for page selection
+            current_pdf_for_selection = file_to_print_path 
+            
             if page_selection:
                 try:
-                    page_indexes = parse_page_selection(page_selection, total_pages=9999)  # Adjust total_pages as needed
+                    # Get actual total pages from the PDF file (essential for accurate page parsing)
+                    pdf_doc = fitz.open(current_pdf_for_selection)
+                    actual_total_pages = len(pdf_doc)
+                    pdf_doc.close()
 
-                    selected_doc = fitz.open(file_path)
+                    page_indexes = parse_page_selection(page_selection, total_pages=actual_total_pages)
+
+                    if not page_indexes:
+                        return jsonify({"error": "No valid pages selected for printing."}), 400
+
+                    selected_doc = fitz.open(current_pdf_for_selection)
                     new_doc = fitz.open()
 
                     for i in page_indexes:
                         if i < len(selected_doc):
                             new_doc.insert_pdf(selected_doc, from_page=i, to_page=i)
-                    temp_print_path = file_path.replace(".pdf", f"_selectedpages.pdf")
-                    new_doc.save(temp_print_path)
+                    
+                    # Create a unique temporary filename for the selected pages PDF
+                    timestamp_str_pages = datetime.now().strftime('%Y%m%d%H%M%S%f')
+                    temp_selected_pages_pdf_name = f"selected_pages_{Path(file_name_from_opts).stem}_{timestamp_str_pages}.pdf"
+                    temp_selected_pages_pdf_path = os.path.join(UPLOAD_FOLDER, temp_selected_pages_pdf_name)
+                    
+                    new_doc.save(temp_selected_pages_pdf_path)
                     selected_doc.close()
                     new_doc.close()
-                    print(f"Created selected-pages PDF at: {temp_print_path}")
+                    
+                    file_to_print_path = temp_selected_pages_pdf_path # Now print this selected-pages PDF
+                    print(f"Created selected-pages PDF at: {file_to_print_path}")
                 except Exception as e:
-                    log_error_to_db(f"Error creating selected-pages PDF: {e}", source="/print_document")
+                    log_error_to_db(f"Error creating selected-pages PDF: {e}", source="/print_document_page_selection")
                     return jsonify({"error": f"Failed to process selected pages: {e}"}), 500
 
-            sumatra_path = r"C:\\Users\\CCC\\AppData\\Local\\SumatraPDF\\SumatraPDF.exe"
+            sumatra_path = r"C:\\Users\\ivanc\AppData\\Local\\SumatraPDF\\SumatraPDF.exe"
+            
+            # Use the final resolved path for SumatraPDF
             cmd = [
                 sumatra_path,
                 "-print-to", printer_name,
                 "-silent",
                 "-print-settings", f"copies={num_copies}",
-                temp_print_path
+                str(file_to_print_path) # Ensure this is a string
             ]
 
             try:
-                print("File to be printed exists:", os.path.exists(file_path))
-                print("File path:", file_path)
-                print("Sumatra Command:", " ".join(cmd))
+                print(f"File to be printed (final path for Sumatra): {file_to_print_path}")
+                print(f"Sumatra Command: {' '.join(cmd)}")
 
-                result = subprocess.run(cmd, check=True, timeout=30)
+                result = subprocess.run(cmd, check=True, timeout=60) # Increased timeout to 60 seconds
                 print(f"SumatraPDF print command succeeded: {result}")
             except subprocess.CalledProcessError as e:
-                log_error_to_db(f"SumatraPDF printing failed: {e}", source="/print_document")
+                log_error_to_db(f"SumatraPDF printing failed: {e}. Command: {' '.join(cmd)}", source="/print_document_sumatra")
                 return jsonify({"success": False, "message": f"Print failed: {e}"}), 500
             except subprocess.TimeoutExpired:
-                log_error_to_db("SumatraPDF printing timed out", source="/print_document")
+                log_error_to_db("SumatraPDF printing timed out", source="/print_document_sumatra_timeout")
                 return jsonify({"success": False, "message": "Printing timed out."}), 504
 
+        # --- Other File Types Printing (using win32print directly) ---
         else:
-            for _ in range(num_copies):
+            # Here, the DM_COLOR setting applies for non-PDFs
+            hPrinter = None
+            try:
                 hPrinter = win32print.OpenPrinter(printer_name)
+
+                devmode = win32print.DocumentProperties(
+                    None,
+                    hPrinter,
+                    printer_name,
+                    None,
+                    None,
+                    win32con.DM_OUT_BUFFER
+                )
+
+                # Set number of copies
+                devmode.Fields |= win32con.DM_COPIES
+                devmode.Copies = num_copies
+
+                # --- Grayscale Setting for non-PDF files ---
+                if color_option == "Grayscale":
+                    if hasattr(devmode, 'Color'):
+                        devmode.Fields |= win32con.DM_COLOR
+                        devmode.Color = win32con.DMCOLOR_MONOCHROME
+                        print(f"Set win32print DEVMODE to Grayscale for non-PDF file: {file_to_print_path}")
+                    else:
+                        print(f"Warning: Printer {printer_name} does not support DM_COLOR setting for grayscale via driver. (Non-PDF)")
+                else: # Explicitly set to color if not grayscale
+                    if hasattr(devmode, 'Color'):
+                        devmode.Fields |= win32con.DM_COLOR
+                        devmode.Color = win32con.DMCOLOR_COLOR
+                        print(f"Set win32print DEVMODE to Color for non-PDF file: {file_to_print_path}")
+                # --- End Grayscale Setting ---
+
+                # Apply updated DEVMODE
+                devmode = win32print.DocumentProperties(
+                    hPrinter,
+                    None,
+                    printer_name,
+                    devmode,
+                    devmode,
+                    win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER
+                )
+
+                doc_info = win32print.DOCINFO_TYPE()
+                doc_info.pDocName = os.path.basename(file_to_print_path)
+                doc_info.pOutputFile = None
+                doc_info.pDatatype = "RAW" # Assumes printer can handle raw byte stream of image/doc
+                doc_info.fwType = 0
+
+                hJob = win32print.StartDocPrinter(hPrinter, 1, doc_info)
                 try:
-                    hJob = win32print.StartDocPrinter(hPrinter, 1, ("Print Job", None, "RAW"))
-                    win32print.StartPagePrinter(hPrinter)
-                    with open(file_path, "rb") as f:
+                    win32print.StartPagePrinter(hJob) # Use hJob here
+                    with open(file_to_print_path, "rb") as f:
                         raw_data = f.read()
-                        win32print.WritePrinter(hPrinter, raw_data)
-                    win32print.EndPagePrinter(hPrinter)
-                    win32print.EndDocPrinter(hPrinter)
+                        win32print.WritePrinter(hJob, raw_data) # Use hJob here
+                    win32print.EndPagePrinter(hJob) # Use hJob here
+                    win32print.EndDocPrinter(hJob) # Use hJob here
+                    print(f"Successfully sent {file_to_print_path} to printer: {printer_name} (win32print direct).")
+                except Exception as inner_e:
+                    log_error_to_db(f"win32print direct printing failed for {file_to_print_path}: {inner_e}", source="/print_document_win32print_inner")
+                    raise # Re-raise to be caught by outer except
                 finally:
+                    # Ensure the job is ended even if there was an error during WritePrinter
+                    if hJob:
+                        try:
+                            win32print.EndDocPrinter(hJob)
+                        except Exception as e_end_doc:
+                            print(f"Warning: Error ending print job {hJob}: {e_end_doc}")
+
+            except Exception as e:
+                log_error_to_db(f"win32print direct printing setup/execution failed for {file_to_print_path}: {e}", source="/print_document_win32print_outer")
+                return jsonify({"success": False, "message": f"Print failed (win32print): {e}"}), 500
+            finally:
+                if hPrinter:
                     win32print.ClosePrinter(hPrinter)
 
-        timeout_sec = 60
-        interval = 2
+        # Monitor printer status after sending the job
+        timeout_sec = 120 # Increased timeout for printer to go idle
+        interval = 5
         waited = 0
+        print(f"Monitoring printer status for {timeout_sec} seconds...")
         while waited < timeout_sec:
             status = check_printer_status(printer_name)
+            print(f"Current printer status: {status} (Waited: {waited}s)")
             if status == "Idle":
+                print("Printer is Idle. Print job likely completed.")
                 break
             time.sleep(interval)
             waited += interval
 
         if waited >= timeout_sec:
+            log_error_to_db("Print command issued, but printer did not return to idle in time.", source="/print_document_timeout_monitor")
             return jsonify({
                 "success": False,
-                "message": "Print command issued, but printer did not return to idle in time."
+                "message": "Print command issued, but printer did not return to idle in time. Please check printer manually."
             }), 504
 
         return jsonify({"success": True, "message": "Print job sent successfully."})
 
     except Exception as e:
-        log_error_to_db(f"Print error: {e}", source="/print_document")
-        return jsonify({"error": f"Failed to send to printer: {e}"}), 500
+        log_error_to_db(f"An unexpected error occurred during print request: {e}", source="/print_document_overall")
+        return jsonify({"error": f"Failed to send to printer due to an unexpected error: {e}"}), 500
+    finally:
+        # --- Cleanup temporary files ---
+        if temp_grayscale_pdf_path and os.path.exists(temp_grayscale_pdf_path):
+            try:
+                os.remove(temp_grayscale_pdf_path)
+                print(f"Cleaned up temporary grayscale PDF: {temp_grayscale_pdf_path}")
+            except OSError as e:
+                print(f"Cleanup Warning: Could not delete temporary grayscale PDF {temp_grayscale_pdf_path} (in use?): {e}")
+            except Exception as e:
+                print(f"Cleanup Error: Could not delete temporary grayscale PDF {temp_grayscale_pdf_path}: {e}")
+        
+        if temp_selected_pages_pdf_path and os.path.exists(temp_selected_pages_pdf_path):
+            try:
+                os.remove(temp_selected_pages_pdf_path)
+                print(f"Cleaned up temporary selected-pages PDF: {temp_selected_pages_pdf_path}")
+            except OSError as e:
+                print(f"Cleanup Warning: Could not delete temporary selected-pages PDF {temp_selected_pages_pdf_path} (in use?): {e}")
+            except Exception as e:
+                print(f"Cleanup Error: Could not delete temporary selected-pages PDF {temp_selected_pages_pdf_path}: {e}")
 
+# ... (rest of your app.py code) ...
+# Example: @app.route("/", methods=["GET"])
+#          def index(): ...
+#          if __name__ == "__main__":
+#             with app.app_context():
+#                 db.create_all()
+#             socketio.run(app, debug=True, port=5000)
 
 @app.route('/api/list_recent_downloads', methods=['GET'])
 def list_recent_downloads():
