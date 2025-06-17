@@ -81,13 +81,6 @@ class ErrorLog(db.Model):
     def __repr__(self):
         return f'<ErrorLog {self.timestamp} - {self.source}: {self.message[:50]}>'
 
-class HopperStatus(db.Model):
-    id = db.Column(db.Integer, primary_key=True) # Should only ever be one row
-    balance = db.Column(db.Float, nullable=False, default=200.00)
-
-    def __repr__(self):
-        return f'<HopperStatus balance: {self.balance}>'
-
 # NEW: User model for registration
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -97,18 +90,6 @@ class User(db.Model):
 
     def __repr__(self):
         return f'<User {self.username}>'
-
-with app.app_context():
-    db.create_all()  # ensures tables are created before first use
-    # Initialize Hopper Balance if it doesn't exist
-    if HopperStatus.query.first() is None:
-        initial_hopper_status = HopperStatus(balance=200.00)
-        db.session.add(initial_hopper_status)
-        db.session.commit()
-        print("Initialized hopper balance to 200.00 in the database.")
-    else:
-        current_db_balance = HopperStatus.query.first().balance
-        print(f"Hopper balance already exists in DB: ₱{current_db_balance:.2f}")
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static", "uploads")
@@ -552,8 +533,24 @@ def process_downloaded_file():
     try:
         if file_ext_without_dot == "pdf":
             print(f"Processing selected PDF: {original_filename}")
-            processed_images = pdf_to_images(str(final_filepath_for_processing))
+            
+            # NEW: Copy the PDF to UPLOAD_FOLDER with a unique name for printing consistency
+            pdf_output_filename = f"print_ready_{timestamp}_{original_filename}"
+            pdf_output_path = os.path.join(UPLOAD_FOLDER, pdf_output_filename)
+            
+            # Copy the file from DOWNLOADS_DIR to UPLOAD_FOLDER
+            shutil.copy(str(final_filepath_for_processing), pdf_output_path)
+            print(f"Copied original PDF to UPLOAD_FOLDER for printing: {pdf_output_path}")
+
+            # Now process this copied PDF into images for preview/page counting
+            processed_images = pdf_to_images(pdf_output_path)
             calculated_total_pages = len(processed_images)
+
+            # Update final info to reflect the new file in UPLOAD_FOLDER
+            final_filename_for_info = pdf_output_filename
+            final_file_ext_for_info = "pdf"
+            final_filepath_for_processing = pdf_output_path
+
 
         elif file_ext_without_dot in ("jpg", "jpeg", "png"):
             print(f"Processing selected Image: {original_filename}")
@@ -574,19 +571,17 @@ def process_downloaded_file():
         elif file_ext_without_dot in ("doc", "docx"):
             print(f"Processing selected Word Document: {original_filename}")
             temp_doc_path_in_uploads = os.path.join(UPLOAD_FOLDER, f"{timestamp}_{original_filename}")
-            import shutil
             shutil.copy(str(final_filepath_for_processing), temp_doc_path_in_uploads)
-
             processed_images, converted_pdf_path = docx_to_images(temp_doc_path_in_uploads)
             calculated_total_pages = len(processed_images)
-
             if converted_pdf_path and os.path.exists(converted_pdf_path):
                 final_filename_for_info = os.path.basename(converted_pdf_path)
                 final_file_ext_for_info = "pdf"
                 final_filepath_for_processing = converted_pdf_path
                 os.remove(temp_doc_path_in_uploads)
             else:
-                if os.path.exists(temp_doc_path_in_uploads): os.remove(temp_doc_path_in_uploads)
+                if os.path.exists(temp_doc_path_in_uploads):
+                    os.remove(temp_doc_path_in_uploads)
                 raise Exception("Word to PDF conversion failed or PDF path not returned.")
         else:
             raise Exception(f"Unsupported file type selected: {file_ext_without_dot}")
@@ -596,7 +591,6 @@ def process_downloaded_file():
 
         images = processed_images
         total_pages = calculated_total_pages;
-
         files_uploaded_today += 1
 
         try:
@@ -616,7 +610,7 @@ def process_downloaded_file():
         print(f"Selected downloaded file processed successfully: {final_filename_for_info} (from {original_filename})")
         return jsonify({
             "message": "File processed successfully!",
-            "fileName": final_filename_for_info,
+            "fileName": final_filename_for_info, # Ensure this is the name of the file in UPLOAD_FOLDER
             "totalPages": total_pages
         }), 200
 
@@ -1088,13 +1082,6 @@ def printer_status_api():
     
     status_logs = get_printer_status_wmi()
     return jsonify(status_logs)
-
-@app.route("/admin-balance")
-def admin_balance():
-    hopper_status = HopperStatus.query.first()
-    current_hopper_balance = hopper_status.balance if hopper_status else 0.0
-    # You might want to pass other balance-related info if available
-    return render_template("admin-balance.html", current_hopper_balance=round(current_hopper_balance, 2))
 
 @app.route("/admin-feedbacks")
 def admin_feedbacks():

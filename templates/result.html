@@ -391,277 +391,282 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        let previewsData = [];
+          let previewsData = [];
 
-        // Log Error function
-        function logError(message, details) {
-          console.error("Client-side error:", message, details);
-          fetch('/log_activity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                message: String(message),
-                source: 'result.html',
-                details: details ? String(details) : null
-            })
-          }).catch(err => console.error("Failed to send client-side error to backend:", err));
-        }
-
-        function parseSelection(str) {
-          const pages = new Set();
-          (str || "").split(",").forEach((token) => {
-            token = token.trim();
-            if (!token) return;
-            if (token.includes("-")) {
-              let [s, e] = token.split("-").map(Number);
-              if (s > e) [s, e] = [e, s]; 
-              for (let i = s; i <= e; i++) pages.add(String(i));
-            } else if (!isNaN(parseInt(token, 10))) { 
-              pages.add(token);
-            }
-          });
-          return pages;
-        }
-
-        function thumbClass(size, orient) {
-          const o = orient === "auto" ? "portrait" : orient; 
-          return `thumb-${size} ${o}`;
-        }
-
-        function refreshUI(options) {
-          if (!options || !options.fileName) {
-            // MODIFIED: Changed key in console error message
-            console.error("Print options not found in sessionStorage or fileName is missing. Key: printOptions", options);
-            alert("Error: Print options are missing. Please start over from the upload page.");
-            document.getElementById("printDetails").innerHTML = "<p class='text-danger'>Could not load print details.</p>";
-            document.getElementById("previewContainer").innerHTML = "";
-            document.getElementById("segmentedContainer").innerHTML = "";
-            document.getElementById("priceValue").textContent = "0.00";
-            return;
+          // Log Error function
+          function logError(message, details) {
+              console.error("Client-side error:", message, details);
+              fetch('/log_activity', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      message: String(message),
+                      source: 'result.html',
+                      details: details ? String(details) : null
+                  })
+              }).catch(err => console.error("Failed to send client-side error to backend:", err));
           }
 
-          document.getElementById("printDetails").innerHTML = `
-            <h3>Selected Options:</h3>
-            <ul>
-              <li><strong>File:</strong> ${options.fileName}</li>
-              <li><strong>Pages:</strong> ${options.pageSelection || 'All'}</li>
-              <li><strong>Copies:</strong> ${options.numCopies || 1}</li>
-              <li><strong>Orientation:</strong> ${options.orientationOption || 'auto'}</li>
-              <li><strong>Page Size:</strong> ${options.pageSize || 'A4'}</li>
-              <li><strong>Color:</strong> ${options.colorOption || 'Color'}</li>
-            </ul>
-          `;
-
-          document.getElementById("editPageSelection").value = options.pageSelection || "";
-          document.getElementById("editNumCopies").value = options.numCopies || 1;
-          document.getElementById("editOrientationOption").value = options.orientationOption || "auto";
-          document.getElementById("editPageSize").value = "Short"; // Always set to Short
-          document.getElementById("editColorOption").value = options.colorOption || "Color";
-
-          fetch("/preview_with_price", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(options),
-          })
-            .then(async (response) => { 
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
-                throw new Error(errorData.error || `HTTP error ${response.status}`);
-              }
-              return response.json();
-            })
-            .then((data) => {
-              if (data.error) { 
-                console.error("Error from /preview_with_price:", data.error);
-                alert("Error from server: " + data.error);
-                document.getElementById("previewContainer").innerHTML = `<p class="text-danger">${data.error}</p>`;
-                document.getElementById("segmentedContainer").innerHTML = "";
-                document.getElementById("priceValue").textContent = "0.00";
-                return;
-              }
-
-              document.getElementById("priceValue").textContent = data.totalPrice.toFixed(2);
-
-              const pC = document.getElementById("previewContainer");
-              const sC = document.getElementById("segmentedContainer");
-              pC.innerHTML = "";
-              sC.innerHTML = "";
-
-              if (data.pagePrices && Array.isArray(data.pagePrices)) {
-                data.pagePrices.forEach((p) => {
-                  const thumb = document.createElement("div");
-                  thumb.className = "thumb-container " + thumbClass(options.pageSize, options.orientationOption);
-                  const img = document.createElement("img");
-                  img.src = p.original;
-                  img.style.cursor = "pointer";
-                  if (options.colorOption === "Grayscale") {
-                    img.style.filter = "grayscale(100%)";
+          function parseSelection(str) {
+              const pages = new Set();
+              (str || "").split(",").forEach((token) => {
+                  token = token.trim();
+                  if (!token) return;
+                  if (token.includes("-")) {
+                      let [s, e] = token.split("-").map(Number);
+                      if (s > e) [s, e] = [e, s];
+                      for (let i = s; i <= e; i++) pages.add(String(i));
+                  } else if (!isNaN(parseInt(token, 10))) {
+                      pages.add(token);
                   }
-                  img.addEventListener("click", () => showModal(p.original));
-                  thumb.appendChild(img);
-                  pC.appendChild(thumb);
+              });
+              return pages;
+          }
 
-                  const seg = document.createElement("div");
-                  seg.className = "m-2 p-2 border";
-                  seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(2)}):</p>`;
-                  const segImg = document.createElement("img");
-                  segImg.src = p.highlighted;
-                  segImg.style = "max-width:200px; cursor:pointer;";
-                  segImg.addEventListener("click", () => showModal(p.highlighted));
-                  seg.appendChild(segImg);
-                  sC.appendChild(seg);
-                });
-              } else {
-                console.warn("data.pagePrices is missing or not an array", data);
-                sC.innerHTML = "<p>Could not load price breakdown.</p>";
+          function thumbClass(size, orient) {
+              const o = orient === "auto" ? "portrait" : orient;
+              return `thumb-${size} ${o}`;
+          }
+
+          function refreshUI(options) {
+              if (!options || !options.fileName) {
+                  console.error("Print options not found in sessionStorage or fileName is missing. Key: printOptions", options);
+                  alert("Error: Print options are missing. Please start over from the upload page.");
+                  document.getElementById("printDetails").innerHTML = "<p class='text-danger'>Could not load print details.</p>";
+                  document.getElementById("previewContainer").innerHTML = "";
+                  document.getElementById("segmentedContainer").innerHTML = "";
+                  document.getElementById("priceValue").textContent = "0.00";
+                  return;
               }
 
+              document.getElementById("printDetails").innerHTML = `
+                  <h3>Selected Options:</h3>
+                  <ul>
+                      <li><strong>File:</strong> ${options.fileName}</li>
+                      <li><strong>Pages:</strong> ${options.pageSelection || 'All'}</li>
+                      <li><strong>Copies:</strong> ${options.numCopies || 1}</li>
+                      <li><strong>Orientation:</strong> ${options.orientationOption || 'auto'}</li>
+                      <li><strong>Page Size:</strong> ${options.pageSize || 'A4'}</li>
+                      <li><strong>Color:</strong> ${options.colorOption || 'Color'}</li>
+                  </ul>
+              `;
 
-              const grid = document.getElementById("editPageSelectionContainer");
-              grid.innerHTML = "";
-              const totalPages = data.totalPages; 
-              const selectedPages = parseSelection(options.pageSelection);
+              document.getElementById("editPageSelection").value = options.pageSelection || "";
+              document.getElementById("editNumCopies").value = options.numCopies || 1;
+              document.getElementById("editOrientationOption").value = options.orientationOption || "auto";
+              document.getElementById("editPageSize").value = "Short"; // Always set to Short
+              document.getElementById("editColorOption").value = options.colorOption || "Color";
 
-              for (let i = 1; i <= totalPages; i++) {
-                const btn = document.createElement("div");
-                btn.className = "page-button";
-                btn.textContent = i;
-                if (selectedPages.has(String(i))) btn.classList.add("selected");
-                btn.addEventListener("click", () => {
-                  const nowSelected = btn.classList.toggle("selected");
-                  if (nowSelected) selectedPages.add(String(i));
-                  else selectedPages.delete(String(i));
-                  document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
-                });
-                grid.appendChild(btn);
+              fetch("/preview_with_price", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(options),
+              })
+                  .then(async (response) => {
+                      if (!response.ok) {
+                          const errorData = await response.json().catch(() => ({ error: `HTTP error ${response.status}` }));
+                          throw new Error(errorData.error || `HTTP error ${response.status}`);
+                      }
+                      return response.json();
+                  })
+                  .then((data) => {
+                      if (data.error) {
+                          console.error("Error from /preview_with_price:", data.error);
+                          alert("Error from server: " + data.error);
+                          document.getElementById("previewContainer").innerHTML = `<p class="text-danger">${data.error}</p>`;
+                          document.getElementById("segmentedContainer").innerHTML = "";
+                          document.getElementById("priceValue").textContent = "0.00";
+                          return;
+                      }
+
+                      document.getElementById("priceValue").textContent = data.totalPrice.toFixed(2);
+
+                      const pC = document.getElementById("previewContainer");
+                      const sC = document.getElementById("segmentedContainer");
+                      pC.innerHTML = "";
+                      sC.innerHTML = "";
+
+                      if (data.pagePrices && Array.isArray(data.pagePrices)) {
+                          data.pagePrices.forEach((p) => {
+                              const thumb = document.createElement("div");
+                              thumb.className = "thumb-container " + thumbClass(options.pageSize, options.orientationOption);
+                              const img = document.createElement("img");
+                              img.src = p.original;
+                              img.style.cursor = "pointer";
+                              if (options.colorOption === "Grayscale") {
+                                  img.style.filter = "grayscale(100%)";
+                              }
+                              img.addEventListener("click", () => showModal(p.original));
+                              thumb.appendChild(img);
+                              pC.appendChild(thumb);
+
+                              const seg = document.createElement("div");
+                              seg.className = "m-2 p-2 border";
+                              seg.innerHTML = `<p>Page ${p.page} (₱${p.price.toFixed(2)}):</p>`;
+                              const segImg = document.createElement("img");
+                              segImg.src = p.highlighted;
+                              segImg.style = "max-width:200px; cursor:pointer;";
+                              segImg.addEventListener("click", () => showModal(p.highlighted));
+                              seg.appendChild(segImg);
+                              sC.appendChild(seg);
+                          });
+                      } else {
+                          console.warn("data.pagePrices is missing or not an array", data);
+                          sC.innerHTML = "<p>Could not load price breakdown.</p>";
+                      }
+
+                      const grid = document.getElementById("editPageSelectionContainer");
+                      grid.innerHTML = "";
+                      const totalPages = data.totalPages;
+                      const selectedPages = parseSelection(options.pageSelection);
+
+                      for (let i = 1; i <= totalPages; i++) {
+                          const btn = document.createElement("div");
+                          btn.className = "page-button";
+                          btn.textContent = i;
+                          if (selectedPages.has(String(i))) btn.classList.add("selected");
+                          btn.addEventListener("click", () => {
+                              const nowSelected = btn.classList.toggle("selected");
+                              if (nowSelected) selectedPages.add(String(i));
+                              else selectedPages.delete(String(i));
+                              document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
+                          });
+                          grid.appendChild(btn);
+                      }
+                      document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
+
+                      previewsData = data.previews || [];
+                  })
+                  .catch((error) => {
+                      console.error("Failed to load preview data:", error);
+                      alert("Failed to load preview data. Please try again. Details: " + error.message);
+                      document.getElementById("previewContainer").innerHTML = `<p class="text-danger">Could not load previews. ${error.message}</p>`;
+                      document.getElementById("segmentedContainer").innerHTML = "";
+                      document.getElementById("priceValue").textContent = "0.00";
+                  });
+          }
+
+          let opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
+          refreshUI(opts);
+
+          document.getElementById("editForm").addEventListener("submit", (e) => {
+              e.preventDefault();
+              const updated = {
+                  fileName: opts.fileName,
+                  originalDownloadName: opts.originalDownloadName,
+                  pageSelection: document.getElementById("editPageSelection").value,
+                  numCopies: parseInt(document.getElementById("editNumCopies").value, 10),
+                  orientationOption: document.getElementById("editOrientationOption").value,
+                  pageSize: "Short", // Force pageSize to "Short" when applying changes
+                  colorOption: document.getElementById("editColorOption").value,
+              };
+              opts = updated;
+              sessionStorage.setItem("printOptions", JSON.stringify(updated));
+              refreshUI(updated);
+              $("#editModal").modal("hide");
+          });
+
+          document.getElementById("printButton").addEventListener("click", (ev) => {
+              ev.preventDefault();
+              const currentPrice = parseFloat(document.getElementById("priceValue").textContent);
+              // This check ensures that the previews have been loaded successfully from /preview_with_price
+              if (!previewsData || previewsData.length === 0) {
+                  alert("Preview data is not available. Cannot proceed to printing.");
+                  console.error("previewsData is empty or not loaded:", previewsData);
+                  return;
               }
-              document.getElementById("editPageSelection").value = Array.from(selectedPages).sort((a, b) => Number(a) - Number(b)).join(",");
-              
-              previewsData = data.previews || []; 
-            })
-            .catch((error) => {
-              console.error("Failed to load preview data:", error);
-              alert("Failed to load preview data. Please try again. Details: " + error.message);
-              document.getElementById("previewContainer").innerHTML = `<p class="text-danger">Could not load previews. ${error.message}</p>`;
-              document.getElementById("segmentedContainer").innerHTML = "";
-              document.getElementById("priceValue").textContent = "0.00";
-            });
-        }
-        
-        // MODIFIED: Changed key for getItem
-        let opts = JSON.parse(sessionStorage.getItem("printOptions")) || {};
-        refreshUI(opts);
 
-        document.getElementById("editForm").addEventListener("submit", (e) => {
-          e.preventDefault();
-          const updated = {
-            fileName: opts.fileName, 
-            originalDownloadName: opts.originalDownloadName, 
-            pageSelection: document.getElementById("editPageSelection").value,
-            numCopies: parseInt(document.getElementById("editNumCopies").value, 10),
-            orientationOption: document.getElementById("editOrientationOption").value,
-            pageSize: "Short", // Force pageSize to "Short" when applying changes
-            colorOption: document.getElementById("editColorOption").value,
-          };
-          opts = updated; 
-          // MODIFIED: Changed key for setItem
-          sessionStorage.setItem("printOptions", JSON.stringify(updated)); 
-          refreshUI(updated);
-          $("#editModal").modal("hide");
-        });
+              // The 'fileName' is already available in the 'opts' object, which is loaded
+              // from sessionStorage and updated by the edit form.
+              // No need to get it from previewsData as previewsData contains page-specific info.
 
-        document.getElementById("printButton").addEventListener("click", (ev) => {
-            ev.preventDefault();
-            const currentPrice = parseFloat(document.getElementById("priceValue").textContent);
-            if (!previewsData || previewsData.length === 0) {
-                 alert("Preview data is not available. Cannot proceed to printing.");
-                 return;
-            }
-            // MODIFIED: Directly trigger print and show modal
-            const modal = document.getElementById("myModal");
+              // Optional: Log the 'opts' object before sending to verify its content
+              console.log("Opts object being sent to backend:", opts);
+              console.log("JSON stringified opts:", JSON.stringify(opts));
 
-            fetch("/print_document", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(opts), // Use current opts for printing
-            })
-            .then((res) => {
-                if (!res.ok) {
-                    return res.json().then(errData => {
-                        const printErrMsg = `Print request failed. Status: ${res.status}. Backend Error: ${errData.error || 'Unknown error'}`;
-                        console.error(printErrMsg, errData);
-                        logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(errData)}`);
-                        alert("Failed to send print job: " + (errData.error || "Please contact support."));
-                        window.location.href = "/";
-                        throw new Error('Print HTTP error');
-                    }).catch(() => {
-                        const printErrMsg = `Print request failed. Status: ${res.status}.`;
-                        console.error(printErrMsg);
-                        logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}`);
-                        alert("Failed to send print job. Please contact support.");
-                        window.location.href = "/";
-                        throw new Error('Print HTTP error');
-                    });
-                }
-                return res.json();
-            })
-            .then((data) => {
-              if (data.success) {
-                console.log("Print initiated successfully:", data.message);
-                if (modal) {
-                   modal.style.display = "flex";
-                }
-                // Record successful transaction (assuming it's 'Free' or directly processed)
-                fetch('/api/record-transaction', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ method: 'Direct Print (Free/No Payment)', amount: currentPrice }) // Indicate no payment
-                }).then(res => res.json()).then(transData => {
-                    if(transData.success) console.log("Direct print transaction recorded.");
-                    else logError("Failed to record direct print transaction", JSON.stringify(transData));
-                }).catch(err => logError("Error recording direct print transaction", err.stack));
+              const modal = document.getElementById("myModal");
 
-                setTimeout(() => { window.location.href = "/"; }, 30000);
-              } else {
-                const printFailMsg = `Backend reported print failure: ${data.error}`;
-                console.error(printFailMsg);
-                logError(printFailMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(data)}`);
-                alert("Printing failed: " + (data.error || "Unknown issue"));
-                window.location.href = "/";
-              }
-            })
-            .catch((error) => {
-              if (error.message !== 'Print HTTP error') {
-                  const printCatchMsg = `Error during print request fetch: ${error.message}`;
-                  console.error(printCatchMsg, error);
-                  logError(printCatchMsg, `PrintOptions: ${JSON.stringify(opts)}, ErrorStack: ${error.stack}`);
-                  alert("An error occurred while trying to print. Please check connection and try again.");
-                  window.location.href = "/";
-              }
-            });
-        });
+              fetch("/print_document", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(opts), // Use the 'opts' object with all print settings including fileName
+              })
+              .then((res) => {
+                  if (!res.ok) {
+                      return res.json().then(errData => {
+                          const printErrMsg = `Print request failed. Status: ${res.status}. Backend Error: ${errData.error || 'Unknown error'}`;
+                          console.error(printErrMsg, errData);
+                          logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(errData)}`);
+                          alert("Failed to send print job: " + (errData.error || "Please contact support."));
+                          window.location.href = "/";
+                          throw new Error('Print HTTP error');
+                      }).catch(() => {
+                          const printErrMsg = `Print request failed. Status: ${res.status}.`;
+                          console.error(printErrMsg);
+                          logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}`);
+                          alert("Failed to send print job. Please contact support.");
+                          window.location.href = "/";
+                          throw new Error('Print HTTP error');
+                      });
+                  }
+                  return res.json();
+              })
+              .then((data) => {
+                  if (data.success) {
+                      console.log("Print initiated successfully:", data.message);
+                      if (modal) {
+                          modal.style.display = "flex";
+                      }
+                      fetch('/api/record-transaction', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ method: 'Direct Print (Free/No Payment)', amount: currentPrice })
+                      }).then(res => res.json()).then(transData => {
+                          if(transData.success) console.log("Direct print transaction recorded.");
+                          else logError("Failed to record direct print transaction", JSON.stringify(transData));
+                      }).catch(err => logError("Error recording direct print transaction", err.stack));
 
-        function showModal(src) {
-            const img = document.getElementById("modalImage");
-            const isGrayscale = document.getElementById("editColorOption").value === "Grayscale";
-            img.style.filter = isGrayscale ? "grayscale(100%)" : "";
-            img.src = src;
-            $("#imageModal").modal("show");
-        }
+                      setTimeout(() => { window.location.href = "/"; }, 30000);
+                  } else {
+                      const printFailMsg = `Backend reported print failure: ${data.error}`;
+                      console.error(printFailMsg);
+                      logError(printFailMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(data)}`);
+                      alert("Printing failed: " + (data.error || "Unknown issue"));
+                      window.location.href = "/";
+                  }
+              })
+              .catch((error) => {
+                  if (error.message !== 'Print HTTP error') {
+                      const printCatchMsg = `Error during print request fetch: ${error.message}`;
+                      console.error(printCatchMsg, error);
+                      logError(printCatchMsg, `PrintOptions: ${JSON.stringify(opts)}, ErrorStack: ${error.stack}`);
+                      alert("An error occurred while trying to print. Please check connection and try again.");
+                      window.location.href = "/";
+                  }
+              });
+          });
 
-        // MODIFIED: Close button functionality for the new modal
-        const myModalElement = document.getElementById("myModal");
-        if (myModalElement) {
-            document.querySelectorAll("#myModal .close").forEach((closeButton) => {
-                closeButton.onclick = () => {
-                    myModalElement.style.display = "none";
-                    window.location.href = "/"; // Redirect to home on close
-                };
-            });
-        }
+          function showModal(src) {
+              const img = document.getElementById("modalImage");
+              const isGrayscale = document.getElementById("editColorOption").value === "Grayscale";
+              img.style.filter = isGrayscale ? "grayscale(100%)" : "";
+              img.src = src;
+              $("#imageModal").modal("show");
+          }
+
+          // Close button functionality for the new modal
+          const myModalElement = document.getElementById("myModal");
+          if (myModalElement) {
+              document.querySelectorAll("#myModal .close").forEach((closeButton) => {
+                  closeButton.onclick = () => {
+                      myModalElement.style.display = "none";
+                      window.location.href = "/"; // Redirect to home on close
+                  };
+              });
+          }
 
       });
-    </script>
+  </script>
 
     <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">
