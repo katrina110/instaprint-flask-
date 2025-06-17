@@ -506,14 +506,14 @@
                           const printErrMsg = `Print request failed. Status: ${res.status}. Backend Error: ${errData.error || 'Unknown error'}`;
                           console.error(printErrMsg, errData);
                           logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}, BackendResponse: ${JSON.stringify(errData)}`);
-                          // alert("Failed to send print job: " + (errData.error || "Please contact support."));
+                          alert("Failed to send print job: " + (errData.error || "Please contact support."));
                           window.location.href = "/";
                           throw new Error('Print HTTP error');
                       }).catch(() => {
                           const printErrMsg = `Print request failed. Status: ${res.status}.`;
                           console.error(printErrMsg);
                           logError(printErrMsg, `PrintOptions: ${JSON.stringify(opts)}`);
-                          // alert("Failed to send print job. Please contact support.");
+                          alert("Failed to send print job. Please contact support.");
                           window.location.href = "/";
                           throw new Error('Print HTTP error');
                       });
