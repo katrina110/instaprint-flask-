@@ -15,7 +15,9 @@
     />
     <link href="./../static/css/result.css" rel="stylesheet" />
     <link href="./../static/css/header.css" rel="stylesheet" />
-    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> <style>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> 
+  </head>
+  <style>
       /* define thumbnail dimensions for each size/orientation */
       .thumb-A4.portrait {
         width: 150px;
@@ -127,99 +129,7 @@
         overflow-y: hidden; 
         flex-grow: 1;       
       }
-
-      /* Modal Styling from payment.html */
-      .modal {
-        /* Initially hide the modal */
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        overflow: auto;
-        background-color: rgba(0,0,0,0.6); /* Darker overlay */
-        /* Use flexbox to center modal content when displayed */
-        justify-content: center;
-        align-items: center;
-        padding: 20px; /* Add padding for smaller screens */
-      }
-      .modal-content {
-        background-color: #fefefe;
-        padding: 30px; /* More padding */
-        border: 1px solid #b0b0b0; /* Slightly darker border */
-        width: 90%; /* Make modal responsive */
-        max-width: 400px; /* Max width for larger screens */
-        border-radius: 25px;
-        text-align: center; /* Center content inside modal */
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* More prominent shadow */
-        position: relative; /* Needed for absolute positioning of close button */
-      }
-      .close {
-        color: #aaa;
-        /* float: right;  Removed float */
-        font-size: 32px; /* Larger close button */
-        font-weight: bold;
-        position: absolute; /* Position absolute relative to modal-content */
-        top: 10px;
-        right: 15px;
-      }
-      .close:hover, .close:focus {
-        color: #777; /* Darker gray on hover */
-        text-decoration: none;
-        cursor: pointer;
-      }
-
-      /* Star Rating Styling from payment.html */
-      .star-rating {
-        direction: rtl;
-        display: inline-flex;
-        margin-bottom: 20px; /* More space below stars */
-        gap: 5px; /* Add space between stars */
-      }
-      .star-rating input {
-        display: none;
-      }
-      .star-rating label {
-        font-size: 2.5rem; /* Larger stars */
-        color: #ddd;
-        cursor: pointer;
-        transition: color 0.2s ease; /* Smooth color transition */
-      }
-      .star-rating input:checked ~ label,
-      .star-rating label:hover,
-      .star-rating label:hover ~ label {
-        color: gold;
-      }
-
-      /* Feedback QR Code and Text from payment.html */
-      .modal-content img {
-          margin-top: 15px;
-          width: 180px; /* Slightly larger QR code */
-          height: 180px;
-          border: 1px solid #eee; /* Subtle border around QR */
-          border-radius: 25px; /* Rounded corners for QR */
-      }
-      .amount {
-        font-size: 14px; /* Slightly smaller font */
-        margin-top: 20px;
-        color: #555; /* Darker gray */
-        text-align: center;
-        opacity: 0.9; /* Less transparent */
-      }
-
-      @media (max-width: 600px) {
-        .modal-content {
-          width: 95%;
-          padding: 20px;
-        }
-        .star-rating label {
-            font-size: 2rem; /* Smaller stars on small screens */
-        }
-      }
     </style>
-  </head>
   <body>
     <header class="header">
       <img src="./../static/images/pup-logo.png" alt="logo" />
@@ -262,7 +172,7 @@
       </div>
     </div>
 
-    <div
+     <div
       class="modal fade"
       id="editModal"
       tabindex="-1"
