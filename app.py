@@ -440,15 +440,8 @@ def print_document():
         color_option = opts.get("colorOption", "Color")
         printer_name = win32print.GetDefaultPrinter()
 
-        # Optional grayscale conversion
-        if color_option.lower() == "grayscale" and file_path.lower().endswith(".pdf"):
-            grayscale_path = file_path.replace(".pdf", "_gray.pdf")
-            convert_pdf_to_grayscale(file_path, grayscale_path)
-            if os.path.exists(grayscale_path):
-                file_path = grayscale_path
-                
         if file_path.lower().endswith(".pdf"):
-            sumatra_path = r"C:\Users\CCC\AppData\Local\SumatraPDF\SumatraPDF.exe"
+            sumatra_path = r"C:\\Users\\CCC\\AppData\\Local\\SumatraPDF\\SumatraPDF.exe"
             cmd = [
                 sumatra_path,
                 "-print-to", printer_name,
@@ -459,6 +452,7 @@ def print_document():
             try:
                 print("File to be printed exists:", os.path.exists(file_path))
                 print("File path:", file_path)
+                print("Sumatra Command:", " ".join(cmd))
 
                 result = subprocess.run(cmd, check=True, timeout=30)
                 print(f"SumatraPDF print command succeeded: {result}")
@@ -469,7 +463,6 @@ def print_document():
                 log_error_to_db("SumatraPDF printing timed out", source="/print_document")
                 return jsonify({"success": False, "message": "Printing timed out."}), 504
 
-        
         else:
             for _ in range(num_copies):
                 hPrinter = win32print.OpenPrinter(printer_name)
@@ -484,7 +477,6 @@ def print_document():
                 finally:
                     win32print.ClosePrinter(hPrinter)
 
-        # Wait until printer is idle
         timeout_sec = 60
         interval = 2
         waited = 0
