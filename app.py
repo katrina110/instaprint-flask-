@@ -280,7 +280,7 @@ gcash_print_options = None
 # --- Configuration for Recent Downloads ---
 TARGET_SUBFOLDER_NAME = "InstaPrintDL"
 try:
-    documents_path = Path.home() / "OneDrive" / "Documents"
+    documents_path = Path.home() / "Documents"
     DOWNLOADS_DIR = documents_path / TARGET_SUBFOLDER_NAME
     if not DOWNLOADS_DIR.exists():
         print(f"WARNING: The target folder '{DOWNLOADS_DIR}' does not currently exist. Please create it inside your Documents folder.")
