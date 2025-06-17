@@ -38,6 +38,8 @@ from pathlib import Path
 import base64
 import shutil
 import pytz
+import subprocess
+from flask import request, jsonify
 
 import smtplib
 from email.mime.text import MIMEText
@@ -422,6 +424,89 @@ def clear_downloads_folder_route():
         "success": True, 
         "message": f"Successfully cleared {deleted_count} items from {DOWNLOADS_DIR}."
     }), 200
+
+@app.route("/print_document", methods=["POST"])
+def print_document():
+    try:
+        opts = request.get_json()
+        if not opts or "fileName" not in opts:
+            return jsonify({"error": "Missing file name for printing."}), 400
+
+        file_path = os.path.join(UPLOAD_FOLDER, opts["fileName"])
+        if not os.path.exists(file_path):
+            return jsonify({"error": f"Requested file '{file_path}' not found."}), 404
+
+        num_copies = int(opts.get("numCopies", 1))
+        color_option = opts.get("colorOption", "Color")
+        printer_name = win32print.GetDefaultPrinter()
+
+        # Optional grayscale conversion
+        if color_option.lower() == "grayscale" and file_path.lower().endswith(".pdf"):
+            grayscale_path = file_path.replace(".pdf", "_gray.pdf")
+            convert_pdf_to_grayscale(file_path, grayscale_path)
+            if os.path.exists(grayscale_path):
+                file_path = grayscale_path
+                
+        if file_path.lower().endswith(".pdf"):
+            sumatra_path = r"C:\Users\CCC\AppData\Local\SumatraPDF\SumatraPDF.exe"
+            cmd = [
+                sumatra_path,
+                "-print-to", printer_name,
+                "-silent",
+                "-print-settings", f"copies={num_copies}",
+                file_path
+            ]
+            try:
+                print("File to be printed exists:", os.path.exists(file_path))
+                print("File path:", file_path)
+
+                result = subprocess.run(cmd, check=True, timeout=30)
+                print(f"SumatraPDF print command succeeded: {result}")
+            except subprocess.CalledProcessError as e:
+                log_error_to_db(f"SumatraPDF printing failed: {e}", source="/print_document")
+                return jsonify({"success": False, "message": f"Print failed: {e}"}), 500
+            except subprocess.TimeoutExpired:
+                log_error_to_db("SumatraPDF printing timed out", source="/print_document")
+                return jsonify({"success": False, "message": "Printing timed out."}), 504
+
+        
+        else:
+            for _ in range(num_copies):
+                hPrinter = win32print.OpenPrinter(printer_name)
+                try:
+                    hJob = win32print.StartDocPrinter(hPrinter, 1, ("Print Job", None, "RAW"))
+                    win32print.StartPagePrinter(hPrinter)
+                    with open(file_path, "rb") as f:
+                        raw_data = f.read()
+                        win32print.WritePrinter(hPrinter, raw_data)
+                    win32print.EndPagePrinter(hPrinter)
+                    win32print.EndDocPrinter(hPrinter)
+                finally:
+                    win32print.ClosePrinter(hPrinter)
+
+        # Wait until printer is idle
+        timeout_sec = 60
+        interval = 2
+        waited = 0
+        while waited < timeout_sec:
+            status = check_printer_status(printer_name)
+            if status == "Idle":
+                break
+            time.sleep(interval)
+            waited += interval
+
+        if waited >= timeout_sec:
+            return jsonify({
+                "success": False,
+                "message": "Print command issued, but printer did not return to idle in time."
+            }), 504
+
+        return jsonify({"success": True, "message": "Print job sent successfully."})
+
+    except Exception as e:
+        log_error_to_db(f"Print error: {e}", source="/print_document")
+        return jsonify({"error": f"Failed to send to printer: {e}"}), 500
+
 
 @app.route('/api/list_recent_downloads', methods=['GET'])
 def list_recent_downloads():
@@ -1562,20 +1647,7 @@ def convert_pdf_to_grayscale(input_pdf_path, output_pdf_path):
         if gray_doc:
             gray_doc.close()
 
-@app.route('/print_document', methods=['POST'])
-def print_document_route():
-    data = request.json
-    if not data:
-        log_error_to_db("Invalid JSON payload for /print_document.", source="print_document_route_no_json")
-        return jsonify({"error": "Invalid JSON payload."}), 400
 
-    print("Received print request via /print_document route with data:", data)
-    success, message = print_document_logic(data)
-
-    if success:
-        return jsonify({"success": True, "message": message}), 200
-    else:
-        return jsonify({"error": message}), 500
 
 @app.route('/result', methods=['GET'])
 def result():
